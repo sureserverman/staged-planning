@@ -1,0 +1,1 @@
+**Findings:** 1 CRITICAL, 0 HIGH, 2 MEDIUM, 3 LOW

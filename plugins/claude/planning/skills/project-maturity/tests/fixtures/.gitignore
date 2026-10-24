@@ -1,0 +1,5 @@
+# These maturity detector fixtures intentionally ship sample security reports as
+# detector inputs. This negation keeps the fixtures tracked even where a local ignore
+# rule (a global or per-repo gitignore) hides real audit reports, so CI checks out the
+# detector suite's inputs.
+!*audit-report-*.md

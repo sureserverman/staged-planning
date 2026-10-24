@@ -1,0 +1,50 @@
+{
+  "name": "planning",
+  "description": "Staged, gate-checked plans for coding agents: brainstorm a design, write a plan whose stages end in runnable checks, execute it Red-Green with honest gates and code review, and keep a backlog and decisions. Works with no setup; records go to the repo's docs/.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Sure Serverman"
+  },
+  "skills": [
+    "./skills/brainstorming",
+    "./skills/planning-projects",
+    "./skills/executing-plans",
+    "./skills/applying-design-handoff",
+    "./skills/dispatching-parallel-agents",
+    "./skills/backlog",
+    "./skills/decisions",
+    "./skills/workflow-spec",
+    "./skills/project-maturity",
+    "./skills/honest-gates",
+    "./skills/architecting-projects"
+  ],
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "keywords": [
+    "planning",
+    "brainstorming",
+    "design",
+    "design-handoff",
+    "redesign",
+    "stages",
+    "phase-gates",
+    "red-green",
+    "execution",
+    "parallel",
+    "dispatch",
+    "subagents",
+    "roadmap",
+    "tdd",
+    "debugging",
+    "root-cause",
+    "evidence-first",
+    "backlog",
+    "deferred-work",
+    "workflow-spec",
+    "behavior-contract",
+    "regression-audit",
+    "honest-gates",
+    "verification",
+    "gate-integrity"
+  ]
+}

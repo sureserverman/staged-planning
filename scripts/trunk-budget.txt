@@ -1,0 +1,184 @@
+# Trunk size ratchet — `<repo-relative SKILL.md> <max bytes>`.
+#
+# A skill's body is loaded per invocation, not per session: every byte here is
+# paid each time the skill fires, in every project with the plugin enabled.
+#
+# THE RULE. A ceiling is a RATCHET: a trunk may shrink freely and may not grow past
+# it. A ceiling is the trunk's measured size, never a target, and it comes down
+# when the trunk shrinks (check-trunk-budget.py fails a ceiling left above a shrunk
+# trunk). It goes up only to pay for a rule that must sit in the trunk, because the
+# rule binds at a moment when a pointer followed afterwards is the same as no rule.
+# After an extraction, a ceiling is derived from the trunk's
+# conditional/unconditional classification and what the cut retained, never from a
+# target picked ahead of the measurement. The ceiling follows the obligation, not
+# the obligation the ceiling: paying for a rule by deleting a rule, or by moving it
+# into a reference file the executor may never open, is the trade this file exists
+# to stop. The comment above each ceiling names the rules it pays for, and a change
+# to a ceiling changes that comment to match the diff.
+#
+# Every trunk at or above 10000 B must carry an entry; check-trunk-budget.py
+# fails on one that does not, so the ratchet cannot be opted out of by omission.
+
+# executing-plans.
+# The ceiling pays for the rules an executor applies at the moment they bind:
+#   - each rule's obligation-bearing phrase, not only its gist; an obligation named
+#     only as a noun inside a pointer sentence is not a rule (the stage-verify hook,
+#     the evaluator's Blocking/Material/Minor briefing);
+#   - Preflight reports which check failed and how, and its access line names an
+#     executed probe;
+#   - the boxed exit criterion governs every gate pass; the Status-flip rule is
+#     qualified at every site that states it; the honest-gates capsule routes BLOCKED
+#     as well as RED, and a gate run over uncommitted edits proves nothing about what
+#     is recorded; the ACTION NEEDED rule;
+#   - Step 3.3 rule 4a: a test the task wrote is not green until its mutant dies,
+#     proven by a prove-claim.py record, with the tool's preconditions; and before
+#     writing a checker, ask whether the mechanism can decide the property;
+#   - a BLOCKED gate check is written `- [~]`, never `- [x]` with a note;
+#   - a plugin script that reads the working directory runs by its plugin-rooted path
+#     from the repo root (stage-order check, prove-claim, plan-flip-audit, budget
+#     check, context-usage);
+#   - the host's own footing is a safety rail; a mid-execution request for new work
+#     goes back through planning-projects triage;
+#   - the context-reset stop rules, the sub-plan boundary rule and the fresh-session
+#     rule, with the procedure in references/session-handoff.md;
+#   - validate-dispatch.py runs beside validate-gate-checks.py, advisory on an
+#     existing plan;
+#   - Step 3.0 opens a stage only when its Depends-on gates are fully [x]
+#     (`plan-progress.py --stage-order-check --stage <N>`);
+#   - the record audit runs at every stage gate, with its exit codes;
+#   - an unread redesign's owed review is not a remediation round;
+#   - the owned execution-state protocol: plan-state.py is the only state writer, each
+#     operation is called at its transition (`init` at Preflight), `budget_exhausted`
+#     stops, `state_error` is an instrument error, a Stop is recorded with
+#     `plan-state.py set-blocker`, and `finish` retains terminal evidence;
+#   - stage Outcomes and premise-first at Step 3.0, and their two Stop conditions;
+#   - a supersede is the decisions skill's supersede operation.
+# The rationale lives in references (stage-gate.md, dispatch-fidelity.md,
+# bug-is-a-class.md) and in honest-gates. Per-section sizes:
+# core/skills/executing-plans/references/extraction-classification.md.
+core/skills/executing-plans/SKILL.md 54258
+
+# planning-projects.
+# planning-projects is read once per plan and almost every section fires on that
+# pass, so only one section is conditional, and its size comes down by compressing
+# justification rather than relocating procedure. Its rule+elaboration sections are
+# mostly ENUMERATIONS of obligations, and an enumeration has no justification layer
+# to shed. Per-section sizes:
+# core/skills/planning-projects/references/extraction-classification.md.
+# The ceiling pays for these authoring obligations:
+#   - `Depends on` and `Blocks` are required and symmetric, dependencies run in order
+#     within a stage and never on a later stage, and `Dispatch` is consistent with
+#     them; a `Dispatch: YES` task always carries a Scope;
+#   - the § Checklist restates exactly the items a command decides, including the
+#     validator's TASK-TEST-UNSCOPED axis and validate-dispatch.py (Phase 5 names what
+#     it fails): an unscoped task test can run for hours inside one Red-Green loop
+#     where the stage-scope command takes minutes;
+#   - the skills resolve the records home by calling the resolver and obeying its exit
+#     codes, never by restating its conditions; this file carries the exit-code
+#     contract once, including the no-records-home path and an exit 2 whose stderr
+#     lacks the records-home prefix (a broken invocation, not an unreachable store);
+#   - a Test asserts the outcome and each claim could go red; a preparing task tests
+#     its preparation; a forbidden-call sweep matches the bare name; a name used
+#     downstream is fixed by the task that creates it; Preflight checks tools where
+#     the build looks;
+#   - the early integration premise: one bounded smoke case at the first driveable
+#     stage, a missing service blocking only its live claim;
+#   - each stage's Outcomes are written before its tasks;
+#   - the single-pass review figure names the set it counted and its date.
+core/skills/planning-projects/SKILL.md 39440
+
+# honest-gates.
+# Its rules are WRITE-TIME disciplines: each has to be in front of whoever is writing
+# the test or the check, and a pointer followed after the fact is the same as no
+# rule. So a rule sentence never leaves this trunk; only the reason behind it may
+# (references/reasons.md). Untiered: these cost a re-run, not an agent. 44 retention
+# markers pin the trunk's binding sections; the classification is
+# references/extraction-classification.md.
+# The ceiling pays for: before writing a checker, ask whether the mechanism can
+# decide the property, FIRST in its section; the corpus-sweep rule (a
+# parsing-contract, marker-vocabulary or classification change does not ship until
+# the corpus it reclassifies is inventoried and backfilled or filed); a gate artifact
+# the executor authored is disclosed, and one that cannot reach both outcomes is not
+# a gate; each guard is reachable from a named test, and a mutation battery proves a
+# verdict-producing check; a GREEN names where its evidence executed, and every figure
+# in a report is reproducible at a sha; a suite dropped for cost is BLOCKED on that
+# suite, and tier-declared narrowing drops only trees the stage neither touched nor
+# depends on; the mutant's proof is a prove-claim.py record, and a deviation record is
+# disclosed, never counted as proof; sibling skills in the Integration list are
+# optional.
+core/skills/honest-gates/SKILL.md 15069
+
+# backlog.
+# The ceiling pays for the configurable records-home lookup and the command that
+# prints it, and for citations that name the file owning each rule they point at.
+#   - the unchecked-open signal states which bullets of a plan with no Status fields it reads.
+core/skills/backlog/SKILL.md 16181
+
+# dispatching-parallel-agents.
+# A dispatched agent reads only its prompt, so the rules it must follow sit in the
+# template. The ceiling pays for: the brief's proof step, runnable by the agent (stage
+# the work first, the plugin-rooted prove-claim path, the Test command, the patch
+# outside the repo); the ## Return rule that an agent returns only after its own
+# background work finished or was stopped; the "What this is for" block (stage goal,
+# the Research Summary promise, who uses the result) and step 3's rule to build the
+# success path and every failure path; older plans' `Parallel:` read as `Dispatch:`;
+# sibling agents named as optional; pointers that name their section.
+core/skills/dispatching-parallel-agents/SKILL.md 17966
+
+# applying-design-handoff.
+# The ceiling pays for position-neutral pointers and every citation it carries: a
+# DEAD-PATH finding is fixed by repointing the citation, never by deleting it.
+core/skills/applying-design-handoff/SKILL.md 16101
+
+# project-maturity.
+# The ceiling pays for the printed `audit-detectors.py` invocation carrying the
+# records-home flag the trunk mandates; without it an executor copying the command
+# silently loses an axis.
+core/skills/project-maturity/SKILL.md 13995
+
+# brainstorming.
+# The ceiling pays for a pointer at the records-home resolver's contract (not a copy
+# of it) and the no-records-home path (exit 3), spelled out where a skill would
+# otherwise write outside the repo on a clean machine.
+core/skills/brainstorming/SKILL.md 13072
+
+# decisions.
+# The register is per project only, and its format lives in
+# references/decisions-format.md; the ceiling pays for the configurable records lookup.
+core/skills/decisions/SKILL.md 7411
+
+# architecting-projects.
+# The ceiling pays for the configurable records lookup and the no-records-home path
+# (exit 3); prose points at the public parser and the decisions format.
+core/skills/architecting-projects/SKILL.md 11466
+
+core/skills/workflow-spec/SKILL.md 10580
+
+# Codex overrides: whole-file host versions of four trunks, shipped in the Codex build.
+# Each ceiling is the trunk's measured size; the same ratchet applies. Each carries
+# what its core trunk does, in the host's terms (the dispatching brief names the
+# plugin-rooted scripts folder, as core's does).
+hosts/codex/overrides/skills/applying-design-handoff/SKILL.md 17625
+hosts/codex/overrides/skills/architecting-projects/SKILL.md 13348
+#   - the agent list counts every role this plugin ships, and names the ones the table routes.
+hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21402
+hosts/codex/overrides/skills/executing-plans/SKILL.md 63819
+
+# Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
+# those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
+# The Cursor executing-plans trunk names its status-line skill /plan-statusline,
+# because Cursor ships a built-in statusline.
+hosts/cursor/overrides/skills/applying-design-handoff/SKILL.md 16336
+hosts/cursor/overrides/skills/architecting-projects/SKILL.md 12304
+hosts/cursor/overrides/skills/brainstorming/SKILL.md 13907
+#   - the agent list names every agent this plugin ships, and how many the table routes.
+hosts/cursor/overrides/skills/dispatching-parallel-agents/SKILL.md 20585
+hosts/cursor/overrides/skills/executing-plans/SKILL.md 66986
+hosts/cursor/overrides/skills/honest-gates/SKILL.md 15462
+hosts/cursor/overrides/skills/planning-projects/SKILL.md 39953
+hosts/cursor/overrides/skills/project-maturity/SKILL.md 14437
+hosts/opencode/overrides/skills/applying-design-handoff/SKILL.md 17317
+hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13210
+#   - the agent list names every agent this package ships, and how many the table routes.
+hosts/opencode/overrides/skills/dispatching-parallel-agents/SKILL.md 20419
+hosts/opencode/overrides/skills/executing-plans/SKILL.md 61122

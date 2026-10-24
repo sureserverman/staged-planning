@@ -1,0 +1,45 @@
+{
+  "name": "staged-planning",
+  "owner": {
+    "name": "Sure Serverman"
+  },
+  "metadata": {
+    "description": "The planning plugin: staged, gate-checked plans for coding agents, built from one core for Claude Code, Codex, Cursor and OpenCode.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "planning",
+      "source": "./plugins/claude/planning",
+      "description": "Staged, gate-checked plans for coding agents: brainstorm a design, write a plan whose stages end in runnable checks, execute it Red-Green with honest gates and code review, and keep a backlog and decisions. Works with no setup; records go to the repo's docs/.",
+      "version": "1.0.0",
+      "category": "development",
+      "tags": [
+        "planning",
+        "brainstorming",
+        "design",
+        "stages",
+        "phase-gates",
+        "red-green",
+        "execution",
+        "parallel",
+        "dispatch",
+        "subagents",
+        "roadmap",
+        "tdd",
+        "debugging",
+        "root-cause",
+        "evidence-first",
+        "backlog",
+        "deferred-work",
+        "workflow-spec",
+        "behavior-contract",
+        "regression-audit",
+        "honest-gates",
+        "verification",
+        "gate-integrity"
+      ],
+      "strict": false
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "card",
+  "role": "container",
+  "variants": ["elevated", "outlined"],
+  "states": ["default", "selected"],
+  "anatomy": {
+    "container": {
+      "radius": "radius.md",
+      "padding": "space.md",
+      "surface": "color.surface",
+      "shadow": "shadow.card",
+      "outline": "color.outline"
+    },
+    "title": { "type": "type.display", "color": "color.onSurface" },
+    "body": { "type": "type.body", "color": "color.onSurface" }
+  },
+  "tokensRef": ["color.surface", "color.onSurface", "color.outline", "radius.md", "space.md", "shadow.card", "type.display", "type.body"]
+}

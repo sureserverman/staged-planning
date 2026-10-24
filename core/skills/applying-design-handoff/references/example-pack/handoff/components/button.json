@@ -1,0 +1,11 @@
+{
+  "id": "button",
+  "role": "action",
+  "variants": ["primary", "secondary", "ghost"],
+  "states": ["default", "hover", "pressed", "disabled"],
+  "anatomy": {
+    "container": { "radius": "radius.pill", "paddingX": "space.lg", "paddingY": "space.sm" },
+    "label": { "type": "type.label", "color": "color.onPrimary" }
+  },
+  "tokensRef": ["color.primary", "color.onPrimary", "radius.pill", "space.lg", "space.sm", "type.label"]
+}

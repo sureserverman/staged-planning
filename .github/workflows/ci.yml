@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install pyyaml
+
+      # hosts/claude/add/hooks/tests/test-mod.sh runs `claude plugin validate`
+      # and `claude plugin test` on the built plugin, and a missing CLI is a
+      # failure, never a skip (one runner, no silent skip). Neither command needs a login. Pinned
+      # to a version the mod's tests pass on: its stage-note tests need a later
+      # build than the band's 2.1.288 floor.
+      - name: Install the Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.303
+
+      - name: Every suite and validator
+        run: bash scripts/run-tests.sh
+
+      - name: The committed Claude package matches its sources
+        run: python3 build/build.py --host claude --check --committed

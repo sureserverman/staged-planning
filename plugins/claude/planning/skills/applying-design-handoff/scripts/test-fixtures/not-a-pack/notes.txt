@@ -1,0 +1,4 @@
+This directory deliberately contains no recognizable handoff-pack section
+(no tokens file, no components/ subtree, no screens/ or layouts/ subtree, no
+manifest). It is the RED fixture for validate-handoff-pack.py: running the linter
+against test-fixtures/not-a-pack/ must exit 1.

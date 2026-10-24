@@ -1,0 +1,20 @@
+{
+  "name": "staged-planning",
+  "interface": {
+    "displayName": "Staged Planning"
+  },
+  "plugins": [
+    {
+      "name": "planning",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex/planning"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

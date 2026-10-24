@@ -1,0 +1,14 @@
+host: alpha
+out: out/root-a/alpha
+exclude:
+  - docs/**
+rewrites:
+  - glob: skills/**/*.md
+    pattern: '\$\{PLUGIN_HOME\}/'
+    replace: './'
+  - glob: skills/**/*.md
+    pattern: '(^|[^$])/planning:'
+    replace: '\1$planning:'
+features:
+  - id: skills
+    status: native

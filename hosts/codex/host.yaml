@@ -1,0 +1,103 @@
+# Codex: the plugin Codex installs from .agents/plugins/marketplace.json.
+# Tests and fixtures are left out by default (every host but the identity host).
+# The statuses below are the Codex design; the Codex layer's overrides and add/ files
+# carry the forks they name.
+host: codex
+out: plugins/codex/planning
+exclude:
+  # The status-line bar's installer and chain: Codex's status line runs no command.
+  - skills/executing-plans/scripts/statusline-install.py
+  - skills/executing-plans/scripts/statusline-chain.sh
+  # Claude's Markdown agents: on Codex the roles are the TOML files under add/agents/.
+  - agents/*.md
+rewrites:
+  # Skills reach the plugin root through the placeholder core already uses for it.
+  - glob: '**/*.md'
+    pattern: '\$\{CLAUDE_PLUGIN_ROOT\}'
+    replace: '<planning-plugin>'
+  # A skill is invoked as $planning:<skill>, not /planning:<skill>.
+  - glob: '**/*.md'
+    pattern: '(^|[^$\w/.])/planning:'
+    replace: '\1$planning:'
+  # A plan's roster names the agent role a task routes to; Codex has roles, not subagent
+  # types.
+  - glob: skills/planning-projects/references/plan-document-template.md
+    pattern: 'with the subagent type it routes to'
+    replace: 'with the agent role it routes to'
+  - glob: skills/planning-projects/references/plan-document-template.md
+    pattern: '<subagent_type>'
+    replace: '<agent role>'
+  # Codex's skill catalog shares one small budget, so each description stays within 120
+  # characters. The match stays inside the frontmatter and takes a folded description's
+  # continuation lines, blank ones included. A skill this host overrides carries its own
+  # description in the override.
+  - glob: skills/backlog/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Deferred-work register (backlog.md): add, list, remove and unify deferred improvements and decisions."\n'
+  - glob: skills/brainstorming/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Question-driven design before non-trivial work: purpose, constraints and alternatives, then a validated design."\n'
+  - glob: skills/decisions/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Decision register: record, read, promote and supersede architectural decisions and the reasons behind them."\n'
+  - glob: skills/honest-gates/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Integrity rules for gates and done claims: green only when the real check ran here and passed."\n'
+  - glob: skills/planning-projects/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Plan a project of any size: triage to Direct, Light, Standard or Master first, then staged, tested tasks."\n'
+  - glob: skills/project-maturity/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Ship-readiness checklist (MATURITY.md) across six axes: scaffold it, audit it with detectors, read it."\n'
+  - glob: skills/workflow-spec/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
+    replace: '\1description: "Behavior contracts under docs/workflows/ with stable IDs; audit a diff against them for lost behavior."\n'
+  # Skills name the plugin root as <planning-plugin>; nothing substitutes it on Codex,
+  # so each skill says where it is.
+  - glob: skills/*/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?---\n)'
+    replace: '\1\n> On Codex, `<planning-plugin>` is this plugin''s installed folder: the folder that holds `skills/` and `.codex-plugin/`, which is `../..` from this SKILL.md. In a shell command use its absolute path, quoted.\n'
+features:
+  - id: skills
+    status: native
+    note: 'each skill appears as planning:<skill> and is invoked as $planning:<skill>'
+  - id: agents
+    status: equivalent
+    note: 'a plugin cannot ship agent roles, so an installer writes them as TOML under $CODEX_HOME/agents'
+  - id: review-dispatch
+    status: equivalent
+    note: 'a review runs as an agent spawned from an installed role; the review ledger also reads in-session review lines'
+  - id: parallel-dispatch
+    status: equivalent
+    note: 'spawn_agent, in batches of at most 6 at depth 1'
+  - id: stop-continue
+    status: equivalent
+    note: 'a Stop hook fork continues every final stop of a plan in flight by returning decision block with a reason, since nothing resumes a Codex turn; it runs once the user trusts it in /hooks, in a session started with CODEX_PLAN_CONTINUE=1'
+  - id: proof-guard
+    status: equivalent
+    note: 'PreToolUse fires for the Bash tool only; plugin hooks start untrusted until the user trusts them'
+  - id: dispatch-log
+    status: equivalent
+    note: 'a hook fork takes the project folder from the payload''s cwd and logs subagent start and stop only'
+  - id: git-ref-gate
+    status: native
+  - id: handoff-envelope
+    status: native
+    note: 'the writer learns its id from $PLANNING_SUPERVISOR_ID_CMD, as on every host'
+  - id: plan-progress
+    status: native
+  - id: statusline
+    status: absent
+    note: 'no progress bar: Codex''s status line takes only predefined items and runs no command'
+  - id: band-pane-mod
+    status: absent
+    note: 'no band or plan pane: they are a Claude Code mod, and Codex has no such surface'
+  - id: design-sync
+    status: equivalent
+    note: 'a local handoff pack only; Codex has no design tool to read from'
+  - id: context-usage
+    status: equivalent
+    note: 'a fork reads Codex''s session rollout files instead of a transcript'
+  - id: commands
+    status: absent
+    note: 'no slash commands: Codex invokes skills by name, and the one command installs a status line Codex does not have'

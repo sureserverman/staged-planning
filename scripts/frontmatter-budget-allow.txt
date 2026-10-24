@@ -1,0 +1,4 @@
+# Frontmatter description budget allowlist.
+# One repo-relative path per line for components that are permitted to exceed
+# the char budget enforced by scripts/check-frontmatter-budget.py.
+# Each entry needs a trailing-comment reason. Ships empty — add sparingly.

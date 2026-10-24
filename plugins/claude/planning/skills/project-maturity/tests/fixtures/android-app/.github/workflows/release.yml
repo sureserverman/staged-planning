@@ -1,0 +1,8 @@
+name: release
+on: { push: { tags: ['v*'] } }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./gradlew assembleRelease   # produces app-release.apk
+      - run: gh release create "$GITHUB_REF_NAME" app/build/outputs/apk/release/app-release.apk

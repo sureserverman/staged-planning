@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "invariants": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "cases": [
+    {
+      "id": "active-two",
+      "invariants": [
+        1,
+        3
+      ],
+      "expected": "active round two verification and completion allowed"
+    },
+    {
+      "id": "completed-two",
+      "invariants": [
+        3,
+        10
+      ],
+      "expected": "new third round refused without evidenced extension"
+    },
+    {
+      "id": "missing",
+      "invariants": [
+        4,
+        7
+      ],
+      "expected": "idle versus owned missing state distinguished"
+    },
+    {
+      "id": "corrupt",
+      "invariants": [
+        2,
+        4
+      ],
+      "expected": "state_error; snapshot preserved; hook escapes"
+    },
+    {
+      "id": "partial-write",
+      "invariants": [
+        2
+      ],
+      "expected": "last complete snapshot retained or explicit init state_error"
+    },
+    {
+      "id": "interruption",
+      "invariants": [
+        1,
+        2,
+        3
+      ],
+      "expected": "fresh process resumes same run and round"
+    },
+    {
+      "id": "concurrent",
+      "invariants": [
+        2,
+        3
+      ],
+      "expected": "one expected-revision writer succeeds"
+    },
+    {
+      "id": "worktree",
+      "invariants": [
+        7
+      ],
+      "expected": "linked and foreign worktrees cannot overwrite owner"
+    },
+    {
+      "id": "retry",
+      "invariants": [
+        2
+      ],
+      "expected": "same operation returns original receipt; payload mismatch conflicts"
+    },
+    {
+      "id": "extension",
+      "invariants": [
+        6
+      ],
+      "expected": "actual source and exact scope required"
+    },
+    {
+      "id": "no-go-repair",
+      "invariants": [
+        5,
+        6
+      ],
+      "expected": "no_go retained while repairing continues"
+    },
+    {
+      "id": "premises",
+      "invariants": [
+        11
+      ],
+      "expected": "fixture cannot certify live AI usefulness"
+    },
+    {
+      "id": "baseline",
+      "invariants": [
+        8,
+        9
+      ],
+      "expected": "baseline/dependency changes reject reuse"
+    },
+    {
+      "id": "environment",
+      "invariants": [
+        8
+      ],
+      "expected": "availability failure remains in denominator"
+    },
+    {
+      "id": "strategy",
+      "invariants": [
+        10
+      ],
+      "expected": "assessment keeps spent rounds and does not grant authority"
+    }
+  ]
+}

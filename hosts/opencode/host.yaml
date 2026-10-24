@@ -1,0 +1,160 @@
+# OpenCode: facts measured by scripts/probes/opencode-probe.sh in throwaway HOMEs
+# (opencode 1.19.3, model ollama-cloud/kimi-k3). Probe keys only; the host layer's own
+# keys are added when that layer is built. Where these differ from the docs, the
+# measurement stands.
+host: opencode
+out: packages/opencode
+install_shape:
+  # Measured with the built package loaded by local path, no model: its config hook's
+  # additions take effect. `opencode debug config` shows the package's skills path under
+  # skills.paths and its external_directory allow merged after the user's rules;
+  # `opencode debug skill` lists the 11 skills; `opencode debug agent` lists the allow for
+  # the package folder after the default `* ask`; `opencode agent list` shows the 4 agents.
+  # A skill root named in the global config's `skills` array loads: `opencode debug config`
+  # shows it normalized to skills.paths, `opencode debug skill` lists the skill, and a
+  # prompt naming it gets the skill's content from the skill tool.
+  skills: config-skills-paths
+  # A plugin's `config` hook can add agents and commands by mutating cfg.agent and
+  # cfg.command (not documented on the plugins page; typed in @opencode-ai/plugin). The
+  # injected subagent ran through the task tool and the injected command through
+  # `opencode run --command`, from either load route below.
+  agents_commands: plugin-config-hook
+  # `plugin: ["<abs path>/index.ts"]` loads the plugin; debug config shows it as a file:// URL.
+  plugin_local_path: true
+  # A .ts file in ~/.config/opencode/plugins/ loads with no config entry.
+  plugin_dir_autoload: true
+# Other tools' skill roots OpenCode also lists. ~/.claude/plugins/cache/<mkt>/<plugin>/<ver>/skills
+# is NOT read. With one same-named skill in ~/.config/opencode/skills, ~/.claude/skills and
+# ~/.agents/skills, only the ~/.config/opencode/skills copy is listed and served; the
+# others are hidden, not reported.
+co_visible_roots:
+  - ~/.claude/skills
+  - ~/.agents/skills
+# From the sentinel token in each run's output, never the exit code: both runs exited 0.
+# With default permissions `opencode run` printed "permission requested:
+# external_directory (...); auto-rejecting" and the read failed. Allowing
+# <home>/outside/** under permission.external_directory let the read through.
+external_directory:
+  default: rejected
+  with_permission: allowed
+probe_date: 2026-10-24
+probe_script: scripts/probes/opencode-probe.sh
+# The owner's rulings on the probe evidence. Each names the probe and its date.
+rulings:
+  names:
+    choice: {planning: bare}
+    note: a same-named skill in ~/.config/opencode/skills was served over the ~/.claude/skills and ~/.agents/skills copies (probe); a skills.paths entry against those roots was not measured
+    date: 2026-10-24
+    evidence: opencode-probe 2026-10-24
+  external_directory:
+    choice: document-and-check
+    note: the README documents the permission.external_directory entry a records home outside the repo needs; a caller checks that each write landed and fails loudly instead of reporting a preamble
+    date: 2026-10-24
+    evidence: opencode-probe 2026-10-24
+# The host layer's build keys. Tests and fixtures are left out by default (every host but
+# the identity host). Skills keep their bare names (rulings.names); agents are the files
+# under agents/, each registered by its file name.
+exclude:
+  # No Stop hook can hold an OpenCode turn, so a plan does not continue by itself.
+  - hooks/plan-continue.sh
+  # The supervised handoff is not carried on OpenCode.
+  - skills/executing-plans/scripts/handoff-envelope.py
+  # Its prose: planning's side lives in handoff-envelope.py, excluded above.
+  - references/handoff-protocol.md
+  # The status-line bar's installer and chain: OpenCode has no status line.
+  - skills/executing-plans/scripts/statusline-install.py
+  - skills/executing-plans/scripts/statusline-chain.sh
+rewrites:
+  # Skills reach the plugin root through the placeholder core already uses for it; each
+  # SKILL.md says below where it is.
+  - glob: '**/*.md'
+    pattern: '\$\{CLAUDE_PLUGIN_ROOT\}'
+    replace: '<planning-plugin>'
+  # A skill is invoked by its bare name (rulings.names), not /planning:<skill>. Every core
+  # file that writes /planning:<skill> is overridden or excluded, so no rule rewrites it.
+  # This package's agents are registered by their bare file names.
+  - glob: '**/*.md'
+    pattern: '\bplanning:(code-reviewer|architecture-researcher|design-handoff-reproducer|claim-verifier)\b'
+    replace: '\1'
+  # A plan's roster names the agent a task routes to: the task tool takes an agent name.
+  - glob: skills/planning-projects/references/plan-document-template.md
+    pattern: 'with the subagent type it routes to'
+    replace: 'with the agent it routes to'
+  - glob: skills/planning-projects/references/plan-document-template.md
+    pattern: '<subagent_type>'
+    replace: '<agent>'
+  # The dispatch log names the agent a task call asked for under the key agent_name, and
+  # an untyped call runs OpenCode's built-in general agent. The writer and its one reader
+  # change together.
+  - glob: hooks/dispatch-log.sh
+    pattern: 'subagent_type'
+    replace: 'agent_name'
+  - glob: hooks/dispatch-log.sh
+    pattern: '"general-purpose"'
+    replace: '"general"'
+  - glob: skills/executing-plans/scripts/review-ledger-check.py
+    pattern: '<subagent_type>'
+    replace: '<agent>'
+  - glob: skills/executing-plans/scripts/review-ledger-check.py
+    pattern: 'subagent_type'
+    replace: 'agent_name'
+  # Natural-language auto-trigger is unreliable on OpenCode, so every description says
+  # the skill is invoked by name. The match stays inside the frontmatter and takes a
+  # folded description's continuation lines; the added line continues the same scalar.
+  # A skill this host overrides carries the sentence in the override.
+  - glob: skills/*/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?description:.*\n(?:[ \t]+\S.*\n)*)'
+    replace: '\1  On OpenCode, invoke this skill by name.\n'
+  # Skills name the plugin root as <planning-plugin>; nothing substitutes it on OpenCode,
+  # so each skill says where it is.
+  - glob: skills/*/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?---\n)'
+    replace: '\1\n> On OpenCode, `<planning-plugin>` is this package''s folder: the folder that holds `skills/`, `../..` from the base directory OpenCode prints with this skill. In a shell command use its absolute path, quoted.\n'
+# What the host matrix reports for OpenCode, from the probe facts above and the package's
+# own suite. A note says where a claim was not measured.
+features:
+  - id: skills
+    status: native
+    note: 'the package''s config hook adds its skills folder under skills.paths and `opencode debug skill` listed the 11 skills (probe); each is invoked by its bare name (the names ruling), since natural-language auto-trigger is unreliable on OpenCode; the hook also allows reads across the package folder under permission.external_directory, which opencode run otherwise auto-rejects'
+  - id: agents
+    status: equivalent
+    note: 'no plugin manifest ships agents: the package''s config hook adds the four to cfg.agent, each named by its file name, with mode subagent, a permission map and no model; `opencode agent list` showed them and an injected subagent ran through the task tool (probe). Lost: the per-agent model and effort pins core agents carry, as the hook sets neither; reopen if OpenCode gains a provider-neutral per-agent model or effort setting a package can ship'
+  - id: review-dispatch
+    status: native
+    note: 'a review is a task-tool dispatch of code-reviewer and an evaluator runs on the built-in general agent; the review ledger reads the dispatch log''s agent_name rows'
+  - id: parallel-dispatch
+    status: native
+    note: 'every selected task is dispatched through the task tool before waiting on any; the probe measured a task dispatch, not the concurrency'
+  - id: stop-continue
+    status: absent
+    note: 'no blocking Stop: OpenCode has no hook that can hold or resume a turn, so plan-continue.sh does not ship; a turn that ends waits for the user, and the skill''s run-to-completion rule is the whole control'
+  - id: proof-guard
+    status: equivalent
+    note: 'proof-guard.ts runs core''s proof-guard.sh from tool.execute.before on the bash tool and throws when it denies, which blocks the call; the package''s node suite checks the block, the probe did not exercise it'
+  - id: dispatch-log
+    status: equivalent
+    note: 'dispatch-log.ts turns a task call, its child session.created and the call''s end into payloads for core''s dispatch-log.sh, each dispatch row naming the agent under agent_name (OpenCode 1.19.3''s task input carries subagent_type); it allows explicitly and never throws'
+  - id: git-ref-gate
+    status: native
+    note: 'a git reference-transaction hook, installed by proof-hooks-install.py as on every host'
+  - id: handoff-envelope
+    status: absent
+    note: 'handoff-envelope.py does not ship, and supervised handoff is waived on OpenCode: a handoff is the RESUME HERE block and phase handoff, and the next session is resumed by hand'
+  - id: plan-progress
+    status: native
+    note: 'the state file is written as on every host; the plan-progress.py fork ships its budget, stage-order and dispatch checks, not the status-line renderer'
+  - id: statusline
+    status: absent
+    note: 'no progress bar: OpenCode''s status bar is drawn by the host and takes no command or plugin contribution, so statusline-install.py and statusline-chain.sh do not ship'
+  - id: band-pane-mod
+    status: absent
+    note: 'no band or plan pane: they are a Claude Code mod, and OpenCode has no mod API'
+  - id: design-sync
+    status: equivalent
+    note: 'a local handoff pack only; DesignSync is a Claude Code connector that OpenCode does not have'
+  - id: context-usage
+    status: equivalent
+    note: 'a fork reads OpenCode''s SQLite session store and models cache instead of a transcript, with four stop rules: the supervisor''s rollover request goes with the handoff envelope'
+  - id: commands
+    status: equivalent
+    note: 'the config hook registers backlog, decisions and project-maturity in cfg.command, each a prompt that hands off to its skill; an injected command ran through `opencode run --command` (probe); no statusline command, since OpenCode has no status line'

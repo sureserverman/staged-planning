@@ -1,0 +1,187 @@
+# Cursor: facts measured by scripts/probes/cursor-probe.sh (cursor-agent 2026.10.22-27dcf5f,
+# model Auto). Cases plugin, user, both, claude and shadow ran headless
+# (`cursor-agent -p --trust --force --output-format stream-json`); case interactive ran the
+# TUI (`cursor-agent --trust --force`, no -p) in tmux with both routes installed.
+# Every hook command was an absolute path, so a missing event means the route did not fire,
+# except the path-form hooks of the last interactive run (below, at probe_events).
+# Each hook case ran once, with one Task (subagent) call and one or two shell calls.
+#
+# stop and afterAgentResponse fired only in the interactive session: once per route, with
+# status completed. Headless, stop was not observed (afterAgentResponse was not wired
+# there); the client's bundle runs stop, subagentStart and subagentStop only when the
+# server asks for them. subagentStart and subagentStop were not observed in any mode, in
+# one run per mode, each making a Task call.
+host: cursor
+out: plugins/cursor/planning
+# The build: core less the excludes, rewritten, then hosts/cursor/overrides/ and add/.
+# Tests and fixtures are left out by default (every host but the identity host), and the
+# Claude Code mod lives in hosts/claude/add/, which no other host builds.
+exclude:
+  # No store Cursor writes records the context a session uses, so the measured handoff
+  # rules cannot run; only a dated wait hands off (session-handoff.md, the Cursor override).
+  - skills/executing-plans/scripts/context-usage.py
+  # Supervised handoff is not carried on Cursor.
+  - skills/executing-plans/scripts/handoff-envelope.py
+  # Its prose: planning's side lives in handoff-envelope.py, excluded above.
+  - references/handoff-protocol.md
+  # Claude Code's commit-gate installer; on Cursor the hooks installer wires the gate.
+  - skills/executing-plans/scripts/proof-hooks-install.py
+  # Claude Code's PreToolUse guard over the commit gate. Cursor's hook events differ, and
+  # on Cursor the beforeShellExecution commit gate (hooks/commit-gate.sh) does its job,
+  # so nothing in hooks/hooks.json runs it.
+  - hooks/proof-guard.sh
+rewrites:
+  # Cursor gives a skill no plugin-root variable. Skills and agents name the plugin root
+  # through the placeholder core already uses, and the paths after it are plugin-relative.
+  - glob: '**/*.md'
+    pattern: '\$\{CLAUDE_PLUGIN_ROOT\}'
+    replace: '<planning-plugin>'
+  # Cursor has no plugin namespace: a skill is invoked as /<skill>, and an agent is
+  # dispatched by its bare name (the names ruling keeps planning's names bare). Every core
+  # file that writes /planning:<skill> is overridden or excluded, so no rule rewrites it.
+  - glob: '**/*.md'
+    pattern: '\bplanning:(code-reviewer|claim-verifier|architecture-researcher|design-handoff-reproducer)\b'
+    replace: '\1'
+  # Cursor's subagent tool is Task, and it takes the agent's name.
+  - glob: '**/*.md'
+    pattern: '`subagent_type`'
+    replace: 'agent name'
+  - glob: '**/*.md'
+    pattern: '<subagent_type>'
+    replace: '<agent name>'
+  - glob: skills/executing-plans/references/dispatch-fidelity.md
+    pattern: '\bthe Agent tool\b'
+    replace: 'the Task tool'
+  # Cursor's Task call names its general agent generalPurpose (the name its dispatch log
+  # records), not general-purpose.
+  - glob: skills/executing-plans/references/dispatch-fidelity.md
+    pattern: '`general-purpose`'
+    replace: '`generalPurpose`'
+  - glob: skills/executing-plans/scripts/review-ledger-check.py
+    pattern: '<subagent_type>'
+    replace: '<agent name>'
+  - glob: skills/executing-plans/scripts/review-ledger-check.py
+    pattern: 'line of that subagent_type'
+    replace: 'line of that agent name'
+  # Skills name the plugin root as <planning-plugin>; nothing substitutes it on Cursor,
+  # so each skill says where it is. A skill this host overrides carries the note itself.
+  - glob: skills/*/SKILL.md
+    pattern: '\A(---\n(?:(?!---\n).*\n)*?---\n)'
+    replace: '\1\n> On Cursor, `<planning-plugin>` is this plugin''s installed folder: the folder that holds `skills/` and `.cursor-plugin/` (`~/.cursor/plugins/local/planning` for a local install), which is `../..` from this SKILL.md. In a shell command use its absolute path, quoted.\n'
+# What the host matrix reports. A note says what the probe measured, and says so where a
+# behavior was not measured.
+features:
+  - id: skills
+    status: native
+    note: 'each skill is invoked by its bare name, /<skill>: Cursor has no plugin namespace (the names ruling); a local plugin''s skill was found and invoked by cursor-agent -p in a throwaway HOME'
+  - id: agents
+    status: equivalent
+    note: 'the four ship as plugin agents with no model or tool grant, readonly where they review; Cursor chooses the model, and a plugin agent asked for by name ran as its bare file name (cursor probe). Lost: the per-agent model and effort pins core agents carry; reopen if Cursor gains a per-agent effort or model setting a plugin can ship'
+  - id: review-dispatch
+    status: equivalent
+    note: 'a review is a Task dispatch of the bare-named agent; the review ledger matches it to its dispatch line, since Cursor sends no subagent start or stop event'
+  - id: parallel-dispatch
+    status: native
+    note: 'several Task calls in one message; the probe measured the Task call and its payload, not the concurrency'
+  - id: stop-continue
+    status: equivalent
+    note: 'measured: stop fired only in an interactive session, once per route, and never headless, so a cursor-agent -p run gets no stop-continue; the plugin-route stop hook replies with followup_message (loop_limit 25) and CURSOR_PLAN_CONTINUE=0 turns it off'
+  - id: proof-guard
+    status: equivalent
+    note: 'proof-guard.sh does not ship; while a plan is in flight the beforeShellExecution commit gate (hooks/commit-gate.sh) denies a git command in a repo without the proof shim and one that points git at another hooks directory; beforeShellExecution fired on the plugin route in every probe mode'
+  - id: dispatch-log
+    status: equivalent
+    note: 'measured: subagentStart and subagentStop fired in no mode, and preToolUse (matcher Task) fired on the plugin route, headless and interactive; the fork logs one dispatch line per tool_use_id with tool_input.subagent_type (generalPurpose, explore or a plugin agent''s bare name, empty when absent), because both routes installed ran it twice for one call'
+  - id: git-ref-gate
+    status: equivalent
+    note: 'on while a plan is in flight, not opt-in: the hooks skill installs the shim and the commit gate denies git in a repo without it; it gates the Stage N green commit and needs a record for every claim of every task of that stage'
+  - id: handoff-envelope
+    status: absent
+    note: 'handoff-envelope.py does not ship, and supervised handoff is waived on Cursor: a handoff is the RESUME HERE block and phase handoff, and the next session is resumed by hand'
+  - id: plan-progress
+    status: native
+  - id: statusline
+    status: equivalent
+    note: 'the statusline skill writes the statusLine key in the Cursor CLI''s ~/.cursor/cli-config.json, pointing at statusline-chain.sh, which appends the bar to a base status line script; a set statusLine replaces the CLI''s native footer; the probe did not exercise it'
+  - id: band-pane-mod
+    status: absent
+    note: 'no band or plan pane: they are a Claude Code mod, and Cursor has no mod API'
+  - id: design-sync
+    status: equivalent
+    note: 'a local handoff pack only; DesignSync is a Claude Code connector that Cursor does not have'
+  - id: context-usage
+    status: absent
+    note: 'context-usage.py does not ship: no store Cursor writes records the context a session uses, so no measured stop rule fires and only a dated wait hands off'
+  - id: commands
+    status: equivalent
+    note: 'no slash commands ship: the status-line command is the plan-statusline skill, invoked as /plan-statusline, and the hooks skill wires the hooks'
+# Working directory and paths, from the last interactive run (plugin route, path-form
+# commands that logged their working directory and environment, decoys at the same
+# relative paths in the workspace). stop ran from the workspace root: `./hooks/x.sh` ran
+# the workspace's hooks/x.sh, not the plugin's, while `$CURSOR_PLUGIN_ROOT/hooks/x.sh` and
+# `"${CURSOR_PLUGIN_ROOT}/hooks/x.sh"` both ran the plugin's script, so the command runs
+# through a shell and CURSOR_PLUGIN_ROOT is the plugin folder. preToolUse(Task) ran from the
+# plugin folder, and `./hooks/x.sh` reached the plugin's script. Every hook's environment
+# carried CURSOR_PLUGIN_ROOT, CLAUDE_PLUGIN_ROOT (the same folder), CURSOR_PROJECT_DIR,
+# CLAUDE_PROJECT_DIR (the workspace root), CURSOR_VERSION and CURSOR_TRANSCRIPT_PATH.
+# The stop hook is therefore wired as "${CURSOR_PLUGIN_ROOT}/hooks/plan-continue.sh".
+#
+# The Task call's tool_input, from the same run (three Task calls): keys description,
+# model, prompt and subagent_type. subagent_type is the agent's name: a plain "use a
+# subagent" request went to explore, a general-purpose one to generalPurpose, and the
+# plugin's custom agent asked for by name to its bare file name (sp-probe-agent, no plugin
+# prefix). model was "inherit" in all three. dispatch-log reads subagent_type and logs an
+# empty name when the field is absent.
+# probe_events: the events each route fired in any mode. preToolUse (matcher Task) and
+# beforeShellExecution fired with only that route installed, headless; stop and
+# afterAgentResponse fired, logged by that route, in the interactive run.
+probe_events:
+  plugin: [preToolUse, beforeShellExecution, stop, afterAgentResponse]
+  user: [preToolUse, beforeShellExecution, stop, afterAgentResponse]
+# probe_double_fire: lines per event with both routes installed, from the interactive run.
+# Each is one call logged once by each route: an event wired in both places runs twice.
+# beforeShellExecution is 4 there because the subagent also ran a shell command (two calls,
+# two routes); the headless both-case made one shell call and logged 2, and preToolUse 2.
+probe_double_fire:
+  preToolUse: 2
+  beforeShellExecution: 4
+  stop: 2
+  afterAgentResponse: 2
+# claude_hooks_run: a Claude Code plugin installed in ~/.claude has its hooks run by
+# cursor-agent. Headless, its unmatched PreToolUse ran on the Task call and both shell
+# calls, and its Stop did not run. Interactive, its Stop ran once, an `Agent|Task` matcher
+# fired on the Task call and a `Bash` matcher on both Shell calls, with Cursor's payload
+# (camelCase hook_event_name, tool_name Task or Shell, and a cursor_version field).
+# Hooks in ~/.claude/settings.json did not run.
+claude_hooks_run: true
+# shadow: one skill name in four roots. /sp-shadow was answered by the ~/.agents/skills
+# copy. Asked to list the sp-shadow skills it was given, the model named the other three.
+shadow:
+  served: ~/.agents/skills
+  listed:
+    - ~/.claude/skills
+    - ~/.claude/plugins/cache
+    - ~/.cursor/plugins/local
+probe_date: 2026-10-24
+probe_script: scripts/probes/cursor-probe.sh
+# The owner's rulings on the probe evidence. Each names the probe and its date.
+rulings:
+  names:
+    choice: {planning: bare}
+    note: planning's skills keep their names; which of a Claude Code copy and the Cursor copy is served when both are installed is unmeasured, and the README says so
+    date: 2026-10-24
+    evidence: cursor-probe 2026-10-24
+  hook_route:
+    # Per event: plugin (hooks/hooks.json), user (~/.cursor/hooks.json, written by the
+    # installer), both, or none. The plugin route alone fires every event that fires at
+    # all, and both routes double-fire, so every wired event is on the plugin route.
+    # subagentStart and subagentStop fire in no mode: dispatch-log runs on preToolUse(Task).
+    choice: {stop: plugin, preToolUse: plugin, beforeShellExecution: plugin, subagentStart: none, subagentStop: none}
+    note: stop fires only in an interactive session; headless runs get no stop-continue
+    date: 2026-10-24
+    evidence: cursor-probe 2026-10-24
+  claude_hooks:
+    choice: claude-steps-aside
+    note: the Claude planning plugin's dispatch-log, proof-guard and Stop hooks all run under Cursor; each exits quietly when its payload carries cursor_version, so only Cursor's own hooks answer
+    date: 2026-10-24
+    evidence: cursor-probe 2026-10-24 (interactive matcher run)

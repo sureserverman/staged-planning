@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""The Codex review-ledger fork: a claimed review matches a logged start of its role.
+
+Built from the sources to a scratch dir, then run against a throwaway repo holding a
+`Stage 1 Task 1.1` commit, a dispatch log and a draft gate report. Codex logs only an
+agent's role and id, so these are the ways a claim could pass with no review behind it:
+
+  untyped     an evaluator claim naming an agent with no custom role never matches, so
+              Preflight's untyped probe cannot stand in for the evaluator
+  own role    a claim matches only the installed `planning:<agent>` role, never a user's
+              own role of the same bare name
+  once        one agent id counts once, however many rows repeat it
+  timing      a Tier-1 claim takes a start before the stage's last task commit, a stage
+              claim one after it, so task reviews cannot stand in for the stage's pass
+  good        each claim with its own start of its role in its window matches (exit 0)
+"""
+import datetime
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+FAILS = []
+NOW = datetime.datetime.now(datetime.timezone.utc)
+BEFORE = (NOW - datetime.timedelta(hours=1)).isoformat(timespec="seconds")
+AFTER = (NOW + datetime.timedelta(hours=1)).isoformat(timespec="seconds")
+TIER2 = "review: Tier-2 planning:code-reviewer over a1..b2 — APPROVE"
+SECOND = "review: second pass planning:code-reviewer over a1..b2 — APPROVE"
+TIER1 = "review: Tier-1 planning:code-reviewer over the Task 1.1 diff — APPROVE"
+EVAL = "evaluator: planning:goal-evaluator in the goal-evaluator role — PASS"
+EVAL_UNTYPED = "evaluator: default in the goal-evaluator role — PASS"
+
+
+def check(ok, msg):
+    print(f"{'ok  ' if ok else 'FAIL'} {msg}")
+    if not ok:
+        FAILS.append(msg)
+
+
+tmp = tempfile.mkdtemp(prefix="codex-ledger-test-")
+try:
+    out = os.path.join(tmp, "out")
+    subprocess.run([sys.executable, os.path.join(REPO, "build", "build.py"), "--host", "codex",
+                    "--no-lock-check", "--out", out], cwd=REPO, check=True, capture_output=True)
+    script = os.path.join(out, "skills", "executing-plans", "scripts", "review-ledger-check.py")
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, ".claude"))
+    subprocess.run(["git", "init", "-q", "--template=", repo], check=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                    "commit", "--allow-empty", "-qm", "Stage 1 Task 1.1: the work"], check=True)
+    plan = os.path.join(repo, "p-plan.md")
+    with open(plan, "w") as fh:
+        fh.write("# Project Plan: fixture\n\n## Stage 1: one\n\n### Stage 1 Gate\n- [ ] x\n")
+
+    def run(rows, lines):
+        with open(os.path.join(repo, ".claude", "dispatch-log.jsonl"), "w") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+        report = os.path.join(tmp, "report.md")
+        with open(report, "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+        r = subprocess.run([sys.executable, script, "--plan", plan, "--stage", "1", "--repo", repo,
+                            "--report", report], capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    def start(agent_id, role, when):
+        return {"ts": when, "event": "start", "session_id": "s", "agent_type": role,
+                "agent_id": agent_id}
+
+    rc, o = run([start("p1", None, AFTER)], [EVAL_UNTYPED])
+    check(rc == 1 and "untyped" in o, f"an untyped evaluator claim never matches ({rc})")
+    rc, o = run([start("u1", "code-reviewer", AFTER)], [TIER2])
+    check(rc == 1, f"a user's own `code-reviewer` role does not stand in ({rc})")
+    rc, o = run([start("a1", "planning:code-reviewer", AFTER)] * 2, [TIER2, SECOND])
+    check(rc == 1, f"one agent id repeated satisfies one claim, not two ({rc})")
+    rc, o = run([start("t1", "planning:code-reviewer", BEFORE)], [TIER2])
+    check(rc == 1 and "after the stage's last task commit" in o,
+          f"a review started before the last task commit is no stage pass ({rc})")
+    rc, o = run([start("t1", "planning:code-reviewer", BEFORE),
+                 start("t2", "planning:code-reviewer", BEFORE)], [TIER1, TIER2])
+    check(rc == 1, f"two task-time reviews cannot cover a Tier-1 and a Tier-2 claim ({rc})")
+    rc, o = run([start("t1", "planning:code-reviewer", BEFORE),
+                 start("g1", "planning:code-reviewer", AFTER),
+                 start("g2", "planning:code-reviewer", AFTER),
+                 start("e1", "planning:goal-evaluator", AFTER)], [TIER1, TIER2, SECOND, EVAL])
+    check(rc == 0, f"each claim with its own start in its window matches ({rc}: {o[-300:]})")
+finally:
+    shutil.rmtree(tmp)
+
+print(f"\n{'FAIL' if FAILS else 'OK'}: {len(FAILS)} failure(s)")
+sys.exit(1 if FAILS else 0)

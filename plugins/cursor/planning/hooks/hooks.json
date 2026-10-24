@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "type": "command",
+        "command": "\"${CURSOR_PLUGIN_ROOT}/hooks/plan-continue.sh\"",
+        "timeout": 10,
+        "loop_limit": 25
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "\"${CURSOR_PLUGIN_ROOT}/hooks/dispatch-log.sh\"",
+        "matcher": "Task",
+        "timeout": 5
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "type": "command",
+        "command": "\"${CURSOR_PLUGIN_ROOT}/hooks/commit-gate.sh\"",
+        "timeout": 30
+      }
+    ]
+  }
+}

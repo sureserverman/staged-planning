@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "state_groups": [
+    "contract",
+    "storage",
+    "rounds",
+    "dispositions",
+    "strategy"
+  ],
+  "trace_groups": [
+    "durable-round",
+    "authorized-experiment",
+    "premises",
+    "complete"
+  ],
+  "status": "protocol contract; its suites run from the source repository's root under scripts/run-tests.sh, which the installed plugin does not ship",
+  "contract": "references/execution-state-contract.md",
+  "corpus": "tests/fixtures/workflow-recovery/manifest.json",
+  "operations_status": "implemented",
+  "protocol": {
+    "state_schema": 2,
+    "handoff_envelope_schema": 1,
+    "operations": [
+      "init",
+      "show",
+      "transition",
+      "begin-round",
+      "record-verification",
+      "complete-round",
+      "authorize",
+      "set-blocker",
+      "strategy-review",
+      "migrate",
+      "finish"
+    ],
+    "dispositions": [
+      "working",
+      "repairing",
+      "waiting_external",
+      "awaiting_owner_decision",
+      "handoff",
+      "complete"
+    ],
+    "exits": {
+      "ok": 0,
+      "no_active_plan": 0,
+      "budget_exhausted": 2,
+      "state_error": 3,
+      "conflict": 4,
+      "strategy_review_due": 5
+    },
+    "snapshot_max_bytes": 8388608,
+    "new_work_receipt_limit": 256,
+    "legacy_input_max_bytes": 262144
+  },
+  "required_final_gate": "bash scripts/run-tests.sh, from the source repository's root",
+  "qualification": "local_protocol_only",
+  "decision": "the executor owns a versioned execution-state snapshot; readers consume that snapshot; comparison evidence is ledgered"
+}

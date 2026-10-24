@@ -1,0 +1,33 @@
+# planning's feature ids, in host-matrix order. Every hosts/<host>/host.yaml reports a
+# status for each (scripts/host-matrix.py --check).
+features:
+  - id: skills
+    what: the skills, invocable by name
+  - id: agents
+    what: the bundled agent roles (architecture researcher, design-handoff reproducer, code reviewer, claim verifier)
+  - id: review-dispatch
+    what: a review or evaluator runs as a fresh agent that sees only its brief
+  - id: parallel-dispatch
+    what: Dispatch YES tasks run as concurrent agents
+  - id: stop-continue
+    what: a Stop hook keeps a plan in flight running past an early end of turn
+  - id: proof-guard
+    what: a tool-use guard refuses edits that would bypass the proof records while a plan runs
+  - id: dispatch-log
+    what: a hook logs each agent dispatch, for the review-ledger check
+  - id: git-ref-gate
+    what: an opt-in git reference-transaction hook refuses an unproven task commit
+  - id: handoff-envelope
+    what: a session handoff writes and verifies the handoff envelopes
+  - id: plan-progress
+    what: the execution state file the progress display and the tools read
+  - id: statusline
+    what: a status-line progress bar for the plan in flight
+  - id: band-pane-mod
+    what: the band and pane above the prompt that show the plan in flight
+  - id: design-sync
+    what: reading a design handoff from the host's design tool, not only a local pack
+  - id: context-usage
+    what: a measured context-usage reading decides when a run hands off
+  - id: commands
+    what: slash commands the plugin ships (statusline install)

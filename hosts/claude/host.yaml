@@ -1,0 +1,35 @@
+# Claude is the identity host: its output is core/ plus add/, with no rewrites,
+# no overrides and no excludes.
+host: claude
+out: plugins/claude/planning
+features:
+  - id: skills
+    status: native
+  - id: agents
+    status: native
+  - id: review-dispatch
+    status: native
+  - id: parallel-dispatch
+    status: native
+  - id: stop-continue
+    status: native
+  - id: proof-guard
+    status: native
+  - id: dispatch-log
+    status: native
+  - id: git-ref-gate
+    status: native
+  - id: handoff-envelope
+    status: native
+  - id: plan-progress
+    status: native
+  - id: statusline
+    status: native
+  - id: band-pane-mod
+    status: native
+  - id: design-sync
+    status: native
+  - id: context-usage
+    status: native
+  - id: commands
+    status: native

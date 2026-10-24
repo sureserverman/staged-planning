@@ -1,0 +1,5 @@
+scripts/run.py:
+  base_sha256: abf1e1c588617a9e3414eed412302ce6d067a9bc0a5bbe350a76e4fdc1b857ca
+  host_fact: alpha runs its scripts under a different interpreter name.
+skills/one/guide.md:
+  base_sha256: 9b6d634a3e388d4c0d9d4c294ac82bf73e499024e1a7990ce053fd64a6ebd79a

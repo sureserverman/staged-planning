@@ -1,0 +1,15 @@
+{
+  "screenId": "home",
+  "breakpoints": ["compact", "medium", "expanded"],
+  "tree": {
+    "region": "screen",
+    "padding": "space.md",
+    "children": [
+      { "region": "header", "children": [ { "component": "card", "variant": "elevated" } ] },
+      { "region": "content", "gap": "space.md", "children": [
+        { "component": "card", "variant": "outlined" },
+        { "component": "button", "variant": "primary" }
+      ] }
+    ]
+  }
+}

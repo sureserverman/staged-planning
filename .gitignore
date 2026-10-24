@@ -1,0 +1,41 @@
+# Findings files from security tools are local-only and never committed.
+# The synthetic fixtures under tests/fixtures are test data and stay tracked.
+*findings*.jsonl
+!**/tests/fixtures/**/*findings*.jsonl
+
+# Security reports are local-only and never committed, whichever tool wrote them.
+# The synthetic fixtures under tests/fixtures are test data and stay tracked.
+*audit-report-*.md
+*security-report-*.md
+!**/tests/fixtures/**/*report-*.md
+
+# Ephemeral execution state written by executing-plans.
+.claude/plan-progress.json
+
+__pycache__/
+*.pyc
+
+# Claude Code writes this into a plugin directory it loads (build.py LOADER_BYPRODUCTS);
+# the `.claude-plugin/types/` beside it carries its own `*` .gitignore.
+plugins/*/planning/tsconfig.json
+
+# ===== AI Tools =====
+.claude/
+.claude_memory
+.cursorrules
+.cursor/
+.aider*
+.copilot/
+CLAUDE.md
+AGENTS.md
+.github/copilot-instructions.md
+
+# ===== AI / Design Plans =====
+docs/plans/
+plans/
+# test fixtures are committed data, not local plan scratch
+!**/tests/fixtures/**/plans/
+
+# Proof records name the plan that produced them, by its absolute path. A project whose
+# plans are kept outside the repo keeps its proof records local too.
+proof/

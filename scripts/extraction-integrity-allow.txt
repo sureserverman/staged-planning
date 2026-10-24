@@ -1,0 +1,25 @@
+# Extraction-integrity allowlist.
+#
+# One `path:CODE:token` line suppresses exactly ONE finding. The allowlist is
+# read as a MULTISET, not a set: N occurrences of a key need N lines, and the
+# N+1th surfaces. Under set membership these tokens are low-entropy enough
+# ("sections below", "checks above") that a genuinely new dead pointer routinely
+# collides with an allowlisted one and vanishes. Measured under set membership:
+# three dead pointers appended to allowlisted files are absorbed silently, exit 0.
+#
+# Consequence worth knowing: a STALE line is unused suppression capacity that
+# will absorb the next real finding with that key. Remove a line when its finding
+# is fixed rather than leaving it behind.
+#
+# A row is debt — a pointer or a position word that resolved in a monolith and
+# resolves nowhere now — on a path that exists in this repo. A burn-down list,
+# not a permanent exemption. A row for a path that does not exist here allows
+# nothing and is removed.
+#
+# This file deliberately carries NO per-skill narrative in its comments, and NO
+# directory prefix either. The burn-down history lives in the commit log, so a
+# `grep -c '<name>'` over this file answers "are any entries left for that skill"
+# without a comment mentioning it by name skewing the count. That rule is why the
+# paragraphs above name no directory: a gate criterion can be literally
+# `! grep -q '<prefix>/' <this file>`, and a comment saying the prefix is clear
+# would fail the check that proves it is.

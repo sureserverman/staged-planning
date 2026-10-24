@@ -1,0 +1,61 @@
+README.md:
+  base_sha256: 30223ddccf58b67e2ac022ed5fde4b2e77763171b90e19ee1341092ae4109c8f
+agents/architecture-researcher.md:
+  base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
+agents/claim-verifier.md:
+  base_sha256: 0401633ea7eb7ab36f955b709ec0c68274d42591e39d37383f5810d8065a7778
+agents/code-reviewer.md:
+  base_sha256: 9fae2e15579c341b8be112f6a91cf1e6a127fb6bd541fd25a3a521e9209e7088
+agents/design-handoff-reproducer.md:
+  base_sha256: e9448612954289cc8930264891fbfacdce5f3a983f8735e462ad087c4ceb6874
+skills/applying-design-handoff/SKILL.md:
+  base_sha256: 2e93acd0a99ce1ded84747632fd5c25c3f01a979ceea51a9747789060855478e
+skills/applying-design-handoff/references/fidelity-rubric.md:
+  base_sha256: d3d108d3619f3a8c46216101c4e70a71eeb266594664f129fa27ff456e4b5609
+skills/applying-design-handoff/references/handoff-pack-format.md:
+  base_sha256: f7b0a89982bed0c7859956b6e9ebb2157d4747825420a4a304b1cfd002e463c1
+skills/architecting-projects/SKILL.md:
+  base_sha256: c8af46cfc685b131b8dbdc83b363db4873fb79c81989cfe83a7bff109ead4bef
+skills/dispatching-parallel-agents/SKILL.md:
+  base_sha256: 744d7ea7871f917293bc601c30ad66e61e359d7c1b9b9d948d18b70fc25e998f
+skills/dispatching-parallel-agents/references/stack-routing.md:
+  base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
+skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
+  base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
+  host_fact: OpenCode registers an agent under its file name (agents/<name>.md carries no name field), has no plugin namespacing, and its built-in subagents are general and explore, so the fork reads the shipped agents from their file names, accepts the bare name and refuses a planning:<name> id.
+skills/executing-plans/SKILL.md:
+  base_sha256: 7c6e722d2cd08915545e0f89eaafa7f31a6ac97bc6d8def076eae4a655a8ed9c
+skills/executing-plans/references/close-out.md:
+  base_sha256: 3d6f22df7857ba2fef336ef77dc75fa8551ba594ba81d7a13eac94fcc79437fc
+skills/executing-plans/references/dispatch-fidelity.md:
+  base_sha256: 35fe47e1ca68e9beba6baf7f3e1a5300db21b70b07dc822f4c99a62a9ff61ecd
+skills/executing-plans/references/extraction-classification.md:
+  base_sha256: 267a441a3e89958d627dc7c807d1e5e7c6527b48dc7da7c1b905fa1b27325a7e
+skills/executing-plans/references/gate-failure-procedure.md:
+  base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
+skills/executing-plans/references/integration.md:
+  base_sha256: 24cd403ebe8622e879e8554c954a02eb27f9398e92c5d39a579b557c8e68d567
+skills/executing-plans/references/master-plans.md:
+  base_sha256: 4792dee784f32689b02a0d3617c01baa89f49a67900e74f742bfc33d0049f2ec
+skills/executing-plans/references/plan-continue-hook.md:
+  base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
+skills/executing-plans/references/preflight-checks.md:
+  base_sha256: 7c592bcd39059f80f51cb25cf21adcfb779b726f57fbab0c39eb1c2df7a6a208
+skills/executing-plans/references/progress-state-file.md:
+  base_sha256: 48c0b0235859273c776e9fd49fe276c3ee6d964fdc289244c69d9adf42939da5
+skills/executing-plans/references/session-handoff.md:
+  base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
+skills/executing-plans/references/stage-gate.md:
+  base_sha256: 3342cb0c6c23ebdaf9dd79f2df6975b362e025986994cd094c6540f62683608c
+skills/executing-plans/references/task-execution.md:
+  base_sha256: 95d907fc71bf73851bfd095979f5abe67162709f42866f954676561087a94d00
+skills/executing-plans/scripts/context-usage.py:
+  base_sha256: b943d841b54c25234b04272935bb317c439647a9a24b8cb32a49e4e60504e05a
+  host_fact: 'OpenCode keeps no transcript file and sets no session id in a shell''s environment: it records each model call''s token use in its SQLite session store (opencode.db in its data directory) and each model''s context limit in its models cache, so the fork reads those, newest top-level session for the working directory unless --session names one; the rollover-request rule and the sidecar writer go with the handoff envelope and the planning mod, which OpenCode does not ship.'
+skills/executing-plans/scripts/plan-progress.py:
+  base_sha256: 3e3d6c0af52152088bcd83b73046f161939074576e83df5b27d42c44689e7750
+  host_fact: OpenCode has no status line a plugin or a command can feed, so the status-line renderer and its --json model can never run; the fork ships the budget, stage-order and dispatch checks byte-identical and exits 64 on any other argument.
+  depends_on:
+    lib/plan_parser.py: b23f1cd6f2db540a2a6ae8dac2322ce023d3ade59e103be68f64c32a46f47d01
+    skills/executing-plans/scripts/plan_state.py: 4d0fe4499f1e615f04fecd95f1483cd3a92eab86793bdca39f51fb9829b91ea7
+    skills/planning-projects/scripts/validate-dispatch.py: c30f005300c83639de0d5a3df3462870a6e6cba4012689c1789c66e6cc582404

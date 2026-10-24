@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "name": "example-pack",
+  "components": ["button", "card"],
+  "screens": ["home"],
+  "tokens": "tokens.json",
+  "assets": ["assets/logo.svg"]
+}

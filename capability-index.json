@@ -1,0 +1,165 @@
+{
+  "components": [
+    {
+      "description": "Use to research ONE candidate architecture \u2014 a pattern plus concrete module layout \u2014 returning cited findings (evidence, directory tree, boundaries, risks). Triggers include \"research this architecture option\", \"evidence this candidate architecture\", \"validate this project layout\".",
+      "disable_model_invocation": false,
+      "kind": "agent",
+      "model": "sonnet",
+      "name": "architecture-researcher",
+      "path": "core/agents/architecture-researcher.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use to prove a task's Test claims and requirements with prove-claim.py from a clean context, breaking the code each claim is about and watching its test go red. Triggers include \"verify Task N.M\", \"prove this task's claims\", \"verify Stage N\", \"run the claim verifier\".",
+      "disable_model_invocation": false,
+      "kind": "agent",
+      "model": "sonnet",
+      "name": "claim-verifier",
+      "path": "core/agents/claim-verifier.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use this agent to review a completed plan task, a commit, a PR, or a set of changes against a plan and coding standards. Trigger phrases: \"review this\", \"code review please\", \"review this PR\", \"security review\". Review-only \u2014 reports findings; its read-only-contract block defines the boundary.",
+      "disable_model_invocation": false,
+      "kind": "agent",
+      "model": "sonnet",
+      "name": "code-reviewer",
+      "path": "core/agents/code-reviewer.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use to reproduce ONE slice of a Claude Design handoff pack (component/screen plus tokens and assets) precisely, self-checked against the fidelity rubric. Triggers include \"reproduce this design slice\", \"implement this component to spec\", \"build this screen to match the handoff\".",
+      "disable_model_invocation": false,
+      "kind": "agent",
+      "model": "sonnet",
+      "name": "design-handoff-reproducer",
+      "path": "core/agents/design-handoff-reproducer.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Wire, check, or remove the plan-execution progress bar in the Claude Code status line. Triggers on \"install the progress bar\", \"wire the plan statusline\", \"is the progress bar set up\", \"remove the statusline bar\".",
+      "disable_model_invocation": false,
+      "kind": "command",
+      "model": "inherit",
+      "name": "statusline",
+      "path": "hosts/claude/add/commands/statusline.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use when redesigning an app to reproduce a Claude Design handoff pack (tokens, components, layout, assets) precisely, reshaping functionality to fit the design where they conflict. Triggers on \"reproduce this design\", \"apply the handoff pack\", \"redesign to match the design\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "applying-design-handoff",
+      "path": "core/skills/applying-design-handoff/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use after a design is validated (or on a direct architecture request) to produce a researched, user-approved architecture document that planning-projects consumes. Triggers on \"design the architecture\", \"architecture options\", \"pick an architecture\", \"compare architecture candidates\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "architecting-projects",
+      "path": "core/skills/architecting-projects/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use to read, append, or remove entries in docs/backlog.md \u2014 the register for deferred improvements and decisions, not defects. Triggers on \"add to backlog\", \"defer this\", \"what's in the backlog\", \"BL-NNN is done \u2014 remove it\". Append on defer, remove on implement, list on research.",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "backlog",
+      "path": "core/skills/backlog/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use before any non-trivial creative or implementation work \u2014 new features, components, services, migrations, or behavior changes \u2014 to turn a vague idea into a validated design, one question at a time. Triggers on \"I want to build\", \"let's design\", \"brainstorm\", \"help me think through\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "brainstorming",
+      "path": "core/skills/brainstorming/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use to record, read, or look up the architectural decisions that bind a project and the reasons behind them. Triggers on \"record this decision\", \"why did we choose X\", \"log this security review recommendation\", \"what decisions bind this project\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "decisions",
+      "path": "core/skills/decisions/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Dispatches one agent per task, running concurrently. Triggers on \"dispatch these tasks in parallel\", \"run these Dispatch YES tasks\", \"fan out these independent fixes\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "dispatching-parallel-agents",
+      "path": "core/skills/dispatching-parallel-agents/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use when you have a planning-projects plan \u2014 Standard (staged), master (sub-plans), or light (single-stage) \u2014 and need to execute it, driving Red-Green loops and stage gates. Triggers on \"execute this plan\", \"run the plan\", \"execute the master plan\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "executing-plans",
+      "path": "core/skills/executing-plans/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Integrity rules for any verification gate, acceptance check, test command, or \"done\" claim. Use whenever something must pass, build, run, or be measured \u2014 before reporting a gate green, registering a build/test task, or recording test/benchmark evidence. Apply eagerly; do not wait to be asked.",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "honest-gates",
+      "path": "core/skills/honest-gates/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use when the user wants a plan for a project of any size \u2014 triages to a format first (Direct/Light/Standard/Master) and may decline to plan a trivial job. Triggers on \"roadmap\", \"break this down\", \"create a plan\", \"plan this\", \"how should I build\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "planning-projects",
+      "path": "core/skills/planning-projects/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use to scaffold, audit, and read a per-project docs/MATURITY.md checklist tracking ship-readiness across six axes (Documentation, Security, Packaging, UI/UX, i18n, Testing). Triggers: \"scaffold maturity\", \"audit project maturity\", \"is this ready to publish\", \"check ship-readiness\".",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "project-maturity",
+      "path": "core/skills/project-maturity/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    },
+    {
+      "description": "Use to capture, audit, or refresh behavior contracts (docs/workflows/) \u2014 user-visible flows with stable IDs, steps, and invariants. Triggers on \"document the app's workflow\", \"capture the auth flow\", \"audit this diff against the workflow spec\". Regression checklist after a non-trivial change.",
+      "disable_model_invocation": false,
+      "kind": "skill",
+      "model": null,
+      "name": "workflow-spec",
+      "path": "core/skills/workflow-spec/SKILL.md",
+      "plugin": "planning",
+      "requires_enablement": true
+    }
+  ],
+  "schema": 1
+}

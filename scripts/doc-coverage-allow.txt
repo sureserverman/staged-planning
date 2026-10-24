@@ -1,0 +1,2 @@
+# Doc-coverage exceptions — one `plugin/component` per line, each with a written reason.
+# An entry here records a deliberate decision, never a shortcut around writing the section.

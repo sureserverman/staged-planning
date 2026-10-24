@@ -1,0 +1,86 @@
+README.md:
+  base_sha256: 30223ddccf58b67e2ac022ed5fde4b2e77763171b90e19ee1341092ae4109c8f
+agents/architecture-researcher.md:
+  base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
+agents/claim-verifier.md:
+  base_sha256: 0401633ea7eb7ab36f955b709ec0c68274d42591e39d37383f5810d8065a7778
+agents/code-reviewer.md:
+  base_sha256: 9fae2e15579c341b8be112f6a91cf1e6a127fb6bd541fd25a3a521e9209e7088
+agents/design-handoff-reproducer.md:
+  base_sha256: e9448612954289cc8930264891fbfacdce5f3a983f8735e462ad087c4ceb6874
+hooks/dispatch-log.sh:
+  base_sha256: e993234fa47b5068d10f8fa27376ab54aacc9e0a181b449b83f87ed048723454
+  host_fact: 'Cursor sent no subagentStart or subagentStop event in any probe mode, and its preToolUse hook (matcher Task) is a permission hook that runs from the plugin folder, so the fork logs dispatch lines only, on preToolUse: it answers {"permission":"allow"}, takes the repo from the payload''s workspace_roots, logs tool_input.subagent_type (empty when absent), and writes one line per tool_use_id, because an entry on both routes ran it twice for one call.'
+  depends_on:
+    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+hooks/git-ref-gate.sh:
+  base_sha256: 3312866e3e1f8b34418e26a635d6efca318027303de60f629280a7eb566c7f9b
+  host_fact: 'On Cursor an executor left to choose proved only the claims it picked, and it installs nothing it is not told to, so proof there is every claim, once per stage at the gate, and on while a plan is in flight: the fork gates the Stage N green commit, needs a record for every claim of every task of stage N, and its shim is installed by the Cursor hooks installer, which the beforeShellExecution commit gate enforces.'
+  depends_on:
+    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    skills/executing-plans/scripts/prove-claim.py: 14486ef0915d44700f0e3fa7ea6752df54ea275e31d004301732dc74f2484429
+hooks/plan-continue.sh:
+  base_sha256: 43113fb2ba0eaa385c941e242696bf64b86118fce0d408bb774c0a35d8aa6fe2
+  host_fact: A Cursor stop hook answers with followup_message, which Cursor submits as the next user message, its payload carries no message text, and it fires only in an interactive session, run from the workspace root; so the fork continues every stop of a plan in flight that the execution state does not record as a stop, finds the repo from workspace_roots, keys the conversation by conversation_id and finds its siblings from its own resolved path.
+  depends_on:
+    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+skills/applying-design-handoff/SKILL.md:
+  base_sha256: 2e93acd0a99ce1ded84747632fd5c25c3f01a979ceea51a9747789060855478e
+skills/applying-design-handoff/references/handoff-pack-format.md:
+  base_sha256: f7b0a89982bed0c7859956b6e9ebb2157d4747825420a4a304b1cfd002e463c1
+skills/applying-design-handoff/references/playwright-capture.md:
+  base_sha256: 744f361cebb7be0c7c047be7e0f0a5d2183cab5927938f063e72b2cc5ffd62c3
+skills/architecting-projects/SKILL.md:
+  base_sha256: c8af46cfc685b131b8dbdc83b363db4873fb79c81989cfe83a7bff109ead4bef
+skills/brainstorming/SKILL.md:
+  base_sha256: 1c06ca3d892ed705315c51a5b465ad820d598c82de46b4212bedb34d68977820
+skills/dispatching-parallel-agents/SKILL.md:
+  base_sha256: 744d7ea7871f917293bc601c30ad66e61e359d7c1b9b9d948d18b70fc25e998f
+skills/dispatching-parallel-agents/references/stack-routing.md:
+  base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
+skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
+  base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
+  host_fact: 'Cursor has no plugin namespace: a plugin agent asked for by name ran as its bare file name, and its built-in agents are generalPurpose and explore, so the validator fails any <plugin>:<name> id and accepts bare names and those built-ins.'
+skills/executing-plans/SKILL.md:
+  base_sha256: 7c6e722d2cd08915545e0f89eaafa7f31a6ac97bc6d8def076eae4a655a8ed9c
+skills/executing-plans/references/close-out.md:
+  base_sha256: 3d6f22df7857ba2fef336ef77dc75fa8551ba594ba81d7a13eac94fcc79437fc
+skills/executing-plans/references/light-plans.md:
+  base_sha256: e0244928930b57a7e051d73425659931139d3eae14e8b4012032394ce63922f6
+skills/executing-plans/references/master-plans.md:
+  base_sha256: 4792dee784f32689b02a0d3617c01baa89f49a67900e74f742bfc33d0049f2ec
+skills/executing-plans/references/plan-continue-hook.md:
+  base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
+skills/executing-plans/references/preflight-checks.md:
+  base_sha256: 7c592bcd39059f80f51cb25cf21adcfb779b726f57fbab0c39eb1c2df7a6a208
+skills/executing-plans/references/progress-state-file.md:
+  base_sha256: 48c0b0235859273c776e9fd49fe276c3ee6d964fdc289244c69d9adf42939da5
+skills/executing-plans/references/review-scope.md:
+  base_sha256: 8667ef32842f1661c31b0c19da89b315632415dd9a9240a25645e0a2e06c28a1
+skills/executing-plans/references/session-handoff.md:
+  base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
+skills/executing-plans/references/stage-gate.md:
+  base_sha256: 3342cb0c6c23ebdaf9dd79f2df6975b362e025986994cd094c6540f62683608c
+skills/executing-plans/references/task-execution.md:
+  base_sha256: 95d907fc71bf73851bfd095979f5abe67162709f42866f954676561087a94d00
+skills/executing-plans/scripts/plan-flip-audit.py:
+  base_sha256: e7c513918b8f8f67e0b00c9d4ae56c0b9dc910bfe0b5f676515535abf69cdb3f
+  host_fact: 'The Cursor proof model of the hooks/git-ref-gate.sh fork (every claim, once per stage at the gate): findings 8 and 9 hold every claim of a ticked task to a record and skip the tasks of the stage still in flight, read through the hooks'' state reader, so the audit and the Cursor commit gate count the same set. It also carries unrecorded_gate(), which core has none of: the Cursor stop hook asks it whether a stage claimed done (stage-complete, closeout, or ticked gate boxes) lacks its Stage N green commit.'
+  depends_on:
+    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    lib/staleness.py: fb4e58f7e56fd36e0b1c63d097cd7837bd938263da6db6e1d5268a43a83a486c
+    skills/executing-plans/scripts/prove-claim.py: 14486ef0915d44700f0e3fa7ea6752df54ea275e31d004301732dc74f2484429
+skills/executing-plans/scripts/statusline-chain.sh:
+  base_sha256: 930df5bf1e77fdf09366ff3723369e7bfe6aad6980feff674cff2219ad4c1fd2
+  host_fact: The Cursor CLI pipes its own payload to the statusLine command, and Cursor writes no status line script of its own, so the fork defaults the base script to ~/.cursor/statusline.sh and passes the payload bytes through unread to the base and to plan-progress.py.
+  depends_on:
+    skills/executing-plans/scripts/plan-progress.py: 3e3d6c0af52152088bcd83b73046f161939074576e83df5b27d42c44689e7750
+skills/executing-plans/scripts/statusline-install.py:
+  base_sha256: 879e0e5ed07808911d8597d1e5d2086c18616e627244e0b5af7096b4cdc3c80d
+  host_fact: The Cursor CLI reads statusLine from ~/.cursor/cli-config.json, not from Claude Code's settings.json, a plugin cannot contribute it, and a local install is not a versioned cache, so the fork writes, repairs and removes that one key there, pointing at the sibling statusline-chain.sh.
+skills/honest-gates/SKILL.md:
+  base_sha256: 7b00a13103068f95b1e7ce5a8cfd23fb1c58c1b733659543b577c882f9ae94db
+skills/planning-projects/SKILL.md:
+  base_sha256: 451683a2c47248d662777147b2d66dba0b61a11c72e07a1445631a6ddb733a16
+skills/project-maturity/SKILL.md:
+  base_sha256: b2c8eb0f6f768d9471eb7be18c693c967428655e85c0941af9fd5de0467791e0
