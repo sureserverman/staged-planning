@@ -213,8 +213,13 @@ def owner_of(repo):
     else:
         need(marker.is_dir() and git_dir==marker and common==git_dir, 'invalid main worktree marker')
     need(common.stat().st_uid==os.getuid() and not common.stat().st_mode & 0o002, 'unsafe common directory')
+    # A detached HEAD (a tag build, a rebase, a bisect) has no branch, so it owns no run:
+    # `symbolic-ref -q` exits 1 there, and any other failure is still an identity error.
+    head=subprocess.run(['git','-C',str(repo),'symbolic-ref','-q','--short','HEAD'],
+                        capture_output=True,text=True,timeout=10)
+    need(head.returncode in (0,1), 'git worktree identity unavailable')
     return {'root':str(root),'common':str(common),'git_dir':str(git_dir),
-            'branch':git('symbolic-ref','--short','HEAD')}
+            'branch':head.stdout.strip() if head.returncode==0 else None}
 
 
 @contextlib.contextmanager
@@ -640,6 +645,8 @@ def mutate(state,operation,payload):
 
 def execute(repo,operation,payload,expected=None,operation_id=None):
     owner=owner_of(repo)
+    need(operation=='show' or owner['branch'] is not None,
+         'detached HEAD owns no run: switch to a branch first')
     if operation=='show':
         fields(payload,())
         try:

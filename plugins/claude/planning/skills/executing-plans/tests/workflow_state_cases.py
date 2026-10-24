@@ -474,6 +474,22 @@ class ProjectionReaders(Case):
         return subprocess.run([sys.executable,str(path),*args],cwd=self.repo,
             input=json.dumps(stdin or {}),capture_output=True,text=True,timeout=10)
 
+    def test_a_detached_head_owns_no_run(self):
+        # A checkout with no branch (a tag build, a rebase, a bisect) is idle when no run
+        # exists here, never a state error; it cannot start one; and a run started on a
+        # branch is a conflict from the detached checkout, not invisible.
+        self.git('checkout','-q','--detach')
+        self.call('show',status='no_active_plan')
+        result=self.reader('plan-progress.py',stdin={'cwd':str(self.repo)})
+        self.assertEqual((result.returncode,result.stderr),(0,''))
+        refused=self.call('init',{'plan':'fixture-plan.md','scope':'fixture',
+                                  'source':'owner: execute the fixture plan'},status='state_error')
+        self.assertIn('detached HEAD',refused['message'])
+        self.git('checkout','-q','-')
+        self.init()
+        self.git('checkout','-q','--detach')
+        self.call('show',status='conflict')
+
     def test_structured_wait_handoff_and_qualification_are_visible(self):
         (self.repo/'fixture-plan.md').write_text('# Project Plan: Fixture\n## Stage 1: Work\n### Task 1.1: Repair\n- **Status:** [ ]\n')
         self.init();self.call('transition',{'phase':'task','qualification':'no_go'})

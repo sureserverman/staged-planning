@@ -37,6 +37,9 @@ Required keys: `schema_version: 2`, UUID `run_id`, integer `revision`, `owner`
 `qualification`, `blocker`, `strategy`, `receipts` and an integrity digest.
 `rounds` contains `completed`, `budget` and nullable `active`. `gate` contains
 `id`, `repair_revision` and nonempty declared `checks` while repairing.
+A detached HEAD has no branch and owns no run: `show` there reports `no_active_plan`,
+or `conflict` when this worktree's pointer names a run started on a branch, and every
+other operation is a `state_error` until a branch is checked out.
 Compatibility `remediation_round` is completed plus active; `remediation_budget`
 is the current ceiling. Changing a gate cannot erase spent rounds: gate accounts
 are retained. Disposition projects to existing public phase values.
