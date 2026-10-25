@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.4 — 2026-10-25
+
+- **The OpenCode README no longer says the package is on npm.** It said "From npm (published
+  by 1.0.0)" and led with `{ "plugin": ["opencode-staged-planning"] }`, which loads nothing
+  because the package was never published. It now leads with the clone-and-path install, as
+  the repository README does, and says npm comes later. No code change.
+- **The repository no longer carries a backlog or decisions register.** `docs/backlog.md` and
+  `docs/decisions.md` were the maintainer's working records; they moved out of the repo and
+  are gitignored. The plugin's own `backlog` and `decisions` skills are unchanged.
+
 ## 1.0.3 — 2026-10-25
 
 - **The break patch keeps its fallback.** 1.0.2 wrote the shell redirect as `"$TMPDIR"`, which

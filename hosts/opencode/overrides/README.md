@@ -7,16 +7,14 @@ backlog and decisions. This is the OpenCode build of the planning plugin, one np
 
 ## Installation
 
-From npm (published by 1.0.0), add the package to the `plugin` array of your
-`opencode.json`:
+Clone the repository and add this package's entry file to the `plugin` array of your
+`opencode.json`, by its absolute path:
 ```json
-{ "plugin": ["opencode-staged-planning"] }
+{ "plugin": ["/absolute/path/to/staged-planning/packages/opencode/src/index.ts"] }
 ```
 
-Or load a local copy by its path:
-```json
-{ "plugin": ["/absolute/path/to/opencode-staged-planning/src/index.ts"] }
-```
+The package is not on npm yet. Once it is, `{ "plugin": ["opencode-staged-planning"] }` will
+load it by name instead.
 
 That is the whole install. The plugin registers its own skills, agents and commands from
 its `config` hook: it adds its `skills/` folder to the config's skill paths, each

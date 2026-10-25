@@ -39,3 +39,7 @@ plans/
 # Proof records name the plan that produced them, by its absolute path. A project whose
 # plans are kept outside the repo keeps its proof records local too.
 proof/
+
+# A project's backlog and decisions live in its records home, not in this repo.
+docs/backlog.md
+docs/decisions.md
