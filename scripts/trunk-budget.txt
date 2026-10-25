@@ -56,7 +56,8 @@
 # The rationale lives in references (stage-gate.md, dispatch-fidelity.md,
 # bug-is-a-class.md) and in honest-gates. Per-section sizes:
 # core/skills/executing-plans/references/extraction-classification.md.
-core/skills/executing-plans/SKILL.md 54258
+# Lowered 54258 -> 54257 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
+core/skills/executing-plans/SKILL.md 54257
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -123,7 +124,8 @@ core/skills/backlog/SKILL.md 16181
 # the Research Summary promise, who uses the result) and step 3's rule to build the
 # success path and every failure path; older plans' `Parallel:` read as `Dispatch:`;
 # sibling agents named as optional; pointers that name their section.
-core/skills/dispatching-parallel-agents/SKILL.md 17966
+# Lowered 17966 -> 17959 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
+core/skills/dispatching-parallel-agents/SKILL.md 17959
 
 # applying-design-handoff.
 # The ceiling pays for position-neutral pointers and every citation it carries: a
@@ -161,8 +163,10 @@ core/skills/workflow-spec/SKILL.md 10580
 hosts/codex/overrides/skills/applying-design-handoff/SKILL.md 17625
 hosts/codex/overrides/skills/architecting-projects/SKILL.md 13348
 #   - the agent list counts every role this plugin ships, and names the ones the table routes.
-hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21402
-hosts/codex/overrides/skills/executing-plans/SKILL.md 63819
+# Lowered 21402 -> 21395 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
+hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21395
+# Lowered 63819 -> 63818 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 63818
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.

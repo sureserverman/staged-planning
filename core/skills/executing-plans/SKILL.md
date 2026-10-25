@@ -464,10 +464,10 @@ write them.** The reasons behind all three: `references/task-execution.md`.
 4a. **Prove it — by the tool, on the host.** With the work staged, before flipping Status,
    run `python3 <planning-plugin>/skills/executing-plans/scripts/prove-claim.py claim` for the task's **first claim
    and each claim marked `(red if …)`** — `--test` a command from the task's `Test:`;
-   revert the fix (not the test) as `--break`, a patch file in `${TMPDIR:-/tmp}`. It writes
+   revert the fix (not the test) as `--break`, a patch a shell redirect writes into `"$TMPDIR"` (scratch too, never a literal `/tmp/`). It writes
    a record only after watching that test pass, go RED under the break and the tree come
    back — `git add proof/` with the commit. A requirement may be recorded — checkable → `prove-claim.py req`, else `prove-claim.py
-   deviation`; finding 9 only reports the rest. Untiered (a re-run, not an agent), so it runs at every scope including
+   deviation`; finding 9 only reports the rest. Untiered, so it runs at every scope including
    `none` — **but never on a device, VM or instrumented suite**: prove it against the
    host-side test guarding the same line, or record the device-only claim with
    `prove-claim.py deviation --claim`. A per-guard *battery* is for
@@ -499,7 +499,7 @@ write them.** The reasons behind all three: `references/task-execution.md`.
    ```
 
    **Keep the trailer to one physical line** — an unindented wrap ends the trailer block, so
-   the trailer vanishes from every `%(trailers:…)` query with no error at all. Put the reason
+   the trailer vanishes from every `%(trailers:…)` query, silently. Put the reason
    in the body; keep the trailer bare. **Name the actual `subagent_type` that ran the work**,
    not the routing table's suggestion, and say so when a dispatch failed and finished inline.
    **A trailer that misstates who ran the task is worse than none** — it converts a visible
@@ -769,8 +769,8 @@ What each source is load-bearing for: `references/sources.md`.
 
 ## Integration
 
-This skill routes to `planning-projects` (which produced the plan),
+This skill routes to `planning-projects` (the plan's author),
 `dispatching-parallel-agents` (every `Dispatch: YES` task), `backlog` and `decisions` (at
 close-out), `workflow-spec` (the close-out audit), the `planning:code-reviewer` agent (both
 review tiers) and a fresh agent in the goal-evaluator role (gate and close-out). What each is
-for, on what condition it fires, and the **Review opt-out** rules: `references/integration.md`.
+for, when it fires, and the **Review opt-out** rules: `references/integration.md`.

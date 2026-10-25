@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — 2026-10-25
+
+- **Scratch files stay in the session's temp folder.** Rule 4a and the dispatch brief now
+  say the break patch is written by a shell redirect into `"$TMPDIR"`, and that every
+  scratch file goes there, never to a literal `/tmp/` path. They said "a patch file in
+  `${TMPDIR:-/tmp}`", and a model saving the patch with a file tool, which cannot expand
+  the variable, wrote it to `/tmp`, outside the session; a scratch gate script followed
+  it there. Measured on a clean-machine run, where any write outside the session counts.
+
 ## 1.0.1 — 2026-10-25
 
 - **Cursor:** `scripts/hooks-install.py --status` reads the plugin's quoted hook commands.

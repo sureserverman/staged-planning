@@ -54,6 +54,7 @@ def _load_helper():
 
 _helper = _load_helper()
 affirms_claim = _helper.affirms_claim
+affirms_predicate = _helper.affirms_predicate
 FAILED = []
 
 
@@ -96,9 +97,13 @@ def main():
           affirms_claim(r4a, r"work staged"))
     # The patch goes in the run's TMPDIR: Claude Code asks before (or, headless, denies)
     # every write under the repo's `.claude/`, and a literal /tmp path can leave the run.
-    check("rule 4a: `--test` is a command from the task's `Test:`; the break patch lives in ${TMPDIR:-/tmp}",
+    # Written by a shell redirect, because a file tool cannot expand $TMPDIR: a clean-machine
+    # run (2026-10-25) saved the patch with the Write tool to a literal /tmp path.
+    check("rule 4a: `--test` is a command from the task's `Test:`; a shell redirect writes the "
+          "break patch, and every scratch file, into \"$TMPDIR\", never a literal /tmp/ path",
           affirms_claim(r4a, r"`--test` a command from the task's `Test:`")
-          and affirms_claim(r4a, r"patch file in `\$\{TMPDIR:-/tmp\}`")
+          and affirms_predicate(r4a, r"as `--break`", r"a shell redirect writes into `\"\$TMPDIR\"`")
+          and affirms_predicate(r4a, r"scratch too, never a literal", r"`/tmp/`")
           and ".claude/" not in r4a)
     check("rule 4a stages the records with the task commit (`git add proof/`)",
           affirms_claim(r4a, r"git add proof/"))
@@ -132,10 +137,11 @@ def main():
           affirms_claim(brief, r"prove-claim\.py claim"))
     check("the dispatch brief stages the records (`git add proof/`)",
           affirms_claim(brief, r"git add proof/"))
-    check("the dispatch brief: stage the work first, `--test` from the Test, the patch in ${TMPDIR:-/tmp}",
+    check("the dispatch brief: stage the work first, `--test` from the Test, the patch a shell "
+          "redirect writes into \"$TMPDIR\"",
           affirms_claim(brief, r"Stage your work, then prove it")
           and affirms_claim(brief, r"`--test` the Test command above")
-          and affirms_claim(brief, r"reverting your fix, in `\$\{TMPDIR:-/tmp\}`")
+          and affirms_claim(brief, r"reverting your fix, which a shell redirect writes into `\"\$TMPDIR\"`")
           and ".claude/" not in brief)
     check("the dispatch brief names where the tool lives (not an undefined placeholder)",
           affirms_claim(brief, r"executing-plans/scripts/prove-claim\.py"))

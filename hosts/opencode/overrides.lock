@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 9e34f94097739b12575316835588c4c8f6929e3822eae99110186693f648f41b
+  base_sha256: 8f772a945999a4a54791001a5e323b39fcdbe1c2e946742dd2accb6b5617a69a
 agents/architecture-researcher.md:
   base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
 agents/claim-verifier.md:
@@ -17,20 +17,20 @@ skills/applying-design-handoff/references/handoff-pack-format.md:
 skills/architecting-projects/SKILL.md:
   base_sha256: c8af46cfc685b131b8dbdc83b363db4873fb79c81989cfe83a7bff109ead4bef
 skills/dispatching-parallel-agents/SKILL.md:
-  base_sha256: 744d7ea7871f917293bc601c30ad66e61e359d7c1b9b9d948d18b70fc25e998f
+  base_sha256: 3023fd72dd7407d3c083e2a201154669204389e174bd27a51cbbe9719334df76
 skills/dispatching-parallel-agents/references/stack-routing.md:
   base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
 skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: OpenCode registers an agent under its file name (agents/<name>.md carries no name field), has no plugin namespacing, and its built-in subagents are general and explore, so the fork reads the shipped agents from their file names, accepts the bare name and refuses a planning:<name> id.
 skills/executing-plans/SKILL.md:
-  base_sha256: 7c6e722d2cd08915545e0f89eaafa7f31a6ac97bc6d8def076eae4a655a8ed9c
+  base_sha256: 62c9826b23acb64bbd96b074a8a43a2c581c6197e54cd547a0f5f031d5aae831
 skills/executing-plans/references/close-out.md:
   base_sha256: 3d6f22df7857ba2fef336ef77dc75fa8551ba594ba81d7a13eac94fcc79437fc
 skills/executing-plans/references/dispatch-fidelity.md:
   base_sha256: 35fe47e1ca68e9beba6baf7f3e1a5300db21b70b07dc822f4c99a62a9ff61ecd
 skills/executing-plans/references/extraction-classification.md:
-  base_sha256: 267a441a3e89958d627dc7c807d1e5e7c6527b48dc7da7c1b905fa1b27325a7e
+  base_sha256: a1ade402a66e20c518d342bd5aa5df2fb0d49600151020d47aab8169136e5791
 skills/executing-plans/references/gate-failure-procedure.md:
   base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
 skills/executing-plans/references/integration.md:

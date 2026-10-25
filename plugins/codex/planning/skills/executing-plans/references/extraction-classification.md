@@ -3,7 +3,7 @@
 Classifies every trunk heading for extraction: what stays in the trunk, and what may move
 to a reference file. The `bytes` column is each section's size in the trunk, measured with
 `python3 scripts/trunk-sections.py --all-levels core/skills/executing-plans/SKILL.md`:
-**53594 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
+**53593 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
 sitting outside any heading); the two sum to the file size exactly. The `markers` column
 counts the section's rows in the retention-marker table. Both are re-taken from the current
 tree, and a figure here that disagrees with the command is stale.
@@ -82,12 +82,12 @@ measured as stated at the top of this file.
 | 58 | 1 | Phase 3 — Stage execution | phase header |
 | 3312 | 2 | Host notes (Codex) | what Codex does in place of each dispatch, ask, progress and stop mechanism; binds every run on this host |
 
-### rule+elaboration — 14 sections, 35018 B
+### rule+elaboration — 14 sections, 35036 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
 | 12317 | 16 | Step 3.5 — Stage gate | exit criterion + gate order stay; the two verify hooks (Android, redesign), evaluator briefing, Tier-2 shape, decisions sweep and failure procedure are each branch-taken |
-| 7656 | 10 | Step 3.3 — Red-Green loop (per task) | loop rules 1-7 stay; Tier-1 machinery is tier-gated and the test-first rationale is elaboration |
+| 7674 | 10 | Step 3.3 — Red-Green loop (per task) | loop rules 1-7 stay; Tier-1 machinery is tier-gated and the test-first rationale is elaboration |
 | 2026 | 3 | Step 3.2 — Split by parallelism | the YES-obligates-dispatch rule stays; the no-third-mode rationale is elaboration |
 | 1971 | 3 | Dispatch roster and capability probe | fires every Preflight; rationale already in references/dispatch-fidelity.md |
 | 1939 | 3 | A bug found during execution is a class — sweep it, fix every instance | rule is one paragraph; the worked reasoning is elaboration |
@@ -101,12 +101,12 @@ measured as stated at the top of this file.
 | 646 | 1 | Git bootstrap (hard prerequisite for commit-per-task) | fires every Preflight; the decision tree is mechanical detail |
 | 493 | 1 | Decisions re-check (the plan's snapshot can be stale) | fires every Preflight; the why is elaboration |
 
-### conditional — 4 sections, 1492 B
+### conditional — 4 sections, 1473 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
 | 546 | 1 | Phase Close-out — After the last stage | a phase reached once, at the end; nothing before it needs the text |
-| 456 | 1 | Integration | per-skill descriptions consulted only when routing to one |
+| 437 | 1 | Integration | per-skill descriptions consulted only when routing to one |
 | 400 | 2 | Amending authored ceremony | only when an amendment is actually needed; the three legality conditions stay because a pointer is not a rule |
 | 90 | 1 | Sources and rationale | already a pointer at references/sources.md |
 
