@@ -100,9 +100,9 @@ def main():
     # Written by a shell redirect, because a file tool cannot expand $TMPDIR: a clean-machine
     # run (2026-10-25) saved the patch with the Write tool to a literal /tmp path.
     check("rule 4a: `--test` is a command from the task's `Test:`; a shell redirect writes the "
-          "break patch, and every scratch file, into \"$TMPDIR\", never a literal /tmp/ path",
+          "break patch, and every scratch file, into \"${TMPDIR:-/tmp}\", never a literal /tmp/ path in a file tool",
           affirms_claim(r4a, r"`--test` a command from the task's `Test:`")
-          and affirms_predicate(r4a, r"as `--break`", r"a shell redirect writes into `\"\$TMPDIR\"`")
+          and affirms_predicate(r4a, r"as `--break`", r"a shell redirect writes into `\"\$\{TMPDIR:-/tmp\}\"`")
           and affirms_predicate(r4a, r"scratch too, never a literal", r"`/tmp/`")
           and ".claude/" not in r4a)
     check("rule 4a stages the records with the task commit (`git add proof/`)",
@@ -138,10 +138,10 @@ def main():
     check("the dispatch brief stages the records (`git add proof/`)",
           affirms_claim(brief, r"git add proof/"))
     check("the dispatch brief: stage the work first, `--test` from the Test, the patch a shell "
-          "redirect writes into \"$TMPDIR\"",
+          "redirect writes into \"${TMPDIR:-/tmp}\"",
           affirms_claim(brief, r"Stage your work, then prove it")
           and affirms_claim(brief, r"`--test` the Test command above")
-          and affirms_claim(brief, r"reverting your fix, which a shell redirect writes into `\"\$TMPDIR\"`")
+          and affirms_claim(brief, r"reverting your fix, which a shell redirect writes into `\"\$\{TMPDIR:-/tmp\}\"`")
           and ".claude/" not in brief)
     check("the dispatch brief names where the tool lives (not an undefined placeholder)",
           affirms_claim(brief, r"executing-plans/scripts/prove-claim\.py"))

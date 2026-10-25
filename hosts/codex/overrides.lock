@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 8f772a945999a4a54791001a5e323b39fcdbe1c2e946742dd2accb6b5617a69a
+  base_sha256: bfb3b5434b28d26c8d28fb7a08f91669a984929d3084b4dea83a2583971f6a11
 hooks/dispatch-log.sh:
   base_sha256: e993234fa47b5068d10f8fa27376ab54aacc9e0a181b449b83f87ed048723454
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
@@ -22,20 +22,20 @@ skills/applying-design-handoff/scripts/validate-handoff-pack.py:
 skills/architecting-projects/SKILL.md:
   base_sha256: c8af46cfc685b131b8dbdc83b363db4873fb79c81989cfe83a7bff109ead4bef
 skills/dispatching-parallel-agents/SKILL.md:
-  base_sha256: 3023fd72dd7407d3c083e2a201154669204389e174bd27a51cbbe9719334df76
+  base_sha256: 9a2669d897638150ec89c5a6db7f15cfe6e141cb47df8a94a8bdad3a2c46dd36
 skills/dispatching-parallel-agents/references/stack-routing.md:
   base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
 skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: A Codex plugin's agents are TOML role files (name = "<plugin>:<role>") that its installer copies under $CODEX_HOME/agents, and Claude's Markdown agents do not ship, so the validator reads the shipped roles from agents/*.toml.
 skills/executing-plans/SKILL.md:
-  base_sha256: 62c9826b23acb64bbd96b074a8a43a2c581c6197e54cd547a0f5f031d5aae831
+  base_sha256: 83a68c6ca61bfee9a597f3c75b5ca5e60268ad40b3d761e024c7d3636b6bd67b
 skills/executing-plans/references/close-out.md:
   base_sha256: 3d6f22df7857ba2fef336ef77dc75fa8551ba594ba81d7a13eac94fcc79437fc
 skills/executing-plans/references/dispatch-fidelity.md:
   base_sha256: 35fe47e1ca68e9beba6baf7f3e1a5300db21b70b07dc822f4c99a62a9ff61ecd
 skills/executing-plans/references/extraction-classification.md:
-  base_sha256: a1ade402a66e20c518d342bd5aa5df2fb0d49600151020d47aab8169136e5791
+  base_sha256: e2902d5afbfafbb89c28fa1f17acf9477335490ecd2aeb7d61acd3c3e1cb22a8
 skills/executing-plans/references/gate-failure-procedure.md:
   base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
 skills/executing-plans/references/integration.md:

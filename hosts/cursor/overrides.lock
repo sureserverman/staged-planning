@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 8f772a945999a4a54791001a5e323b39fcdbe1c2e946742dd2accb6b5617a69a
+  base_sha256: bfb3b5434b28d26c8d28fb7a08f91669a984929d3084b4dea83a2583971f6a11
 agents/architecture-researcher.md:
   base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
 agents/claim-verifier.md:
@@ -35,14 +35,14 @@ skills/architecting-projects/SKILL.md:
 skills/brainstorming/SKILL.md:
   base_sha256: 1c06ca3d892ed705315c51a5b465ad820d598c82de46b4212bedb34d68977820
 skills/dispatching-parallel-agents/SKILL.md:
-  base_sha256: 3023fd72dd7407d3c083e2a201154669204389e174bd27a51cbbe9719334df76
+  base_sha256: 9a2669d897638150ec89c5a6db7f15cfe6e141cb47df8a94a8bdad3a2c46dd36
 skills/dispatching-parallel-agents/references/stack-routing.md:
   base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
 skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: 'Cursor has no plugin namespace: a plugin agent asked for by name ran as its bare file name, and its built-in agents are generalPurpose and explore, so the validator fails any <plugin>:<name> id and accepts bare names and those built-ins.'
 skills/executing-plans/SKILL.md:
-  base_sha256: 62c9826b23acb64bbd96b074a8a43a2c581c6197e54cd547a0f5f031d5aae831
+  base_sha256: 83a68c6ca61bfee9a597f3c75b5ca5e60268ad40b3d761e024c7d3636b6bd67b
 skills/executing-plans/references/close-out.md:
   base_sha256: 3d6f22df7857ba2fef336ef77dc75fa8551ba594ba81d7a13eac94fcc79437fc
 skills/executing-plans/references/light-plans.md:
@@ -81,6 +81,6 @@ skills/executing-plans/scripts/statusline-install.py:
 skills/honest-gates/SKILL.md:
   base_sha256: 7b00a13103068f95b1e7ce5a8cfd23fb1c58c1b733659543b577c882f9ae94db
 skills/planning-projects/SKILL.md:
-  base_sha256: 451683a2c47248d662777147b2d66dba0b61a11c72e07a1445631a6ddb733a16
+  base_sha256: fd0e95bff85a7c5701975849fb733b95067ebc4144f07b91dde8893f70f84dc7
 skills/project-maturity/SKILL.md:
   base_sha256: b2c8eb0f6f768d9471eb7be18c693c967428655e85c0941af9fd5de0467791e0

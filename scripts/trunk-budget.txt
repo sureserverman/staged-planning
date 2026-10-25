@@ -57,7 +57,8 @@
 # bug-is-a-class.md) and in honest-gates. Per-section sizes:
 # core/skills/executing-plans/references/extraction-classification.md.
 # Lowered 54258 -> 54257 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
-core/skills/executing-plans/SKILL.md 54257
+# Lowered 54257 -> 54256 (1.0.3): the break-patch redirect keeps its /tmp fallback, "likewise" cut to fit.
+core/skills/executing-plans/SKILL.md 54256
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -86,7 +87,8 @@ core/skills/executing-plans/SKILL.md 54257
 #     stage, a missing service blocking only its live claim;
 #   - each stage's Outcomes are written before its tasks;
 #   - the single-pass review figure names the set it counted and its date.
-core/skills/planning-projects/SKILL.md 39440
+# Lowered 39440 -> 39439 (1.0.3): "nine" Light items became "ten".
+core/skills/planning-projects/SKILL.md 39439
 
 # honest-gates.
 # Its rules are WRITE-TIME disciplines: each has to be in front of whoever is writing
@@ -166,7 +168,8 @@ hosts/codex/overrides/skills/architecting-projects/SKILL.md 13348
 # Lowered 21402 -> 21395 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
 hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21395
 # Lowered 63819 -> 63818 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
-hosts/codex/overrides/skills/executing-plans/SKILL.md 63818
+# Lowered 63818 -> 63817 (1.0.3): as core/skills/executing-plans/SKILL.md.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 63817
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
@@ -179,7 +182,8 @@ hosts/cursor/overrides/skills/brainstorming/SKILL.md 13907
 hosts/cursor/overrides/skills/dispatching-parallel-agents/SKILL.md 20585
 hosts/cursor/overrides/skills/executing-plans/SKILL.md 66986
 hosts/cursor/overrides/skills/honest-gates/SKILL.md 15462
-hosts/cursor/overrides/skills/planning-projects/SKILL.md 39953
+# Lowered 39953 -> 39952 (1.0.3): "nine" Light items became "ten", as core.
+hosts/cursor/overrides/skills/planning-projects/SKILL.md 39952
 hosts/cursor/overrides/skills/project-maturity/SKILL.md 14437
 hosts/opencode/overrides/skills/applying-design-handoff/SKILL.md 17317
 hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13210

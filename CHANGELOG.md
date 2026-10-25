@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.3 — 2026-10-25
+
+- **The break patch keeps its fallback.** 1.0.2 wrote the shell redirect as `"$TMPDIR"`, which
+  points at `/` where `TMPDIR` is unset. Rule 4a and the dispatch brief now say
+  `"${TMPDIR:-/tmp}"`, still in a shell redirect, still never a literal path in a file tool.
+  Rule 4a covers every scratch file; the dispatch brief covers the patch (1.0.2's note said
+  both covered scratch files).
+- **Scope checks leave out the executor's own files.** The authoring checklist (Standard and
+  Light) says a gate check over what a commit range changed (`git diff --name-only`) must
+  leave out the `proof/` records and any `.gitignore` the executor commits, or the plan's own
+  bookkeeping fails it. A clean-machine run's toy plan failed its own gate this way.
+
 ## 1.0.2 — 2026-10-25
 
 - **Scratch files stay in the session's temp folder.** Rule 4a and the dispatch brief now

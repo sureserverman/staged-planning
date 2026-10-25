@@ -130,11 +130,11 @@ and follow it" — the same skill body, loaded from disk (see stack-routing.md �
 5. If RED: diagnose the actual error, form a hypothesis, make ONE targeted fix, retest.
    Max <Red-Green max cycles> RED cycles. If exceeded, STOP and report — do not keep looping
 6. Run NOTHING WIDER than the Test above. No full suite, no regression sweep, no "check I broke nothing else" — the main session runs that once at the
-   gate. Running a whole test file instead of one filter is fine
+   gate. A whole test file instead of one filter is fine
 7. Stage your work, then prove it (executing-plans rule 4a): `python3 <absolute path of
    <planning-plugin>/skills/executing-plans/scripts/prove-claim.py claim` (`--help` lists its arguments) for the
    first claim and each `(red if …)` claim — `--test` the Test command above, `--break` a
-   patch reverting your fix, which a shell redirect writes into `"$TMPDIR"`; then `git add proof/`
+   patch reverting your fix, which a shell redirect writes into `"${TMPDIR:-/tmp}"`; then `git add proof/`
 
 ## Constraints
 - Do NOT modify files outside the Files list above
