@@ -1,6 +1,6 @@
 {
   "name": "opencode-staged-planning",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Staged planning for OpenCode: plans with stage gates, Red-Green task loops and proof-backed commits, as skills, agents and commands.",
   "license": "MIT",
   "type": "module",

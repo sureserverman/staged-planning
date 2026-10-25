@@ -42,6 +42,7 @@ Every path is resolved from this file's own plugin folder, never a fixed install
 import argparse
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -180,7 +181,10 @@ def plugin_wiring():
         out = {}
         for ev, entries in doc["hooks"].items():
             for e in entries:
-                name = Path(str(e.get("command", ""))).name
+                # The shipped commands are quoted ("${CURSOR_PLUGIN_ROOT}/hooks/x.sh"), so split
+                # them as the shell does; the script is the last word.
+                words = shlex.split(str(e.get("command", "")))
+                name = Path(words[-1]).name if words else ""
                 out.setdefault(name, []).append(ev)
         return out
     except (OSError, ValueError, KeyError, TypeError, AttributeError):

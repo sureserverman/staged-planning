@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 — 2026-10-25
+
+- **Cursor:** `scripts/hooks-install.py --status` reads the plugin's quoted hook commands.
+  It took each command's last path part as written, closing quote included, so it
+  reported all three hooks unwired and exited 1 although Cursor ran them. It now splits
+  a command as the shell does and takes the script from its last word.
+
 ## 1.0.0 — 2026-10-24
 
 The first release of the `planning` plugin, built from one host-neutral core for four

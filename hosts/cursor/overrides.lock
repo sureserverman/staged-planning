@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: f86baecd82f0ae786a46a82cae01991717d6aef385c8572b0f1c822f06da43d7
+  base_sha256: 9e34f94097739b12575316835588c4c8f6929e3822eae99110186693f648f41b
 agents/architecture-researcher.md:
   base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
 agents/claim-verifier.md:

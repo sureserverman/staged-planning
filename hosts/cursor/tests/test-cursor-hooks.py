@@ -314,6 +314,12 @@ try:
           and any(n.startswith("hooks.json.bak-") for n in os.listdir(os.path.dirname(cfg))),
           "--install removes only our leftover entries, keeps the rest and the mode, backs up",
           (r.stdout, r.stderr, after))
+    st = subprocess.run([sys.executable, installer, "--status", "--home", home],
+                        capture_output=True, text=True, env=env0)
+    check(st.returncode == 0 and all(f"plugin route — {s} on " in st.stdout for s in
+                                     ("plan-continue.sh", "commit-gate.sh", "dispatch-log.sh")),
+          "--status reads the built hooks.json's quoted commands: all three wired, exit 0",
+          st.stdout)
     with open(cfg, "w") as fh:
         fh.write("{not json")
     r = subprocess.run([sys.executable, installer, "--install", "--home", home],
