@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 30223ddccf58b67e2ac022ed5fde4b2e77763171b90e19ee1341092ae4109c8f
+  base_sha256: f86baecd82f0ae786a46a82cae01991717d6aef385c8572b0f1c822f06da43d7
 agents/architecture-researcher.md:
   base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
 agents/claim-verifier.md:
@@ -14,7 +14,7 @@ hooks/dispatch-log.sh:
   depends_on:
     hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
 hooks/git-ref-gate.sh:
-  base_sha256: 3312866e3e1f8b34418e26a635d6efca318027303de60f629280a7eb566c7f9b
+  base_sha256: 208f0a5b6077d83a29074525fb85eb8f9bdd903436d262cb18484c45713bd076
   host_fact: 'On Cursor an executor left to choose proved only the claims it picked, and it installs nothing it is not told to, so proof there is every claim, once per stage at the gate, and on while a plan is in flight: the fork gates the Stage N green commit, needs a record for every claim of every task of stage N, and its shim is installed by the Cursor hooks installer, which the beforeShellExecution commit gate enforces.'
   depends_on:
     hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1

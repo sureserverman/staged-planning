@@ -1081,9 +1081,10 @@ def proof_records(repo, plan):
     committed with it, so a record that does not match its own commit was proven on some
     other tree. A project may instead keep proof/ out of git, because a record copies the
     plan's path and wording and the plans live outside the repo. Then the records are read
-    from disk and bound to the commits whose subject names their task, or to their stage's
-    `Stage N green` commit (the tree the gate's verifier proves on): a record matching none
-    of them was proven on a tree that was never committed. `problems` is [] for a
+    from disk and bound to the commits whose subject names their task, or to a `Stage N green`
+    commit for their stage's number (the tree the gate's verifier proves on; any such commit
+    in HEAD's history binds, an earlier plan's included, as any commit naming the task
+    does): a record matching none of them was proven on a tree that was never committed. `problems` is [] for a
     valid record.
     """
     pc = _prove_claim()
@@ -1131,7 +1132,8 @@ def proof_records(repo, plan):
             for tid in subject_tasks(subj):
                 task_shas.setdefault(tid, []).append(sha)
             # On Cursor every task is proven at its stage's gate, on the tree the
-            # `Stage N green` commit records, so that commit is a binding too.
+            # `Stage N green` commit records, so that commit is a binding too. Any plan's
+            # commit for that stage number binds, as any commit naming the task does.
             green = STAGE_GREEN.match(subj.strip())
             if green:
                 green_shas.setdefault(green.group(1), []).append(sha)

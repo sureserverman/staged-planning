@@ -27,10 +27,15 @@
 # With no plan in flight (no execution state, an untrusted one, no plan named, or the
 # named plan gone) it denies one thing: a git commit whose text names `Stage N green`,
 # because a stage closed with no state could never be checked. Everything else is allowed.
+# A snapshot the gate cannot read or that names another branch (`state_error`, which a
+# detached HEAD gives in a worktree whose run started on a branch) and a finished run
+# are not "no plan": the gate allows them, so a new plan started after a finished one
+# is ungated until `plan-state.py init` records it.
 # A message that merely mentions hooksPath is denied too; the deny says why. These are
 # text rules, a rail and not a sandbox: a command that hides a word from them (a glob,
-# split quoting, an interpreter's -c) is not seen, and the git hook is what still checks
-# every `Stage N green` commit.
+# split quoting, an interpreter's -c, a message read from a file) is not seen; where the git
+# hook is installed it still checks every `Stage N green` commit, and with no plan in flight
+# nothing requires it to be.
 #
 # THE ANSWER. beforeShellExecution is a permission hook: every exit prints JSON,
 # {"permission":"allow"} or {"permission":"deny","user_message":…,"agent_message":…}.

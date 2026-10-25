@@ -88,6 +88,20 @@ def LINGER_RUN(work, tag):
     return subprocess.run(args, capture_output=True, text=True, timeout=120)
 
 
+def probe_id_case():
+    """The backlog probe seeds an entry the backlog skill reads as one (`BL-` and three
+    digits), and the answer check names that id, which the prompt does not carry: a
+    placeholder such as BL-NNN is no entry, and an id the prompt gives away proves no read."""
+    import importlib.util
+    import re
+    spec = importlib.util.spec_from_file_location("qualify_probe_id", QUALIFY)
+    q = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(q)
+    pid = getattr(q, "PROBE_ID", "")
+    check(re.fullmatch(r"BL-\d{3}", pid) is not None and pid not in q.BACKLOG_PROMPT,
+          f"the backlog probe seeds a real entry id ({pid or 'none'}), absent from the prompt")
+
+
 def no_proc_cases(work):
     """run_host on a machine with no /proc (macOS): the session is still found and killed,
     through ps, and the leader is not reaped before its session is scanned (a reaped
@@ -180,6 +194,7 @@ def main():
         check(got.stdout.strip() == "", f"a background child the host leaves is killed when its turn ends: {got.stdout.split()}")
         subprocess.run(["pkill", "-f", f"LINGER-{tag}"])
         no_proc_cases(work)
+        probe_id_case()
 
         print("inputs")
         owner = work / "owner"

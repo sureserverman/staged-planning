@@ -145,6 +145,19 @@ with tempfile.TemporaryDirectory() as root:
     rc, out = run(root, "--host", "claude", "--expect", OURS)
     check(rc == 2 and "claude" in out, "a host CLI that cannot run is exit 2, never a pass", out)
 
+# A reader that parsed nothing must not pass a --forbid: input of the wrong shape is
+# unreadable (exit 2), never "nothing loaded".
+with tempfile.TemporaryDirectory() as root:
+    out_file = os.path.join(root, "claude-list.json")
+    write(out_file, json.dumps({"plugins": [{"id": OURS, "enabled": True}]}))
+    fake_bin(root, "claude", out_file)
+    rc, out = run(root, "--host", "claude", "--forbid", "planning@example-market")
+    check(rc == 2, "a `claude plugin list --json` that is not a list is exit 2, never a pass", out)
+    write(os.path.join(root, "home", ".config", "opencode", "opencode.json"), json.dumps(["x"]))
+    rc, out = run(root, "--host", "opencode", "--forbid", "planning@example-market")
+    check(rc == 2 and "Traceback" not in out,
+          "an opencode.json that is not an object is exit 2, not a traceback", out)
+
 if FAILURES:
     print(f"\n{len(FAILURES)} failure(s)")
     sys.exit(1)

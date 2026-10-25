@@ -79,7 +79,9 @@ Two adapters run inside the plugin on OpenCode's tool events:
 
 The proof-record commit gate itself is a git hook, opt-in per project:
 `python3 <package folder>/skills/executing-plans/scripts/proof-hooks-install.py --install --repo <repo>`. In an opted-in repo with no plan in flight it
-refuses one commit, a `Stage N green` subject, and its refusal names `plan-state.py init`.
+refuses one commit, a `Stage N green` subject, and its refusal names `plan-state.py init`. A snapshot the gate cannot read or that names another branch (`state_error`) and a
+finished run are not "no plan": the gate allows them, so a new plan started after a finished
+one is ungated until `plan-state.py init` records it.
 
 ## Where artifacts live
 

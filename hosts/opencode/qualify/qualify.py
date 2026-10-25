@@ -16,8 +16,8 @@ Cases, in order:
     agents and the commands each package emitted. A set difference is printed and fails,
     and so does a build side with nothing to compare.
   - the backlog: `opencode run -m <model>` in a repo whose docs/backlog.md holds
-    `## BL-NNN — probe entry` asks the backlog skill for the open entries. The transcript
-    must show the skill tool loading `backlog`, and the answer must name BL-NNN. `opencode
+    a `## BL-<three digits> — probe entry` heading (PROBE_ID) asks the backlog skill for the open entries. The transcript
+    must show the skill tool loading `backlog`, and the answer must name that id. `opencode
     run` can refuse a tool call and still exit 0, so the transcript decides, not the exit.
 
 The first --plugin is the one under test; later ones come in the same way, by argument,
@@ -64,10 +64,13 @@ CASES = [
     ("command-discovery", "`opencode debug config` carries exactly the commands each package "
      "emitted"),
     ("backlog-skill", "the backlog skill, run by name, loads through the skill tool and "
-     "answers BL-NNN"),
+     "answers the probe id"),
     ("owner-home-untouched", "the invoking user's ~/.config/opencode hashes the same before "
      "and after"),
 ]
+# The backlog probe's entry id: `BL-` and three digits, the form the backlog skill reads.
+# Joined at run time so the source carries no register id of its own.
+PROBE_ID = "BL-" + "417"
 BACKLOG_PROMPT = ("Use the backlog skill to list the open entries in this repository's "
                   "backlog. Reply with the entry ids only.")
 
@@ -337,7 +340,7 @@ class Run:
         init_repo(repo, self.env)
         (repo / "docs").mkdir()
         (repo / "docs" / "backlog.md").write_text(
-            "# Backlog\n\n## BL-NNN — probe entry\n\n- **Added:** 2026-01-01\n"
+            f"# Backlog\n\n## {PROBE_ID} — probe entry\n\n- **Added:** 2026-01-01\n"
             "- **What:** a probe entry.\n")
         for cmd in (["git", "add", "-A"], ["git", "-c", "core.hooksPath=/dev/null", "commit", "-q",
                                            "-m", "qualify: seed"]):
@@ -363,7 +366,7 @@ class Run:
                 answer.append(part["text"])
         why = [w for w, bad in ((f"exit {rc}", rc != 0),
                                 ("the skill tool never loaded backlog", not loaded),
-                                ("the answer does not name BL-NNN", "BL-NNN" not in "".join(answer)))
+                                (f"the answer does not name {PROBE_ID}", PROBE_ID not in "".join(answer)))
                if bad]
         self.record("backlog-skill", not why, "; ".join(why))
 

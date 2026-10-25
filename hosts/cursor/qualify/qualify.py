@@ -13,8 +13,8 @@ headless `cursor-agent -p` turns in scratch git repos (a model answers each):
     with the agents/*.md each build emitted, one-sided: the session also lists Cursor's
     own and other plugins' agents, with no path to tell them apart. A difference is
     printed and fails the case, and so does a build side with nothing to compare.
-  - the backlog: in a repo whose docs/backlog.md holds `## BL-NNN — probe entry`, the
-    backlog skill is asked for the open entries. The answer must name BL-NNN, and the
+  - the backlog: in a repo whose docs/backlog.md holds a `## BL-<three digits> — probe entry` heading (PROBE_ID), the
+    backlog skill is asked for the open entries. The answer must name that id, and the
     transcript must show the session reading the backlog skill's own SKILL.md from the
     first plugin (Cursor loads a skill by reading it).
   - the dispatch: in a repo with a plan in flight, the session launches one subagent.
@@ -65,7 +65,7 @@ CASES = [
      "and never listed)"),
     ("agent-discovery", "every agent each build emitted is listed as launchable"),
     ("backlog-skill", "the backlog skill, run by name, reads its own SKILL.md from the first "
-     "plugin and answers BL-NNN"),
+     "plugin and answers the probe id"),
     ("dispatch-once", "one subagent launch leaves exactly one dispatch line per tool_use_id"),
     ("owner-home-untouched", "the invoking user's ~/.cursor/hooks.json and plugins/local hash "
      "the same before and after"),
@@ -78,6 +78,9 @@ LIST_PROMPT = (
     "any root variable replaced by its folder. Then, for every custom subagent your Task tool "
     "can launch (leave out the built-in ones), one line `agent <its name>`. Then a line "
     "END-LIST, and nothing else.")
+# The backlog probe's entry id: `BL-` and three digits, the form the backlog skill reads.
+# Joined at run time so the source carries no register id of its own.
+PROBE_ID = "BL-" + "417"
 BACKLOG_PROMPT = ("Use the backlog skill to list the open entries in this repository's "
                   "backlog. Reply with the entry ids only.")
 DISPATCH_PROMPT = (
@@ -423,16 +426,16 @@ class Run:
         init_repo(repo, self.env)
         (repo / "docs").mkdir()
         (repo / "docs" / "backlog.md").write_text(
-            "# Backlog\n\n## BL-NNN — probe entry\n\n- **Added:** 2026-01-01\n"
+            f"# Backlog\n\n## {PROBE_ID} — probe entry\n\n- **Added:** 2026-01-01\n"
             "- **What:** a probe entry.\n")
         commit_all(repo, self.env)
         out, rc = self.agent("backlog", repo, BACKLOG_PROMPT)
         own = os.path.normpath(str(self.local / self.plugins[0][1] / "skills" / "backlog" / "SKILL.md"))
         read = own in skill_reads(out)
-        named = "BL-NNN" in answer_text(out)
+        named = PROBE_ID in answer_text(out)
         why = [w for w, bad in ((f"exit {rc}", rc != 0),
                                 ("the backlog skill's SKILL.md was not read", not read),
-                                ("the answer does not name BL-NNN", not named)) if bad]
+                                (f"the answer does not name {PROBE_ID}", not named)) if bad]
         self.record("backlog-skill", not why, "; ".join(why))
 
     def dispatch(self):

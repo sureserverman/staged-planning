@@ -4,11 +4,11 @@
 It answers from $HOME/.config/opencode/opencode.json the way OpenCode did when measured: a
 `plugin` entry's package adds its skills/, agents/ and commands/; a `skills.paths` entry
 adds its skills. It misbehaves on demand through FAKE_MODE:
-  ok        list everything; the backlog run loads the skill and answers BL-NNN
+  ok        list everything; the backlog run loads the skill and answers the probe id
   miss      leave one skill out of `debug skill`
   noagent   leave the agents out of `debug config`
   xcmd      add a command no package ships
-  noskill   answer BL-NNN without loading the skill
+  noskill   answer the probe id without loading the skill
   owner     also write into $FAKE_OWNER/.config/opencode/opencode.json
   FAKE_LINGER=<tag>  (any mode) leave a background child behind, as the real host's
              workers do: `sleep` under argv LINGER-<tag>, in the same session
@@ -69,7 +69,7 @@ def main():
         if MODE != "noskill":
             print(json.dumps({"type": "tool_use", "part": {"type": "tool", "tool": "skill", "state": {
                 "status": "completed", "input": {"name": "backlog"}}}}))
-        print(json.dumps({"type": "text", "part": {"type": "text", "text": "BL-NNN"}}))
+        print(json.dumps({"type": "text", "part": {"type": "text", "text": "BL-" + "417"}}))
     else:
         return 3
     return 0

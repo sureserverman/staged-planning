@@ -72,6 +72,8 @@ def claude():
         rows = json.loads(_cli(["claude", "plugin", "list", "--json"]))
     except ValueError as e:
         raise Unreadable(f"`claude plugin list --json` is not JSON: {e}")
+    if not isinstance(rows, list):
+        raise Unreadable("`claude plugin list --json` did not print a list")
     return [r["id"] for r in rows if isinstance(r, dict) and r.get("enabled") is True
             and isinstance(r.get("id"), str)]
 
@@ -122,6 +124,8 @@ def opencode():
         cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
         raise Unreadable(f"{cfg_file}: {e}")
+    if not isinstance(cfg, dict):
+        raise Unreadable(f"{cfg_file}: not a JSON object")
     roots = []
     for entry in cfg.get("plugin") or []:
         if isinstance(entry, str) and entry.startswith("file://"):

@@ -44,9 +44,13 @@
 # own commit convention; it is a rail, not a sandbox.
 #
 # WITH NO PLAN IN FLIGHT (no execution state, an untrusted one, no plan named, or the
-# named plan gone) a `Stage N green` commit is refused, because a stage closed with no
+# named plan gone) a commit whose subject starts `Stage N green` is refused, because a stage closed with no
 # state could never be checked; the message names `plan-state.py init`. Every other
 # commit is allowed.
+# A snapshot the gate cannot read or that names another branch (`state_error`, which a
+# detached HEAD gives in a worktree whose run started on a branch) and a finished run
+# are not "no plan": the gate allows them, so a new plan started after a finished one
+# is ungated until `plan-state.py init` records it.
 #
 # IT FAILS OPEN on its own errors (no python3, unreadable state, git or import
 # failures, any uncaught exception) and says why on stderr. A record it cannot read is a

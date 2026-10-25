@@ -4,11 +4,11 @@
 It answers the three prompts qualify.py sends, from what is installed under
 $HOME/.cursor/plugins/local, and misbehaves on demand through FAKE_MODE:
   ok         list every model-invocable skill and every agent; read the backlog skill and
-             answer BL-NNN; log one dispatch line for one Task call
+             answer the probe id; log one dispatch line for one Task call
   miss       leave one skill out of the listing
   extra      list a skill path the build never emitted
   noagent    leave the agents out of the listing
-  noread     answer BL-NNN without reading the backlog skill
+  noread     answer the probe id without reading the backlog skill
   double     log the one Task call's dispatch line twice
   nolog      log no dispatch line
   owner      also write into $FAKE_OWNER/.cursor/hooks.json
@@ -86,7 +86,7 @@ def main():
             emit({"type": "tool_call", "subtype": "completed", "call_id": "r1",
                   "tool_call": {"readToolCall": {"args": {"path": str(path)},
                                                  "result": {"success": {"content": "x"}}}}})
-        result("BL-NNN")
+        result("BL-" + "417")
     elif "Task tool" in prompt:
         if MODE != "notask":
             emit({"type": "tool_call", "subtype": "started", "call_id": "t1",

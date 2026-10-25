@@ -268,7 +268,9 @@ or a remote-tracking ref (a fetched one, or one written there by hand); a ref ot
 and `refs/heads/*`; and past the newest 200 commits of one update, which it says on stderr.
 With no plan in flight (no execution state, or one naming no plan or a plan that is gone) it
 refuses one commit: a `Stage N green` subject, since a stage closed with no state could never
-be checked. The refusal names `plan-state.py init`.
+be checked. The refusal names `plan-state.py init`. A snapshot the gate cannot read or that names another branch (`state_error`) and a
+finished run are not "no plan": the gate allows them, so a new plan started after a finished
+one is ungated until `plan-state.py init` records it.
 
 Nothing installs it. Opt a project in with:
 

@@ -270,7 +270,9 @@ only and the gate does not check them. It reads the finished commit, so `--no-ve
 record must match the commit's own tree and the plan's current wording. With no plan in
 flight (no execution state, or one naming no plan or a plan that is gone) it refuses a
 `Stage N green` commit outright, since that stage could never be checked; the refusal names
-`plan-state.py init`.
+`plan-state.py init`. A snapshot the gate cannot read or that names another branch (`state_error`) and a
+finished run are not "no plan": the gate allows them, so a new plan started after a finished
+one is ungated until `plan-state.py init` records it.
 
 `executing-plans` installs it into the project when a plan loads, through
 `scripts/hooks-install.py` in this plugin. The installer refuses to replace someone else's
