@@ -613,8 +613,10 @@ window (`close-out.md`) rather than leaving it in place.
 
 `../../planning-projects/references/test-scope-tiers.md` sets the rule: a fix made for a Tier-1/Tier-2 finding, a gate triage, or any re-verification inside a
 remediation loop runs at **fix-scope** — the classes the fix touched, plus the originating
-task's `Test:` and the gate check that failed. **Never the full suite, and never a repeat of
-the gate's stage-scope command.** The gate goes green on the fix-scope result *plus* the
+task's `Test:`, the gate check that failed, every cheap repo validator (the `scripts/check-*`
+class) and every test that doubles a changed signature. Measured on 2026-10-25: all four
+failures caught after a fix were validator or test-double breaks that the fix itself made.
+**Never the full suite, and never a repeat of the gate's stage-scope command.** The gate goes green on the fix-scope result *plus* the
 stage-scope result already recorded.
 
 **It is restated in the trunk because a pointer goes unread.** An executor that never opens

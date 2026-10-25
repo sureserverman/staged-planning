@@ -64,6 +64,12 @@ tasks need, and both siblings then have to edit the one file the task exists to 
 out of. Its `Test:` checks the content instead:
 `grep -q '"vitest"' package.json`.
 
+**It leaves a closed set's pins behind.** A task that adds a member to a closed set (an enum,
+an event list, a migration count, a snapshot baseline) updates every test that pins that set,
+in the same task. Otherwise the pin goes red at the next full run, far from the task that broke
+it. Measured on 2026-10-25, this was the most common reason a plan's first full pass failed,
+and no scoped run can see it.
+
 ### Scope marking (the set a task changes)
 
 A task that changes a **class** of artifact declares the set it must sweep, on a `Scope:`

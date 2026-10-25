@@ -598,5 +598,5 @@ Five command-decided items are restated here:
 
 ## Checklist — Light plans
 
-For a **Light** plan (Phase -0.5), verify only the ten Light items — the full checklist
-does not apply. They are in `references/authoring-checklist.md` § Checklist — Light plans.
+For a **Light** plan (Phase -0.5), verify only the eleven Light items; the full checklist
+does not apply. See `references/authoring-checklist.md` § Checklist — Light plans.

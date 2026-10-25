@@ -39,6 +39,7 @@ Run every item before showing the plan to the user.
 - [ ] **One owner per fact**: no gate check re-proves what a task's `Test:` already decides, unless it sweeps a strictly wider, nameable set; and no `(judgment)` line restates a fact an executable check in this plan already answers (`../SKILL.md` § Every fact has one owner)
 - [ ] **Every gate check can fail in the direction its hazard runs.** For each set-valued check, name what the defect would look like in the tree: an unwanted presence is a new line and an allow-list sweep catches it; a *missing* call adds nothing for a grep to find, so it needs an invariant asserted over every operation — a test the gate runs, not a sweep of the sites the plan chose. No validator can tell these apart, because the syntax is identical and only the hazard differs (`set-valued-checks.md` § The third error)
 - [ ] A gate check over what a commit range changed (`git diff --name-only <base>..HEAD`) leaves out the files the executor commits itself — `proof/` records and any `.gitignore` git bootstrap writes — or it fails on the run's own bookkeeping
+- [ ] A task that adds a member to a closed set (an enum, event list, migration count, snapshot baseline) updates every test that pins that set, in the same task (`task-fields.md` § `Test:`)
 - [ ] **The plan's goal is a check from the first gate**: every gate from the first one whose artifact exists carries a `(goal)` check sweeping the plan's goal over the whole artifact, never a subset by category — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING, and any FILTERED-SUBSET note on it is answered. The validator checks presence, not placement: zero means some gate carries one, so placement from the first gate is checked here by the author (`gate-authoring.md` § The plan's goal is a check from the first gate)
 - [ ] **Every gate check can pass as authored**: `validate-gate-checks.py` reports zero SELECTOR-UNMATCHED — every `pytest <file> -k <expr>` selector in a gate is one some task's `Test:` builds toward, so no gate names a filter that collects nothing (such a gate cannot pass, and nothing else finds that before execution; `executing-plans` re-checks it at Preflight with `--collect-only`, where the tests actually exist)
 
@@ -78,7 +79,7 @@ Run every item before showing the plan to the user.
 ## Checklist — Light plans
 
 For a **Light** plan (`../SKILL.md` § Phase -0.5 — Format triage selected it), verify only
-these ten — the Standard checklist does not apply:
+these eleven — the Standard checklist does not apply:
 
 - [ ] Every task has a concrete, runnable `Test:` that asserts the outcome and could go red — the same bar as any plan
 - [ ] Tasks are in dependency order; any `Depends on` points only backward within the stage
@@ -86,6 +87,7 @@ these ten — the Standard checklist does not apply:
 - [ ] The stage has `**Outcomes:**` unless nobody outside the code meets its result (`../SKILL.md` § Phase 2 — Stage Breakdown)
 - [ ] The single `### Stage 1 Gate` includes "full existing test suite passes" and a `(goal)` check sweeping the plan's goal over the whole artifact — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING (`gate-authoring.md` § The plan's goal is a check from the first gate)
 - [ ] A gate check over what a commit range changed (`git diff --name-only <base>..HEAD`) leaves out the files the executor commits itself — `proof/` records and any `.gitignore` git bootstrap writes — or it fails on the run's own bookkeeping
+- [ ] A task that adds a member to a closed set (an enum, event list, migration count, snapshot baseline) updates every test that pins that set, in the same task (`task-fields.md` § `Test:`)
 - [ ] The `Format: Light — …` line is present at the top; the file is saved to `<records home>/plans/` as `*-light-plan.md`
 - [ ] Open backlog items in scope were reviewed (the scan runs at every size); folded-in items carry `Closes BL-NNN`
 - [ ] If `docs/workflows/` exists and the change touches a documented flow, the altered/removed behavior is declared on the task (`Changes WF-NNN` / `Removes WF-NNN`) — behavior contracts don't get a size exemption

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.5 — 2026-10-25
+
+- **Verification scales to the change.** `test-scope-tiers.md` § *Outside a plan, and proven
+  trees*: a release or follow-up fix runs what its change kind needs (docs: build `--check`,
+  validators, leak/portability; tests: the touched tests; code: the touched modules' suites),
+  and CI runs the full suite. A tree that already passed is not run again: no pre-tag rerun,
+  no detached-clone rerun, no repeat of a gate's full pass after a fix that fix-scope proved.
+  The gate-position runs stay: measured over about 20 plans, they caught 47 new failures, 8 of
+  them product defects; the unmandated reruns caught none of value.
+- **Fix-scope includes the repo's validators** and every test that doubles a changed
+  signature. Every failure caught after a fix in the sample was one of those.
+- **A task that adds to a closed set updates its pins** (an enum, event list, migration count,
+  snapshot baseline), in the same task. That was the most common reason a first full pass
+  went red. The Light checklist is eleven items.
+
 ## 1.0.4 — 2026-10-25
 
 - **The OpenCode README no longer says the package is on npm.** It said "From npm (published

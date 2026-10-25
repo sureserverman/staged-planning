@@ -1,6 +1,6 @@
 # planning
 
-An eleven-skill pipeline (v1.0.4) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
+An eleven-skill pipeline (v1.0.5) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
 
 This is the **Cursor** build. Beside the eleven skills it ships two Cursor-only skills, `hooks` and `plan-statusline`, four agents, and the plugin's hooks (`hooks/hooks.json`). Skills are invoked by their bare names (`/executing-plans`, `/backlog`, …); Cursor does not trigger a skill reliably from prose, so name the one you want.
 

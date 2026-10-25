@@ -3,7 +3,7 @@
 Classifies every trunk heading for extraction: what stays in the trunk, and what may move
 to a reference file. The `bytes` column is each section's size in the trunk, measured with
 `python3 scripts/trunk-sections.py --all-levels core/skills/executing-plans/SKILL.md`:
-**53592 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
+**53590 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
 sitting outside any heading); the two sum to the file size exactly. The `markers` column
 counts the section's rows in the retention-marker table. Both are re-taken from the current
 tree, and a figure here that disagrees with the command is stale.
@@ -82,11 +82,11 @@ measured as stated at the top of this file.
 | 58 | 1 | Phase 3 — Stage execution | phase header |
 | 3312 | 2 | Host notes (Codex) | what Codex does in place of each dispatch, ask, progress and stop mechanism; binds every run on this host |
 
-### rule+elaboration — 14 sections, 35035 B
+### rule+elaboration — 14 sections, 35033 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
-| 12317 | 16 | Step 3.5 — Stage gate | exit criterion + gate order stay; the two verify hooks (Android, redesign), evaluator briefing, Tier-2 shape, decisions sweep and failure procedure are each branch-taken |
+| 12315 | 16 | Step 3.5 — Stage gate | exit criterion + gate order stay; the two verify hooks (Android, redesign), evaluator briefing, Tier-2 shape, decisions sweep and failure procedure are each branch-taken |
 | 7673 | 10 | Step 3.3 — Red-Green loop (per task) | loop rules 1-7 stay; Tier-1 machinery is tier-gated and the test-first rationale is elaboration |
 | 2026 | 3 | Step 3.2 — Split by parallelism | the YES-obligates-dispatch rule stays; the no-third-mode rationale is elaboration |
 | 1971 | 3 | Dispatch roster and capability probe | fires every Preflight; rationale already in references/dispatch-fidelity.md |

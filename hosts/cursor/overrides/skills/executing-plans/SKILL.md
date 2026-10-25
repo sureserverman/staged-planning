@@ -557,10 +557,10 @@ When every task in the stage is green, run the stage gate:
   `demo.md` (§ Host notes (Cursor), "Proof is made by the tool, once per stage")
 - **Regressions check runs at stage-scope on intermediate gates:** cheap host-side checks in full, expensive suites (device/instrumented/e2e) restricted to the modules the stage's commits touched — never `clean`. Use the plan's declared `stage-scope:` command when its Preflight carries a "Test-scope commands" block; when the full suite is cheap (<~5 min), just run it in full. Policy: `../planning-projects/references/test-scope-tiers.md`.
 - **The final stage's gate runs at plan-scope**, together with close-out — the plan's one full clean pass.
-- **A review or remediation fix re-runs at `fix-scope` — never the full suite, and never a
-  repeat of the gate's stage-scope command.** The gate stands on that fix-scope result *plus*
-  the stage-scope result already recorded; a full pass is not re-earned per fix
-  (`references/stage-gate.md` § *A review fix does not re-earn the full pass*).
+- **A review or remediation fix re-runs at `fix-scope` — never the full suite or the
+  stage-scope command**; the gate stands on that plus the recorded stage-scope result
+  (`references/stage-gate.md` § *A review fix does not re-earn the full pass*). Never re-run a
+  passed tree (`test-scope-tiers.md` § *Outside a plan, and proven trees*).
 - **The record audit runs at every stage gate:** `python3 <planning-plugin>/skills/executing-plans/scripts/plan-flip-audit.py <plan> --repo <repo-root> --require-all-checks`
   — exit 1, a `blocking` finding, fails the gate. Exit 2 is an error to fix first; name each
   `advisory` finding (exit 4) in the report; exit 3 means a check could not run, and the

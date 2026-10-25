@@ -28,7 +28,7 @@ the merge.
 | Tier | When it runs | What runs |
 |------|--------------|-----------|
 | **task-scope** | Every Red-Green cycle | The task's own `Test:` — **and nothing else**. The stage-scope command does not run inside a task. On an expensive-suite project the field is targeted *because the author scoped it* (§ Plan-authoring declaration), never as a property of being a task field. |
-| **fix-scope** | After a Tier-1/Tier-2 Critical fix, a gate-triage fix, or **any re-verification inside a gate's remediation loop** | Only the test classes/modules the fix touched, plus the originating task's own `Test:` and the gate check that failed. Never the full suite, and never a repeat of the gate's stage-scope command — a review or remediation fix is a targeted change and gets a targeted re-proof. |
+| **fix-scope** | After a Tier-1/Tier-2 Critical fix, a gate-triage fix, or **any re-verification inside a gate's remediation loop** | Only the test classes/modules the fix touched, plus the originating task's own `Test:`, the gate check that failed, every cheap repo validator (the `scripts/check-*` class) and every test that doubles a changed signature. Never the full suite, and never a repeat of the gate's stage-scope command — a review or remediation fix is a targeted change and gets a targeted re-proof. |
 | **stage-scope** | Intermediate stage gates | All **cheap host-side checks in full** (unit tests, lint, static/architecture checks, build). **Expensive suites restricted to the modules touched by the stage's commits.** Never `clean`. |
 | **plan-scope** | Final stage gate + close-out — once | The full suite from a clean state, including every expensive suite and every quarantined slow test. The one place `clean` belongs. |
 
@@ -131,6 +131,31 @@ bars the *unprompted* regression sweep, not a repair that legitimately spans the
 same guard rail 2 that governs a scoped gate report. "Ran the stage-scope suite for Task
 2.3" is honest and also a rule violation; running it and reporting only the task's
 `Test:` as green is the disclosure failure on top.
+
+## Outside a plan, and proven trees
+
+A change made outside a plan's gates — a release, a follow-up fix, a doc correction — is
+verified by what it changed, not by habit:
+
+| The change touches | Run |
+|---|---|
+| Prose or docs only | build `--check`, the repo's validators, its leak or portability check |
+| Tests only | the touched test files, plus the validators |
+| Code | the suites of the touched modules, plus the validators |
+
+The full suite belongs to CI, which runs it on every push: read its result instead of
+re-running it locally.
+
+**A tree that already passed a run is not run again.** Same tree hash, same result: no
+pre-tag rerun, no rerun on a detached clone, no repeat after a review that changed nothing,
+no re-run of a gate's full pass after a fix that fix-scope already proved. A test that
+depends on how the tree is checked out (a detached HEAD in CI, say) is a defect in that
+test: fix the test class, and do not buy a whole-suite rerun to cover it.
+
+Measured on 2026-10-25 over about 20 plans in 11 projects: pre-release and pre-tag reruns
+caught nothing (0 of 6), and repeat runs on an unchanged tree caught one test-only flake. The
+gate-position runs that § The four tiers mandates caught 47 new failures, 8 of them product
+defects. The tiers stay; the habits go.
 
 ## Guard rails
 
