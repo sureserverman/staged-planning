@@ -25,6 +25,13 @@ asks. What it pins:
   6. An entry applies only when every qualifier of its `applies to:` holds — stated in
      § Stop conditions and the catalog, cited by close-out step 10 and § ACTION NEEDED;
      `init` runs on the run's branch.
+  7. Every place the executor matches an entry runs `owner-decision.py match` and acts
+     only on what it lists; a destructive command passes --require-command.
+  8. The catalog's record names `owner-decision.py check` and the place words it reads;
+     both checklist items run it.
+  9. In every executing-plans SKILL.md, close-out.md, stage-gate.md and preflight-checks.md
+     copy, each paragraph or bullet naming an owner decision names `match` (a property,
+     so a site nobody listed fails too).
 
 Why: a trunk that gains a stop the catalog does not name is a stop planning never asks
 about, and the run halts on it mid-stage.
@@ -149,6 +156,9 @@ def part2_templates_carry_the_section():
     for name in ("plan-document-template.md", "light-plan-format.md", "master-plan-format.md"):
         text = read(os.path.join(REF, name))
         body = section(text, "## Owner decisions")
+        lines = [l for l in body.split("```")[0].splitlines() if l.strip()]
+        check(f"2 {name}: the section holds only one-line entries (owner-decision.py reads nothing else)",
+              lines and all(l.startswith("- **OD-") or l.startswith("- none — ") for l in lines), lines[:3])
         check(f"2 {name} carries a `## Owner decisions` section", body.strip() != "", "missing")
         check(f"2 {name}: its example bullets are not checkboxes",
               "**OD-1**" in body and not re.search(r"(?m)^\s*- \[[ x~]\]", body), body[:200])
@@ -289,6 +299,95 @@ def part6_an_entry_is_never_stretched_to_fit():
           STRICT in record and "never reinterpret" in record, "missing")
 
 
+MATCH = "owner-decision.py match"
+
+
+def part7_the_script_decides():
+    """Catches: an ask point where the executor still reads `applies to:` itself. Prose
+    alone let a Stage-2 entry decide a one-stage plan's merge twice after the rule was
+    tightened; each place the executor matches an entry must run the script and act only
+    on what it lists."""
+    for path in trunks("executing-plans"):
+        text = read(path)
+        stops = " ".join(section(text, "## Stop conditions").split())
+        check(f"7 {rel(path)} § Stop conditions: act only on an entry `{MATCH}` lists",
+              MATCH in stops and "lists" in stops, "missing")
+        # Catches M1: an executor that checks one command and runs another.
+        check(f"7 {rel(path)} § Stop conditions: run exactly the command passed to --command",
+              "exactly the command" in stops, "missing")
+        secrets = [b for b in bullets(section(text, "## Safety rails")) if b.startswith("**Secrets**")]
+        check(f"7 {rel(path)} § Safety rails: a secret's mechanism runs `{MATCH} --at stage --stage N`",
+              len(secrets) == 1 and f"{MATCH} --at stage --stage N" in secrets[0], secrets[:1])
+        rails = [b for b in bullets(section(text, "## Safety rails")) if b.startswith("**Destructive commands**")]
+        check(f"7 {rel(path)} § Safety rails: a destructive command runs `{MATCH}` with --require-command",
+              len(rails) == 1 and MATCH in rails[0] and "--require-command" in rails[0], rails[:1])
+    for path in copies("executing-plans", "references/close-out.md"):
+        m = re.search(r"(?ms)^10\. (.*?)(?=^\d+\. |^\S|\Z)", read(path))
+        step = " ".join((m.group(1) if m else "").split())
+        check(f"7 {rel(path)} step 10 runs `{MATCH}` at close-out", MATCH in step and "--at closeout" in step, step[:200])
+        # Catches I1: a merge step settled by an entry that names no command.
+        check(f"7 {rel(path)} step 10 passes --require-command", "--require-command" in step, step[:200])
+    for path in copies("executing-plans", "references/stage-gate.md"):
+        body = section_starting(read(path), "## ACTION NEEDED")
+        first = " ".join((body.strip().split("\n\n")[0] if body.strip() else "").split())
+        check(f"7 {rel(path)} § ACTION NEEDED settles a decision only by `{MATCH}`", MATCH in first, first[:200])
+
+
+CHECK = "owner-decision.py check"
+
+
+def part8_the_author_checks():
+    """Catches: an author writing `applies to:` in words the script cannot place, so every
+    entry is refused at execution and the batched round bought nothing — or an entry naming
+    a stage the plan lacks reaching the executor at all."""
+    m = re.search(r"(?ms)^## The record\n(.*?)^## How to ask", read(os.path.join(REF, "owner-decisions.md")))
+    record = " ".join((m.group(1) if m else "").split())
+    check(f"8 owner-decisions.md § The record names `{CHECK}`", CHECK in record, "missing")
+    for rule in ("every code span there is a command", "never combine", "deny by default",
+                 "one physical line", "nothing else in the section", "exact text",
+                 "plain printable text", "voids the section", "not against an author"):
+        check(f"8 owner-decisions.md § The record states the grammar: {rule!r}", rule in record, "missing")
+    for word in ("`Preflight`", "`close-out`", "`Stage N`", "`Task N.M`", "`Sub-plan N`", "backticked command"):
+        check(f"8 owner-decisions.md § The record names the place word {word}", word in record, "missing")
+    text = read(os.path.join(REF, "authoring-checklist.md"))
+    for name in ("## Checklist — Standard plans", "## Checklist — Light plans"):
+        items = [l for l in section(text, name).splitlines() if l.startswith("- [ ] ") and "## Owner decisions" in l]
+        check(f"8 {name}: the owner-decisions item runs `{CHECK}`",
+              len(items) == 1 and CHECK in items[0], items[:1])
+
+
+def units(text):
+    """Paragraphs and bullets (with their continuation lines), outside code fences.
+    Lines inside a fence are kept as one unit per fence, so a diagram's sentence is whole."""
+    out, cur = [], []
+    for line in text.splitlines():
+        starts = re.match(r"^\s*(?:[-*+]|\d+[.)])\s", line) or line.startswith("|")
+        if not line.strip() or (starts and cur):
+            if cur:
+                out.append(" ".join(cur))
+            cur = [] if not line.strip() else [line.strip()]
+            continue
+        cur.append(line.strip().lstrip("│ "))
+    if cur:
+        out.append(" ".join(cur))
+    return out
+
+
+def part9_no_owner_decision_settles_without_match():
+    """Catches I2's class (absence-shaped): a sentence that lets an owner decision settle
+    a confirmation — the merge, a secret, a stage, the remote — without running the
+    script, so the executor reads the entry itself again. Asserted as a property of every
+    unit that mentions an owner decision, not as a list of the sites found."""
+    for rel_path in ("SKILL.md", "references/close-out.md", "references/stage-gate.md",
+                     "references/preflight-checks.md"):
+        for path in copies("executing-plans", rel_path):
+            for u in units(read(path)):
+                if not re.search(r"owner decision|Owner decisions", u, re.I) or u.startswith("|"):
+                    continue
+                check(f"9 {rel(path)}: a unit naming an owner decision names `match` — {u[:70]!r}",
+                      "match" in u, u[:240])
+
+
 def main():
     part1_catalog_names_every_stop()
     part2_templates_carry_the_section()
@@ -296,6 +395,9 @@ def main():
     part4_planning_asks_the_round()
     part5_execution_reads_the_answers()
     part6_an_entry_is_never_stretched_to_fit()
+    part7_the_script_decides()
+    part8_the_author_checks()
+    part9_no_owner_decision_settles_without_match()
     if FAILED:
         print(f"\n{len(FAILED)} failure(s)")
         sys.exit(1)

@@ -66,7 +66,7 @@ Run every item before showing the plan to the user.
 - [ ] Workflow specs in scope were read; any altered or removed behavior is declared on the corresponding task (`Changes WF-NNN` / `Removes WF-NNN`); new flows have a capture/extend task (`../SKILL.md` § Workflow-spec scan)
 - [ ] If an architecture doc exists for this topic: every structure-creating task cites its ARCH-ID, the final stage gate carries the architecture-conformance check, and no task contradicts an approved ARCH section (`../SKILL.md` § Architecture doc scan)
 - [ ] The decisions scan ran and its result is written into `## Decisions in force` (including the explicit `none — registers consulted: …` form, and `project register: absent` on a new project); tasks constrained by an entry cite it (`Honors DEC-NNN`), any deliberate override cites it (`Supersedes …— <why>`), and the final stage gate carries the decisions-conformance check (`../SKILL.md` § Decisions scan)
-- [ ] Before the plan was presented, the draft was swept against `owner-decisions.md` and every question it triggers was asked in one batched round; each answer is in `## Owner decisions` as `OD-N`, quoted and dated, naming the case it covers — or the section carries the `none` bullet (`../SKILL.md` § Ask execution's questions now)
+- [ ] Before the plan was presented, the draft was swept against `owner-decisions.md` and every question it triggers was asked in one batched round; each answer is in `## Owner decisions` as `OD-N`, quoted and dated, naming the case it covers in the place words `owner-decisions.md` § The record lists, and `owner-decision.py check <plan>` exits 0 — or the section carries the `none` bullet (`../SKILL.md` § Ask execution's questions now)
 
 ## Additionally, for a decomposed project (master plan + sub-plans)
 
@@ -91,7 +91,7 @@ these twelve — the Standard checklist does not apply:
 - [ ] A task that adds a member to a closed set (an enum, event list, migration count, snapshot baseline) updates every test that pins that set, in the same task (`task-fields.md` § `Test:`)
 - [ ] The `Format: Light — …` line is present at the top; the file is saved to `<records home>/plans/` as `*-light-plan.md`
 - [ ] Open backlog items in scope were reviewed (the scan runs at every size); folded-in items carry `Closes BL-NNN`
-- [ ] `## Owner decisions` records the batched round's answers, or the `none` bullet — the catalog sweep runs at every size, like the scans (`owner-decisions.md`)
+- [ ] `## Owner decisions` records the batched round's answers, or the `none` bullet, and `owner-decision.py check <plan>` exits 0 — the catalog sweep runs at every size, like the scans (`owner-decisions.md`)
 - [ ] If `docs/workflows/` exists and the change touches a documented flow, the altered/removed behavior is declared on the task (`Changes WF-NNN` / `Removes WF-NNN`) — behavior contracts don't get a size exemption
 - [ ] On an expensive-suite project, every task's `Test:` is path- or suite-scoped, or the **task** carries a `full-suite: accepted` field with a reason — the same bar as any plan, and an **authoring-time** check (`test-scope-tiers.md`). A Light plan has task `Test:` fields, so this is not one of the items the format drops; it also carries the `**Test-scope commands**` block that arms the check (`light-plan-format.md` § Preflight collapses into the gate), without which this item is unenforceable
 

@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 61f6a31c125a7b7c8a8d9ae0bc895c4203cae125bc69d41833fbeb29b2e233bf
+  base_sha256: bb9f64db4c0c4ec9d4ab8ee79bfbfb3719c1f44cff8ac2dbacac74c0a6983565
 agents/architecture-researcher.md:
   base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
 agents/claim-verifier.md:
@@ -42,9 +42,9 @@ skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: 'Cursor has no plugin namespace: a plugin agent asked for by name ran as its bare file name, and its built-in agents are generalPurpose and explore, so the validator fails any <plugin>:<name> id and accepts bare names and those built-ins.'
 skills/executing-plans/SKILL.md:
-  base_sha256: 3d703cdf326700bf4a5e3fd13a4a176c760f6f467f1313c6e52ac6735f0c003a
+  base_sha256: 3af4ce0de3c75d212c9520a0f23608747bea0f118462e8ed659421313bc0141d
 skills/executing-plans/references/close-out.md:
-  base_sha256: ed8e454bf26bda4199c9e6551f64fc2a358e4e676b46e5ea2d963a9c386e441d
+  base_sha256: a672a8653367a8c62a5017e15e54f72b86ffb39361830e90654da2718a2372d7
 skills/executing-plans/references/light-plans.md:
   base_sha256: e0244928930b57a7e051d73425659931139d3eae14e8b4012032394ce63922f6
 skills/executing-plans/references/master-plans.md:
@@ -52,7 +52,7 @@ skills/executing-plans/references/master-plans.md:
 skills/executing-plans/references/plan-continue-hook.md:
   base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
 skills/executing-plans/references/preflight-checks.md:
-  base_sha256: e174b22ca0e5e4ddb5f21b3f09842b3980ab5eb70570a8a2a451f8228ee4cfd9
+  base_sha256: dce2921011f25d9ec1436da43df755d0a2a23550995ef1c7411627594ab7f7ed
 skills/executing-plans/references/progress-state-file.md:
   base_sha256: ae82cd6fa6807f279808ddfe95ac1a377f5bd029de2ffcd66ade6b1f5ba517c3
 skills/executing-plans/references/review-scope.md:
@@ -60,7 +60,7 @@ skills/executing-plans/references/review-scope.md:
 skills/executing-plans/references/session-handoff.md:
   base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
 skills/executing-plans/references/stage-gate.md:
-  base_sha256: ae5d2d979032fdb06f43bef89d9e9536d0c5d5b25576aa8fdee475315ee2c16a
+  base_sha256: 8d95d68340828623ba3182539e4f7bb848c9a71e048a365d3751c7f75a840c96
 skills/executing-plans/references/task-execution.md:
   base_sha256: 95d907fc71bf73851bfd095979f5abe67162709f42866f954676561087a94d00
 skills/executing-plans/scripts/plan-flip-audit.py:

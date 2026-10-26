@@ -152,14 +152,15 @@ procedure. Work the steps in order.
    - Workflow audit triage: blocks updated, blocks removed, undeclared changes (if any
      survived escalation)
 10. Carry out the merge the plan's `## Owner decisions` records — merge, pull request, branch
-    deletion, push, tag, each only where an entry applies (every qualifier of its `applies to:` holds,
-    `../SKILL.md` § Stop conditions) — and report what was done.
+    deletion, push, tag, each only where `owner-decision.py match --at closeout --command '<it>'
+    --require-command` lists an entry (every qualifier of its `applies to:` holds,
+    `../SKILL.md` § Stop conditions), each run exactly as checked — and report what was done.
     Run `plan-state.py finish` (this file's last section) before any of it switches
     off or deletes the run's branch: the run is owned by its branch, and `finish` is
     refused from anywhere else.
-    With none recorded, offer merge / finalize options (worktree cleanup, PR creation, branch
-    merge). Do not merge without explicit confirmation; an owner decision naming the merge
-    is one.
+    With none listed, offer merge / finalize options (worktree cleanup, PR creation, branch
+    merge). Do not merge without explicit confirmation; an owner decision `match` lists for
+    the step is one.
 
 ## ACTION NEEDED — the one place the close-out report asks for something
 
@@ -176,10 +177,10 @@ ACTION NEEDED: <one line naming the decision>
 One block, last, options numbered. **A close-out report carrying an `ACTION NEEDED:` block
 does not also announce that it is proceeding** — to a merge, a tag, or anything else.
 
-**Step 10's merge offer is the block whenever no owner decision settles the merge.** The
+**Step 10's merge offer is the block whenever `match` lists no owner decision for the merge.** The
 close-out then ends in a decision the user owns, so the block is present: with no other
 decision it carries the merge options alone, and with one it carries both, numbered
-together. When an owner decision settled the merge and nothing else needs the user, the
+together. When `match` listed an owner decision for every merge step and nothing else needs the user, the
 close-out carries no block and says what it did. What may never happen is a separate `ACTION NEEDED:` block for some other decision
 *plus* a freestanding merge offer elsewhere in the report — that reconstructs the pairing this
 form exists to forbid, out of two individually well-formed halves. Anything the user does not

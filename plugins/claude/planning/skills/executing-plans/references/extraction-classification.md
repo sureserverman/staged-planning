@@ -3,7 +3,7 @@
 Classifies every trunk heading for extraction: what stays in the trunk, and what may move
 to a reference file. The `bytes` column is each section's size in the trunk, measured with
 `python3 scripts/trunk-sections.py --all-levels core/skills/executing-plans/SKILL.md`:
-**54701 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
+**55217 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
 sitting outside any heading); the two sum to the file size exactly. The `markers` column
 counts the section's rows in the retention-marker table. Both are re-taken from the current
 tree, and a figure here that disagrees with the command is stale. The command reads the source trunk; a host build may rewrite
@@ -58,7 +58,7 @@ enforces set equality against the trunk's real headings.
 `bytes` is the section's size in the trunk and `markers` its retention-marker count, both
 measured as stated at the top of this file.
 
-### unconditional — 14 sections, 18232 B
+### unconditional — 14 sections, 18692 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
@@ -66,10 +66,10 @@ measured as stated at the top of this file.
 | 1960 | 3 | The plan is the authorization — dispatch without a confirmation turn | dispatch-bound obligation; binds every dispatch decision |
 | 1848 | 1 | Reference map | the index — without it no reference is reachable |
 | 1412 | 3 | Phase 2 — Preflight | phase header + the check list itself |
-| 2897 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all |
+| 3168 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all |
 | 1165 | 3 | Run to completion — don't stop until you have to | governs every turn of every run |
 | 951 | 2 | What this skill expects | the format contract; every run validates against it |
-| 1140 | 3 | Safety rails | branch/destructive/secrets/shared-infra — every run |
+| 1329 | 3 | Safety rails | branch/destructive/secrets/shared-infra — every run |
 | 609 | 1 | Checklist | the four-step loop every execution follows |
 | 604 | 2 | When to revisit earlier steps | small, unconditional |
 | 2547 | 4 | Step 3.0 — Test the stage's premise first, in the real environment | every stage start: the stage-order check, Outcomes, and the premise worksheet the green commit needs |
@@ -96,11 +96,11 @@ measured as stated at the top of this file.
 | 646 | 1 | Git bootstrap (hard prerequisite for commit-per-task) | fires every Preflight; the decision tree is mechanical detail |
 | 493 | 1 | Decisions re-check (the plan's snapshot can be stale) | fires every Preflight; the why is elaboration |
 
-### conditional — 4 sections, 1577 B
+### conditional — 4 sections, 1633 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
-| 650 | 1 | Phase Close-out — After the last stage | a phase reached once, at the end; nothing before it needs the text |
+| 706 | 1 | Phase Close-out — After the last stage | a phase reached once, at the end; nothing before it needs the text |
 | 437 | 1 | Integration | per-skill descriptions consulted only when routing to one |
 | 400 | 2 | Amending authored ceremony | only when an amendment is actually needed; the three legality conditions stay because a pointer is not a rule |
 | 90 | 1 | Sources and rationale | already a pointer at references/sources.md |

@@ -60,7 +60,8 @@
 # Lowered 54257 -> 54256 (1.0.3): the break-patch redirect keeps its /tmp fallback, "likewise" cut to fit.
 # Lowered 54256 -> 54254 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 54254 -> 55365 (1.1.0): § Stop conditions reads the plan's `## Owner decisions` before it asks; § Safety rails takes a destructive command's, a secret's and a stage's confirmation from an entry naming it, and names the plan's tasks, gate checks and close-out steps as never confirmation by themselves; an entry applies only when every qualifier of its `applies to:` holds, never reinterpreted to fit; `init` runs on the run's branch, which owns the run; close-out carries out a recorded merge; the reference map routes to the catalog.
-core/skills/executing-plans/SKILL.md 55365
+# Raised 55365 -> 55881 (1.1.1): § Stop conditions runs `owner-decision.py match`, acts only on an entry it lists and runs exactly the command it checked; § Safety rails' destructive-command, secret (--at stage --stage N) and shared-infrastructure confirmations are entries it lists (--require-command for a command); the close-out phase names it per merge step; the Stop-conditions call states --stage, once per command, and exit 1 or 2 means ask.
+core/skills/executing-plans/SKILL.md 55881
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -178,7 +179,8 @@ hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21395
 # Lowered 63818 -> 63817 (1.0.3): as core/skills/executing-plans/SKILL.md.
 # Lowered 63817 -> 63815 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 63815 -> 64926 (1.1.0): as core/skills/executing-plans/SKILL.md.
-hosts/codex/overrides/skills/executing-plans/SKILL.md 64926
+# Raised 64926 -> 65442 (1.1.1): as core/skills/executing-plans/SKILL.md.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 65442
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
@@ -191,7 +193,8 @@ hosts/cursor/overrides/skills/brainstorming/SKILL.md 13907
 hosts/cursor/overrides/skills/dispatching-parallel-agents/SKILL.md 20585
 # Lowered 66986 -> 66984 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 66984 -> 68095 (1.1.0): as core/skills/executing-plans/SKILL.md.
-hosts/cursor/overrides/skills/executing-plans/SKILL.md 68095
+# Raised 68095 -> 68690 (1.1.1): as core/skills/executing-plans/SKILL.md, and its tick rule: a plan entry is the owner's answer only when match lists it.
+hosts/cursor/overrides/skills/executing-plans/SKILL.md 68690
 hosts/cursor/overrides/skills/honest-gates/SKILL.md 15462
 # Lowered 39953 -> 39952 (1.0.3): "nine" Light items became "ten", as core.
 # Lowered 39952 -> 39944 (1.0.5): the Light list grew to eleven items; its pointer line was tightened.
@@ -204,4 +207,5 @@ hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13210
 hosts/opencode/overrides/skills/dispatching-parallel-agents/SKILL.md 20419
 # Lowered 61122 -> 61120 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 61120 -> 62231 (1.1.0): as core/skills/executing-plans/SKILL.md.
-hosts/opencode/overrides/skills/executing-plans/SKILL.md 62231
+# Raised 62231 -> 62747 (1.1.1): as core/skills/executing-plans/SKILL.md.
+hosts/opencode/overrides/skills/executing-plans/SKILL.md 62747

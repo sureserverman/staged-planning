@@ -60,8 +60,8 @@ plan's `Dispatch` fields belong back in `planning-projects`.
 
 ## ACTION NEEDED — the one place a report asks the user for something
 
-**Read the plan's `## Owner decisions` first.** A decision an entry settles — every qualifier of its `applies to:` holds
-(`../SKILL.md` § Stop conditions) — is acted on and cited by its `OD-N`, never asked; only what no entry names goes in the block.
+**Read the plan's `## Owner decisions` first.** A decision an entry settles — one `owner-decision.py match` lists, so every qualifier of its
+`applies to:` holds (`../SKILL.md` § Stop conditions) — is acted on and cited by its `OD-N`, never asked; only what no entry names goes in the block.
 
 A gate report either needs something from the user or it does not. When it does, the ask goes
 in **one** block, **last**, under this exact heading, with the options numbered so the reply

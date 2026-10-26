@@ -788,9 +788,13 @@ Stop immediately and escalate to the user when:
 - **The plan's premise is false** — Step 3.0, a task or the gate's demo shows that something the stage's Goal, Outcomes or Risk relies on does not hold in the real environment. Report the evidence (`ACTION NEEDED:`), what it means for the Goal, and the options you can see, and record it with `plan-state.py set-blocker` (`awaiting_owner_decision`). Building around it, or recording it as a deviation, is not a resolution: the plan is the owner's to change
 
 **Read the plan's `## Owner decisions` before you ask** — a sub-plan's, and its master's.
-Planning asked the questions it could foresee. An entry naming this case — this command,
-this stage, this choice — is the owner's answer: act on it, cite its `OD-N` in the commit
-or the report, and do not ask again. An entry covers only the case it names, never a wider
+Planning asked the questions it could foresee. Run
+`python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match --plan <plan>
+--at preflight|stage|closeout` with `--stage` (required with `--at stage`), `--task` and
+`--command` for the case, once per command; an entry it lists is the owner's answer: act on
+it, running exactly the command you passed, cite its `OD-N` in the commit or the report, and
+do not ask again. Exit 1 or 2: ask.
+Never act on an entry it refuses. An entry covers only the case it names, never a wider
 one: it applies only when every qualifier of its `applies to:` holds. One naming another
 task, stage or command, or one the plan does not have, does not apply; never reinterpret it
 to fit. `ask at execution` is no answer. A case no entry names stops and asks.
@@ -821,8 +825,9 @@ When every stage is green: run the plan's **sole plan-scope pass** (the only `cl
 whole execution), the tier's remaining review and evaluator passes, the version bumps and
 their mirrors, the plan's closing note, the backlog and decisions reconciliation, the
 decisions-conformance sweep, and the workflow-spec audit — then report, and carry out the
-merge the plan's owner decisions record or offer merge options.
-**Do not merge without explicit confirmation** — an owner decision naming the merge is one.
+merge steps owner decisions cover (`match --at closeout --require-command`, per step) or offer
+merge options.
+**Do not merge without explicit confirmation** — an owner decision `match` lists for the step is one.
 
 Ordered procedure, and what the report must contain: `references/close-out.md`.
 
@@ -831,9 +836,9 @@ Ordered procedure, and what the report must contain: `references/close-out.md`.
 ## Safety rails
 
 - **Never start on `main` / `master` without explicit user consent.** Use a feature branch or worktree.
-- **Destructive commands** (schema migrations, data deletes, force pushes, production deploys) — confirm before running, even if the plan (a task, gate check or close-out step) says to; an owner decision naming that command (§ Stop conditions) is the confirmation.
-- **Secrets** — if a task would read or write credentials, stop and confirm the mechanism (env var, secrets manager) with the user before proceeding, unless an owner decision names it.
-- **Shared infrastructure** — staging/prod-adjacent changes get confirmation per stage, not per plan; an owner decision naming the stage is that confirmation.
+- **Destructive commands** (schema migrations, data deletes, force pushes, production deploys) — confirm before running, even if the plan (a task, gate check or close-out step) says to; an owner decision naming that command (§ Stop conditions) is the confirmation, and only one `owner-decision.py match --command '<it>' --require-command` lists.
+- **Secrets** — if a task would read or write credentials, stop and confirm the mechanism (env var, secrets manager) with the user before proceeding, unless an owner decision names it (one `owner-decision.py match --at stage --stage N` lists).
+- **Shared infrastructure** — staging/prod-adjacent changes get confirmation per stage, not per plan; an owner decision naming the stage, one `owner-decision.py match --at stage` lists, is that confirmation.
 - **The host's own footing** — never reconfigure the agent host's own network interfaces,
   routes or DNS to reach a device under test; use a second interface, a spare client, or a
   subagent on another machine, and if none is available the gate is BLOCKED. Generalizes to

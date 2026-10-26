@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.1 — 2026-10-26
+
+- **A script decides whether an owner decision applies.** `executing-plans/scripts/
+  owner-decision.py match --plan P --at preflight|stage|closeout` with `--stage`, `--task`
+  and `--command` for the case lists the `## Owner decisions` entries that apply and refuses
+  the rest with the reason. Every place an entry's `applies to:` names (`Preflight`,
+  `close-out`, `Stage N`, `Task N.M`, `Sub-plan N`, a backticked command) must exist in the
+  plan and match the case. An entry for "the Stage 2 close-out" in a one-stage plan is now
+  refused ("names Stage 2; the plan has no Stage 2"). An entry without the owner's dated,
+  quoted words, or saying `ask at execution`, is refused. A sub-plan also reads its master's
+  entries for its own `Sub-plan N`. Exit 0 applies, 1 asks the owner. This closes 1.1.0's
+  known limit.
+- **The executor acts only on what `match` lists.** § Stop conditions, § Safety rails,
+  close-out step 10 and the gate's § ACTION NEEDED run `match` before acting on an entry, in
+  every host copy. A command is covered only by an entry naming that exact command, with
+  or without `--require-command`, and the executor runs exactly the command it checked.
+- **The author checks the entries before presenting.** `owner-decision.py check <plan>`
+  reports each entry that cannot be an answer, with its line, and exits 1. Both checklists
+  require it to exit 0, and `owner-decisions.md` § The record lists the place words.
+- **The section has a strict format.** One line per entry, starting `- **OD-N** — ` at column
+  0, in plain printable text, with commands compared as exact text. Any other line, markup,
+  raw HTML or a comment voids every entry in the section, so what the script reads is what a
+  reader sees. The threat model is careless writing and reading, not a plan crafted to
+  deceive. The three plan templates keep their guidance above the heading, so a copied
+  template does not void itself.
+
 ## 1.1.0 — 2026-10-26
 
 - **Planning asks what execution would stop for.** `planning-projects` § *Ask execution's

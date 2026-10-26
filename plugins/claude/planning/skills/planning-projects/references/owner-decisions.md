@@ -18,7 +18,7 @@ checkboxes: a raw `- [ ]` there would read as deferred work to the plan parser.
 ```markdown
 ## Owner decisions
 
-- **OD-1** — <the decision, in one line> — owner, YYYY-MM-DD: "<their words>" — applies to: <the exact case: a task and its command, a stage, Preflight or close-out>
+- **OD-1** — <the decision, in one line> — owner, YYYY-MM-DD: "<their words>" — applies to: <one place: Preflight, close-out, Stage N or Task N.M> (`<each command it covers>`)
 - **OD-2** — <the decision> — ask at execution — applies to: <the case>
 ```
 
@@ -30,6 +30,34 @@ checkboxes: a raw `- [ ]` there would read as deferred work to the plan parser.
   not a yes to the next. It applies only when every qualifier of its `applies to:` holds — an
   entry naming Stage 2 does not cover a one-stage plan's close-out — and the executor never
   reinterprets it to fit; it asks.
+- **`applies to:` uses the words `owner-decision.py` reads**: `Preflight`, `close-out`,
+  `Stage N`, `Task N.M`, `Sub-plan N` (in a master), and a backticked command with its
+  arguments (`git push origin main`); every code span there is a command, so name a branch
+  in plain words in the decision. Only `and`, `only`, `the`, `at`, `in`, `of`, `on` and
+  punctuation may sit between them. One entry covers one position: Preflight, close-out and
+  a stage never combine. `applies to:` comes once, last, after the owner's quoted words.
+  Commands match as exact text: `rm -rf '*'` is not `rm -rf *`, and `git merge x` is not
+  `git merge --no-edit x`, so name the command exactly as the run will type it.
+- **Each entry is one physical line**, starting `- **OD-N** — `, and there is nothing else in
+  the section: no notes, headings, comments, sub-bullets or continued lines — only entries,
+  blank lines and the `none` line. Put an amendment note before the `## Owner decisions`
+  heading. The executor acts only on an entry `owner-decision.py match` lists, and it
+  refuses any entry with another word in `applies to:`, and every entry in a section with
+  another line: deny by default, so "except", "not" or "only if" can never widen one.
+- **Every line of the section is plain printable text**: ASCII and the two dashes, no other
+  character. Outside code spans an entry holds no `<`, `>`, `~`, `%`, `&` or backslash, and
+  no adjacent or unbalanced backticks: struck-through, hidden or commented text would show a
+  reader something other than what the script reads. Raw HTML, an HTML comment, an
+  Obsidian `%%` comment or a `$$` math block anywhere before the section's end voids the
+  section, and a plan with one before its `Master:` line inherits nothing.
+- **What this guards against** is careless writing and careless reading — a scope stretched
+  to fit, a restriction left where the reader does not look, a command almost the approved
+  one. It is not against an author deliberately crafting a plan to deceive; the owner's
+  answers are only as honest as the plan that records them. Before the
+  plan is presented, run
+  `python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py check <plan>`:
+  it reports, with its line, each entry naming a stage, task or sub-plan the plan lacks, or
+  carrying neither the owner's words nor `ask at execution`. Exit 0 is clean.
 - **A declined question is recorded `ask at execution`**, so the executor knows it was asked
   and stops there as it would have.
 - **A plan the catalog triggers nothing for** carries one bullet:

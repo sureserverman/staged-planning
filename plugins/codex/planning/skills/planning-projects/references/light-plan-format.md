@@ -132,13 +132,13 @@ the proportionate replacement for a Research Summary. Link a source if one matte
 Include any decision in force that bears on the change, inline:
 "DEC-NNN binds this — <constraint in half a line>."]
 
-## Owner decisions
-
 [The owner's answers to the questions execution would stop for (`owner-decisions.md`) —
 non-checkbox bullets; `- none — the catalog triggered no question (swept YYYY-MM-DD)` when
-it triggers nothing.]
+it triggers nothing. The section holds only one-line entries (or the `none` line) and blank lines: `owner-decision.py` reads nothing else, so this note stays above it.]
 
-- **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [the exact case]
+## Owner decisions
+
+- **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [one place: Preflight, close-out, Stage N or Task N.M] (`[each command it covers]`)
 
 ## Stage 1: [Name]
 

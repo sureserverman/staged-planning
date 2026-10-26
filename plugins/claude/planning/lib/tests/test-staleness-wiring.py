@@ -33,6 +33,7 @@ WIRED = [
     ("executing-plans", "handoff-envelope.py"),
     ("executing-plans", "plan-flip-audit.py"),
     ("executing-plans", "stage-brief.py"),
+    ("executing-plans", "owner-decision.py"),
     ("executing-plans", "proof-hooks-install.py"),
     ("executing-plans", "prove-claim.py"),
     ("executing-plans", "review-ledger-check.py"),

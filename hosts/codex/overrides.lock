@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 61f6a31c125a7b7c8a8d9ae0bc895c4203cae125bc69d41833fbeb29b2e233bf
+  base_sha256: bb9f64db4c0c4ec9d4ab8ee79bfbfb3719c1f44cff8ac2dbacac74c0a6983565
 hooks/dispatch-log.sh:
   base_sha256: e993234fa47b5068d10f8fa27376ab54aacc9e0a181b449b83f87ed048723454
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
@@ -29,13 +29,13 @@ skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: A Codex plugin's agents are TOML role files (name = "<plugin>:<role>") that its installer copies under $CODEX_HOME/agents, and Claude's Markdown agents do not ship, so the validator reads the shipped roles from agents/*.toml.
 skills/executing-plans/SKILL.md:
-  base_sha256: 3d703cdf326700bf4a5e3fd13a4a176c760f6f467f1313c6e52ac6735f0c003a
+  base_sha256: 3af4ce0de3c75d212c9520a0f23608747bea0f118462e8ed659421313bc0141d
 skills/executing-plans/references/close-out.md:
-  base_sha256: ed8e454bf26bda4199c9e6551f64fc2a358e4e676b46e5ea2d963a9c386e441d
+  base_sha256: a672a8653367a8c62a5017e15e54f72b86ffb39361830e90654da2718a2372d7
 skills/executing-plans/references/dispatch-fidelity.md:
   base_sha256: 35fe47e1ca68e9beba6baf7f3e1a5300db21b70b07dc822f4c99a62a9ff61ecd
 skills/executing-plans/references/extraction-classification.md:
-  base_sha256: 0b823ab7e426886dae1a189a6bbb9c87c316f716c8173130d35196ad812b8fcf
+  base_sha256: aa2eb47b877c9a0fd1b53f3db4a6e122d93bdcd1681ee28526d7e85cb1827d29
 skills/executing-plans/references/gate-failure-procedure.md:
   base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
 skills/executing-plans/references/integration.md:
@@ -47,7 +47,7 @@ skills/executing-plans/references/progress-state-file.md:
 skills/executing-plans/references/session-handoff.md:
   base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
 skills/executing-plans/references/stage-gate.md:
-  base_sha256: ae5d2d979032fdb06f43bef89d9e9536d0c5d5b25576aa8fdee475315ee2c16a
+  base_sha256: 8d95d68340828623ba3182539e4f7bb848c9a71e048a365d3751c7f75a840c96
 skills/executing-plans/references/task-execution.md:
   base_sha256: 95d907fc71bf73851bfd095979f5abe67162709f42866f954676561087a94d00
 skills/executing-plans/scripts/context-usage.py:
