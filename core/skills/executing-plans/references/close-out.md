@@ -143,13 +143,20 @@ procedure. Work the steps in order.
    - Decisions recorded or superseded during close-out (by ID)
    - Workflow audit triage: blocks updated, blocks removed, undeclared changes (if any
      survived escalation)
-10. Offer merge / finalize options (worktree cleanup, PR creation, branch merge). Do not merge
-    without explicit confirmation.
+10. Carry out the merge the plan's `## Owner decisions` records — merge, pull request, branch
+    deletion, push, tag, each only where an entry applies (every qualifier of its `applies to:` holds,
+    `../SKILL.md` § Stop conditions) — and report what was done.
+    Run `plan-state.py finish` (this file's last section) before any of it switches
+    off or deletes the run's branch: the run is owned by its branch, and `finish` is
+    refused from anywhere else.
+    With none recorded, offer merge / finalize options (worktree cleanup, PR creation, branch
+    merge). Do not merge without explicit confirmation; an owner decision naming the merge
+    is one.
 
 ## ACTION NEEDED — the one place the close-out report asks for something
 
 Same form as the gate report's (`stage-gate.md` § ACTION NEEDED), and it binds here for the
-same reason: a close-out ends with a merge offer, which is itself a decision, so a close-out
+same reason: a close-out usually ends with a merge offer, which is itself a decision, so a close-out
 that also carries an unresolved question is the report most likely to bury one.
 
 ```
@@ -161,10 +168,11 @@ ACTION NEEDED: <one line naming the decision>
 One block, last, options numbered. **A close-out report carrying an `ACTION NEEDED:` block
 does not also announce that it is proceeding** — to a merge, a tag, or anything else.
 
-**Step 10's merge offer is always the block, and it is why close-out has no "or none" case.**
-A close-out always ends in a decision the user owns, so the block is always present: with no
-other decision it carries the merge options alone, and with one it carries both, numbered
-together. What may never happen is a separate `ACTION NEEDED:` block for some other decision
+**Step 10's merge offer is the block whenever no owner decision settles the merge.** The
+close-out then ends in a decision the user owns, so the block is present: with no other
+decision it carries the merge options alone, and with one it carries both, numbered
+together. When an owner decision settled the merge and nothing else needs the user, the
+close-out carries no block and says what it did. What may never happen is a separate `ACTION NEEDED:` block for some other decision
 *plus* a freestanding merge offer elsewhere in the report — that reconstructs the pairing this
 form exists to forbid, out of two individually well-formed halves. Anything the user does not
 have to decide is not an `ACTION NEEDED:` item at all.

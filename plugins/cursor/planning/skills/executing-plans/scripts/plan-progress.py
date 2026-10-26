@@ -1652,7 +1652,64 @@ def plan_detail(text, path):
         if num in by_num:
             by_num[num]["gate_checked"] = sum(s == "done" for s in items)
             by_num[num]["gate_total"] = len(items)
-    return {"plan": str(path), "name": plan_name(path), "stages": stages}
+    detail = {"plan": str(path), "name": plan_name(path), "stages": stages}
+    if pu.is_master_plan(text, path):
+        detail["subplans"] = master_register(text, path)
+    return detail
+
+
+def master_register(text, path):
+    """Every `### Sub-plan N:` entry of a master, in register order.
+
+    Discovery shows only the sub-plans in flight, so a pane drawing a master
+    from the groups alone never shows a finished or unstarted one. This reads the
+    register itself: each entry's number, title and register `status`, and —
+    from the plan its `- **Plan:**` link names — that plan's path, `id`, display
+    `name` and its own `done`/`total`. An entry whose plan cannot be read keeps
+    its place with `plan`, `id`, `done` and `total` null, and its `name` from the
+    link's filename (its title when it has no link). `number` is null for a
+    heading number too long to be one.
+    """
+    entries, cur = [], None
+    for line in text.splitlines():
+        sm = pu.SUBPLAN_RE.match(line)
+        if sm:
+            # A heading's number is author text: one too long for int() costs
+            # the entry its number, never the whole breakdown.
+            digits = sm.group(1)
+            cur = {"number": int(digits) if len(digits) <= 9 else None,
+                   "title": plain(sm.group(2)).strip(),
+                   "status": None, "link": None}
+            entries.append(cur)
+            continue
+        if cur is None:
+            continue
+        if line.startswith("## "):
+            cur = None
+            continue
+        st = pu.STATUS_RE.match(line)
+        if st and cur["status"] is None:
+            cur["status"] = pu.status_state(st.group(1))
+        lk = pu.SUBPLAN_LINK_RE.match(line)
+        if lk and cur["link"] is None:
+            cur["link"] = pu.link_target(lk.group(1))
+    out = []
+    for e in entries:
+        sub = path.parent / e["link"] if e["link"] else None
+        row = {"number": e["number"], "title": e["title"], "status": e["status"],
+               "plan": None, "name": relative_name(sub, path) if sub else e["title"],
+               "id": None, "done": None, "total": None}
+        if sub is not None and _is_file(sub):
+            sub_text = _plan_text(sub)
+            try:
+                resolved = str(sub.resolve())
+            except (*BAD_PATH, RuntimeError):   # RuntimeError: a symlink loop, Python <= 3.12
+                resolved = None
+            if sub_text and resolved is not None:
+                done, total, _ = parse_plan(sub_text, sub)
+                row.update(plan=resolved, id=plan_id(sub), done=done, total=total)
+        out.append(row)
+    return out
 
 
 def build_model(cwd, with_detail=False):

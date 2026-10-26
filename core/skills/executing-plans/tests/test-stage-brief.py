@@ -269,6 +269,13 @@ expect(got == ["Works: a."], "a note line before the bullets does not end the fi
 got = PFA.stage_outcomes(plan_with("**Outcomes:** the user\n- Works: a, and when b fails\n  the user sees c.\n- D."), 2)
 expect(got == ["Works: a, and when b fails the user sees c.", "D."], "a wrapped bullet keeps its continuation", got)
 
+# Catches: a who-line wrapped before the bullets ending the field, so every Outcome is dropped.
+f = PFA.stage_fields(plan_with("**Outcomes:** the author, the owner,\nand the executor.\n- Works: a.\n- B."), 2)
+expect(f["outcomes"]["items"] == ["Works: a.", "B."]
+       and f["outcomes"]["text"] == "the author, the owner, and the executor."
+       and f["goal"]["text"] == "g",
+       "a wrapped field line joins the field's text and keeps its bullets", f.get("outcomes"))
+
 # Catches: "Stage 02" naming no stage.
 got = PFA.stage_outcomes(plan_with("**Outcomes:** u\n- Works: a.", stage="2"), "02")
 expect(got == ["Works: a."], "a zero-padded stage number names the same stage", got)

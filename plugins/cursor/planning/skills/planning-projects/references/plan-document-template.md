@@ -31,6 +31,15 @@ deferred work by the plan parser (backlog unify) and become a false backlog cand
 
 **Registers consulted:** [`<records home>/decisions.md`; any register the records resolver lists …]
 
+## Owner decisions
+
+[The owner's answers to the questions execution would stop for, asked in one batched round
+before the plan is presented (`owner-decisions.md`). NON-CHECKBOX bullets, like the section
+above. An entry covers only the case it names; execution still stops on anything else.]
+
+- **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [the exact case: a task and its command, a stage, Preflight or close-out]
+- **OD-2** — [the decision] — ask at execution — applies to: [the case]
+
 ## Preflight
 
 - [ ] [Check 1]: [how to verify]

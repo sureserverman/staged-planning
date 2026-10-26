@@ -1112,7 +1112,7 @@ def main():
 
     roster = section(text, r"### Dispatch roster and capability probe",
                      r"## Phase 3 — Stage execution")
-    closeout_report = section(text, r"9\. Report to the user with:", r"\n10\. Offer merge")
+    closeout_report = section(text, r"9\. Report to the user with:", r"\n10\. ")
     resets = section(text, r"## Context resets at stage boundaries",
                      r"## Progress state file")
     check("the Preflight roster/probe block is present", bool(roster),

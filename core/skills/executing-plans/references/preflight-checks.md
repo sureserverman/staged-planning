@@ -200,7 +200,8 @@ git rev-parse --is-inside-work-tree  →  is this a repo?
 │        current tree ("chore: initial commit before plan execution") so the
 │        first task has a parent. Then offer to create a GitHub remote
 │        (`gh repo create <name> --private --source=. --remote=origin`) — create
-│        it only on user confirmation; never push a repo public without consent.
+│        it only on user confirmation (an owner decision naming the remote is
+│        one); never push a repo public without consent.
 │        Execution proceeds locally whether or not a remote is created.
 └── YES ↓
 On main / master?  → do NOT execute here. Create a feature branch (or worktree)

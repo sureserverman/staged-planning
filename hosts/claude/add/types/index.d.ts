@@ -52,7 +52,23 @@ export type PlanStage = {
   tasks: PlanTask[]
 }
 
-export type PlanDetail = { plan: string; name?: string; stages: PlanStage[]; [field: string]: unknown }
+// One entry of a master's register, in register order. `status` is the register's
+// own Status word; `plan`, `id`, `done` and `total` are null when the plan its
+// `Plan:` link names cannot be read.
+export type PlanSubplan = {
+  number: number | null
+  title: string
+  status: 'done' | 'partial' | 'open' | null
+  plan: string | null
+  name: string
+  id: string | null
+  done: number | null
+  total: number | null
+}
+
+// `subplans` is present on a master's breakdown only, and absent from an older
+// script's output.
+export type PlanDetail = { plan: string; name?: string; stages: PlanStage[]; subplans?: PlanSubplan[]; [field: string]: unknown }
 
 // `detail` is the pinned plan's breakdown; `details` every group's, keyed by its
 // `id` (null where it could not be built; one entry per id, so two plans whose

@@ -132,6 +132,14 @@ the proportionate replacement for a Research Summary. Link a source if one matte
 Include any decision in force that bears on the change, inline:
 "DEC-NNN binds this — <constraint in half a line>."]
 
+## Owner decisions
+
+[The owner's answers to the questions execution would stop for (`owner-decisions.md`) —
+non-checkbox bullets; `- none — the catalog triggered no question (swept YYYY-MM-DD)` when
+it triggers nothing.]
+
+- **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [the exact case]
+
 ## Stage 1: [Name]
 
 **Outcomes:** [who uses the result — omit only when nobody outside the code meets it]
@@ -178,6 +186,8 @@ size, and a Light plan has only one gate to catch it.
 A Light plan carries decisions as **one line inside `Context:`**, never as a
 `## Decisions in force` section. The section is Standard-and-up machinery; a Light plan
 that grows one has been stretched past its bounds (apply the upgrade rule instead).
+`## Owner decisions` is not that section and stays: the owner's answers bind a run at
+any size.
 
 What does **not** scale down: the scan still runs, exactly like the backlog scan. A small
 plan can violate a binding constraint just as thoroughly as a large one, and the cost of

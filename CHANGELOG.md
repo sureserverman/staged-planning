@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.1.0 — 2026-10-26
+
+- **Planning asks what execution would stop for.** `planning-projects` § *Ask execution's
+  questions now*: once the draft exists and before it is presented, the author sweeps it
+  against `references/owner-decisions.md` and asks every triggered question in one batched
+  round. Triggers include the branch, a destructive command, a secret's mechanism, a
+  shared-infrastructure stage and the merge. Each answer goes in the plan's new
+  `## Owner decisions` section as `OD-N`, quoted and dated. The Standard, Light and master
+  templates carry the section, and both checklists carry the item. The Light checklist is
+  twelve items.
+- **Execution reads the owner's answers before it asks.** `executing-plans` § Stop conditions:
+  an entry naming the case is the answer, acted on and cited by its `OD-N`. An entry covers
+  only the case it names. `ask at execution` is no answer, and a case no entry names still
+  stops. A destructive command is confirmed by an entry naming that command, never by the plan
+  (a task, gate check or close-out step) saying to run it. Close-out step 10 carries out a
+  recorded merge, running `finish` before anything leaves the run's branch, and offers one
+  only when none is recorded.
+- **A master's plan pane shows every sub-plan.** `plan-progress.py --json` gives a master's
+  breakdown its whole register as `subplans`. Both the `/plan-view` pane and a master's own
+  pane list every entry in register order: `✔ done`, the executing one's phase and task,
+  `not started`, or `plan not found`. A model without `subplans` draws as before.
+- **A wrapped stage field keeps its bullets.** `stage_fields()` dropped every Outcome under a
+  `**Outcomes:**` line that wrapped onto a second line. A wrapped field line now joins the
+  field's text.
+- **A run starts its state on its own branch.** `plan-state.py init` runs once git bootstrap
+  has put the run on its branch, which owns the run. Starting it on `main` first stopped runs
+  mid-way on a tracker question.
+- **Known limit: an entry naming a stage the plan does not have can still be applied.** The
+  executor reads `applies to:` itself. In testing, an entry scoped to "the Stage 2 close-out"
+  in a one-stage plan was applied at that plan's close-out in 3 of 3 runs. Naming the exact
+  commands in `applies to:` held in 3 of 3 runs. 1.1.1 moves the matching into a script.
+
 ## 1.0.5 — 2026-10-25
 
 - **Verification scales to the change.** `test-scope-tiers.md` § *Outside a plan, and proven

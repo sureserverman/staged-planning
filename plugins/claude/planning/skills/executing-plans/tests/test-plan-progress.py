@@ -2707,6 +2707,49 @@ def jdoc(r):
     return doc if isinstance(doc, dict) else {}
 
 
+def case_master_subplans():
+    """A master's breakdown lists its whole register as `subplans`, in register
+    order: a finished entry, an in-flight one and one whose plan is missing all
+    appear, each with its own task counts, so a pane can show every sub-plan and
+    not only the ones discovery chose."""
+    print("a master's breakdown carries every register entry as subplans:")
+    mod = load_module()
+    master = GROUP_MASTER + """
+### Sub-plan 3: third
+- **Status:** [ ]
+- **Plan:** ./2026-08-04-alpha-sub-03-missing-plan.md
+"""
+    done_sub = GROUP_SUB_1.replace("- **Status:** [ ]", "- **Status:** [x]")
+    tmp, repo, vplans = group_fixture(mod, {MASTER_NAME: master, SUB1_NAME: done_sub,
+                                            SUB2_NAME: GROUP_SUB_2})
+    mpath = vplans / MASTER_NAME
+    subs = mod.plan_detail(master, mpath).get("subplans")
+    got = [(s.get("number"), s.get("title"), s.get("status"), s.get("name"),
+            s.get("done"), s.get("total")) for s in subs or []]
+    check(got == [(1, "foundation", "done", "2026-08-02-alpha-sub-01-foundation", 2, 2),
+                  (2, "second", "open", "2026-08-03-alpha-sub-02-second", 0, 2),
+                  (3, "third", "open", "2026-08-04-alpha-sub-03-missing", None, None)],
+          f"subplans: every entry in register order with status, name and counts ({got})")
+    if subs and len(subs) == 3:
+        check(subs[0].get("plan") == str((vplans / SUB1_NAME).resolve())
+              and subs[0].get("id") == mod.plan_id(vplans / SUB1_NAME),
+              f"subplans: plan is the resolved path, id its plan_id ({subs[0]})")
+        check(subs[2].get("plan") is None and subs[2].get("id") is None,
+              f"subplans: an entry whose plan does not exist has plan and id null ({subs[2]})")
+    check("subplans" not in mod.plan_detail(GROUP_SUB_1, vplans / SUB1_NAME),
+          "subplans: a plan that is not a master carries no subplans key")
+    gdoc = json.loads(mod.render_json(str(repo)))
+    mid = mod.plan_id(mpath)
+    listed = [s.get("number") for s in ((gdoc.get("details") or {}).get(mid) or {}).get("subplans") or []]
+    check(listed == [1, 2, 3],
+          f"subplans: --json details carry the master's whole register ({listed})")
+    huge = master.replace("### Sub-plan 3: third", "### Sub-plan " + "9" * 5000 + ": third")
+    got = [(s.get("number"), s.get("title")) for s in mod.plan_detail(huge, mpath).get("subplans") or []]
+    check(got == [(1, "foundation"), (2, "second"), (None, "third")],
+          f"subplans: a heading number too long for int() costs that entry its number only ({got})")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 def case_detail_folds_repeated_stages():
     """A `## Stage N …` heading repeating a stage number already seen (a gate
     report, a re-run) is that stage's, not a new one: plan_detail() lists each
@@ -3163,6 +3206,7 @@ def main():
     case_json_mode()
     case_json_spans()
     case_detail_folds_repeated_stages()
+    case_master_subplans()
     print(f"  --json parity asserted over {len(JSON_PARITY_RUNS)} rendered fixture states")
     check(len(JSON_PARITY_RUNS) >= 50,
           f"json: parity ran across the suite's fixture states, not a token few "

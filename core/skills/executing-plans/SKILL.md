@@ -48,6 +48,7 @@ the one you need rather than working from memory.
 | `references/close-out.md` | every stage is green — the close-out procedure |
 | `references/progress-state-file.md` | writing `.claude/plan-progress.json`, or wiring the statusline |
 | `references/session-handoff.md` | a stage or sub-plan gate has passed — whether to continue or hand off; or runs with `--adopt-handoff <id>` |
+| `../planning-projects/references/owner-decisions.md` | an owner decision's scope is in doubt — what each catalog point asks |
 | `references/integration.md` | routing to another skill or agent, or citing the opt-out rules |
 | `references/sources.md` | citing why a rule here exists |
 
@@ -694,7 +695,7 @@ degraded context, and the plan file is already the handoff artifact.
 
 **Every run is owned: `scripts/plan-state.py` alone writes
 `<repo-root>/.claude/plan-progress.json`, and only `init` starts a run.** Call `init` when
-Preflight starts; `transition` when a task starts, a gate runs and close-out starts;
+Preflight starts, on the run's branch (it owns the run); `transition` when a task starts, a gate runs and close-out starts;
 `begin-round` / `record-verification` / `complete-round` around a remediation round;
 `set-blocker` on a Stop condition or a handoff; `finish` as close-out's last step. The
 payload is JSON on stdin, with `--expected-revision` (the last receipt's; 0 for `init`)
@@ -720,6 +721,14 @@ Stop immediately and escalate to the user when:
 - **An Outcome cannot be met or shown as written** — a task or the demo finds it unreachable or wrong. Report it (`ACTION NEEDED:`) with the evidence and the options, and record it with `plan-state.py set-blocker` (`awaiting_owner_decision`): the Stop hook reads the snapshot, not prose. Do not drop or reword it yourself: `Stage N green` is checked against the Outcomes recorded in the Step 3.0 worksheet, and a change stands only with the owner's words quoted in its amendment note (`owner, <date>: "<their words>"`)
 - **The plan's premise is false** — Step 3.0, a task or the gate's demo shows that something the stage's Goal, Outcomes or Risk relies on does not hold in the real environment. Report the evidence (`ACTION NEEDED:`), what it means for the Goal, and the options you can see, and record it with `plan-state.py set-blocker` (`awaiting_owner_decision`). Building around it, or recording it as a deviation, is not a resolution: the plan is the owner's to change
 
+**Read the plan's `## Owner decisions` before you ask** — a sub-plan's, and its master's.
+Planning asked the questions it could foresee. An entry naming this case — this command,
+this stage, this choice — is the owner's answer: act on it, cite its `OD-N` in the commit
+or the report, and do not ask again. An entry covers only the case it names, never a wider
+one: it applies only when every qualifier of its `applies to:` holds. One naming another
+task, stage or command, or one the plan does not have, does not apply; never reinterpret it
+to fit. `ask at execution` is no answer. A case no entry names stops and asks.
+
 **Never guess through a stop condition.** Ask.
 
 **Equally: never ask through a dispatch the plan mandated.** These conditions fire when a
@@ -742,8 +751,9 @@ Return to Phase 1 (critique) when:
 When every stage is green: run the plan's **sole plan-scope pass** (the only `clean` in the
 whole execution), the tier's remaining review and evaluator passes, the version bumps and
 their mirrors, the plan's closing note, the backlog and decisions reconciliation, the
-decisions-conformance sweep, and the workflow-spec audit — then report and offer merge
-options. **Do not merge without explicit confirmation.**
+decisions-conformance sweep, and the workflow-spec audit — then report, and carry out the
+merge the plan's owner decisions record or offer merge options.
+**Do not merge without explicit confirmation** — an owner decision naming the merge is one.
 
 Ordered procedure, and what the report must contain: `references/close-out.md`.
 
@@ -752,9 +762,9 @@ Ordered procedure, and what the report must contain: `references/close-out.md`.
 ## Safety rails
 
 - **Never start on `main` / `master` without explicit user consent.** Use a feature branch or worktree.
-- **Destructive commands** (schema migrations, data deletes, force pushes, production deploys) — confirm before running, even if the plan says to.
-- **Secrets** — if a task would read or write credentials, stop and confirm the mechanism (env var, secrets manager) with the user before proceeding.
-- **Shared infrastructure** — staging/prod-adjacent changes get confirmation per stage, not per plan.
+- **Destructive commands** (schema migrations, data deletes, force pushes, production deploys) — confirm before running, even if the plan (a task, gate check or close-out step) says to; an owner decision naming that command (§ Stop conditions) is the confirmation.
+- **Secrets** — if a task would read or write credentials, stop and confirm the mechanism (env var, secrets manager) with the user before proceeding, unless an owner decision names it.
+- **Shared infrastructure** — staging/prod-adjacent changes get confirmation per stage, not per plan; an owner decision naming the stage is that confirmation.
 - **The host's own footing** — never reconfigure the agent host's own network interfaces,
   routes or DNS to reach a device under test; use a second interface, a spare client, or a
   subagent on another machine, and if none is available the gate is BLOCKED. Generalizes to

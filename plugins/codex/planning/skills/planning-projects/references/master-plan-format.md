@@ -67,6 +67,14 @@ outside a `**Gate:**` block would become a false backlog candidate.]
 
 **Registers consulted:** [...]
 
+## Owner decisions
+
+[The owner's answers to the questions execution would stop for (`owner-decisions.md`),
+non-checkbox bullets. The master's close-out — the version bump, the merge — is decided
+here; an entry naming a sub-plan's task or stage binds that sub-plan.]
+
+- **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [the exact case: a sub-plan and its task, or the master close-out]
+
 ## Sub-plans
 
 ### Sub-plan 1: [Name]

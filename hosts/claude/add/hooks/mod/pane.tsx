@@ -2,19 +2,22 @@
 // gates, every task with its status — and the agents this session has dispatched.
 // Opened only by the person (/plan-view or the band's Plan button), never unasked.
 // It draws planning.model.detail, which plan-progress.py --json parsed with the
-// same regexes as the bar, and planning.agents.
+// same regexes as the bar, and planning.agents. When the executing plan is a
+// sub-plan, every entry of its master's register is drawn above it, with its
+// progress.
 //
 // A plan's own pane, `planning-plan-<id>` (a band row's own Plan button), draws
 // that plan instead: its header row built as the band builds its rows (rowSpans,
 // the band's bar size for the pane's width, one name column), then — for a master
-// — its in-flight sub-plans, then its stages and tasks from
+// — every entry of its register (its in-flight sub-plans, from an older script
+// that sends no register), then its stages and tasks from
 // planning.model.details[id], with no current-task marker and no agents, which
 // belong to the executing plan alone.
 
 import { atom, read } from 'claude-code'
 import type { On } from 'claude-code'
 
-import type { AgentRecord, PlanDetail, PlanGroup, PlanModelState, PlanTask } from '../../types'
+import type { AgentRecord, PlanDetail, PlanGroup, PlanModelState, PlanSubplan, PlanTask, TailSpan } from '../../types'
 import { barCellsFor, layoutFor, rowSpans } from './band'
 import type { Span } from './band'
 import { PLAN_PANE, PLAN_PANE_TITLE, PLAN_PANES } from './pane-id'
@@ -73,6 +76,64 @@ function stageLines(detail: PlanDetail | null, current: string | null): Line[] {
   return lines
 }
 
+// A master's whole register, from its breakdown's `subplans` (plan-progress.py
+// --json, in register order): one row per entry, drawn as the band draws a
+// sub-plan. An entry in flight is its own group, markers and all, and `keepTail`
+// keeps the executing plan's phase and task too (the /plan-view pane). Any other
+// entry is built from its own counts and marked `✔ done`, `not started` or `plan
+// not found`. An entry is finished when its register Status is done, as the
+// master's own bar counts it. A sub-plan grouped under the master (by its
+// `Master:` backlink) that no entry names is drawn after the entries, so the
+// executing plan is never left out. Null when the breakdown carries no register
+// (an older script), so the caller draws what it drew before.
+function registerOf(
+  state: PlanModelState | null,
+  master: PlanGroup,
+  keepTail: boolean,
+): { heading: Line; rows: PlanGroup[] } | null {
+  const subs = typeof master.id === 'string' ? state?.model?.details?.[master.id]?.subplans : undefined
+  if (!Array.isArray(subs)) return null
+  const groups = state?.model?.groups ?? []
+  const green = state?.model?.palette?.green ?? null
+  const shown = (g: PlanGroup): PlanGroup =>
+    ({ ...g, depth: 1, ...(g.role === 'pinned' && !keepTail ? { tail: '', tail_spans: [] } : {}) })
+  const entries = subs.filter((s): s is PlanSubplan => s !== null && typeof s === 'object')
+  const matched = new Set<PlanGroup>()
+  const rows = entries.map((s): PlanGroup => {
+    const live = typeof s.id === 'string' ? groups.find(g => g?.id === s.id && g !== master) : undefined
+    if (live !== undefined) {
+      matched.add(live)
+      return shown(live)
+    }
+    const found = typeof s.plan === 'string' && typeof s.total === 'number'
+    const done = typeof s.done === 'number' ? s.done : 0
+    const mark: TailSpan | null = !found
+      ? { text: 'plan not found', color: null, dim: true }
+      : s.status === 'done'
+        ? { text: '✔ done', color: typeof green === 'string' ? green : null, dim: false }
+        : done === 0
+          ? { text: 'not started', color: null, dim: true }
+          : null
+    return {
+      name: found ? plain(s.name) || plain(s.title) : plain(s.title) || plain(s.name),
+      done: found ? done : 0,
+      total: found ? (s.total as number) : 0,
+      role: 'child',
+      depth: 1,
+      tail: mark?.text ?? '',
+      tail_spans: mark === null ? [] : [mark],
+    }
+  })
+  const at = groups.indexOf(master)
+  for (const below of at < 0 ? [] : groups.slice(at + 1)) {
+    if ((below?.depth ?? 0) === 0) break
+    if (!matched.has(below)) rows.push(shown(below))
+  }
+  const finished = entries.filter(s => s.status === 'done').length
+  const heading = entries.length === 0 ? 'No sub-plans in the register' : `Sub-plans ${finished}/${entries.length} done`
+  return { heading: { text: heading, bold: true }, rows }
+}
+
 // A plan's own pane: the plan whose `id` the pane's id carries. Its header and any
 // sub-plan's are rowSpans() fitted to `width`, so it reads as the band does.
 export function planLines(state: PlanModelState | null, id: string, width: number): Line[] {
@@ -94,13 +155,19 @@ export function planLines(state: PlanModelState | null, id: string, width: numbe
   // A listed sub-plan keeps its own markers (⊘ GATE BLOCKED); only the executing
   // plan's tail — its phase, task and any ↻N/M round — is left to that plan's own
   // pane (planning-plan).
-  const listed = subs.map(sub => (sub.role === 'pinned' ? { ...sub, tail: '', tail_spans: [] } : sub))
+  // A top-level plan with a register lists every entry of it instead.
+  const register = (g.depth ?? 0) === 0 ? registerOf(state, g, false) : null
+  const listed = register?.rows ?? subs.map(sub => (sub.role === 'pinned' ? { ...sub, tail: '', tail_spans: [] } : sub))
   const header = { ...g, depth: 0 }
   const layout = layoutFor([header, ...listed].map(row => ({ g: row, width, stale: false })), cells)
   const row = (r: PlanGroup, mid = false): Line => ({ text: '', spans: rowSpans(r, width, false, '', palette, cells, layout, mid) })
   const lines: Line[] = [row(header)]
   if (state?.stale === true) lines.push({ text: '(stale: the last refresh failed)', dim: true })
-  if (g.role === 'master' || subs.length > 0) {
+  if (register !== null) {
+    lines.push({ text: '' })
+    lines.push(register.heading)
+    listed.forEach((sub, i) => lines.push(row(sub, i < listed.length - 1)))
+  } else if (g.role === 'master' || subs.length > 0) {
     lines.push({ text: '' })
     lines.push({ text: subs.length > 0 ? 'Sub-plans in flight' : 'No sub-plan in flight', bold: true })
     listed.forEach((sub, i) => lines.push(row(sub, i < listed.length - 1)))
@@ -114,19 +181,40 @@ export function planLines(state: PlanModelState | null, id: string, width: numbe
   return lines
 }
 
-export function paneLines(state: PlanModelState | null, agents: AgentRecord[]): Line[] {
+export function paneLines(state: PlanModelState | null, agents: AgentRecord[], width = 100): Line[] {
   const groups = state?.model?.groups ?? []
   const pinned = groups.find(g => g.role === 'pinned')
   const detail = state?.model?.detail ?? null
   if (pinned === undefined && detail === null) return [{ text: 'No plan is executing.', dim: true }]
 
   const lines: Line[] = []
-  const master = groups.find(g => g.role === 'master' && (pinned?.depth ?? 0) > 0)
+  // The executing sub-plan's master is the top-level group above it, as the band
+  // keeps it; with a register in its breakdown, every sub-plan is drawn under it.
+  let owner: PlanGroup | undefined
+  if (pinned !== undefined && (pinned.depth ?? 0) > 0) {
+    for (let i = groups.indexOf(pinned) - 1; i >= 0; i -= 1) {
+      if ((groups[i]?.depth ?? 0) === 0) {
+        owner = groups[i]
+        break
+      }
+    }
+  }
+  const register = owner?.role === 'master' ? registerOf(state, owner, true) : null
+  if (owner !== undefined && register !== null) {
+    const cells = barCellsFor(width)
+    const header = { ...owner, depth: 0 }
+    const layout = layoutFor([header, ...register.rows].map(row => ({ g: row, width, stale: false })), cells)
+    const palette = state?.model?.palette
+    const row = (r: PlanGroup, mid = false): Line => ({ text: '', spans: rowSpans(r, width, false, '', palette, cells, layout, mid) })
+    lines.push(row(header), register.heading)
+    register.rows.forEach((r, i) => lines.push(row(r, i < register.rows.length - 1)))
+  }
+  const master = register === null ? groups.find(g => g.role === 'master' && (pinned?.depth ?? 0) > 0) : undefined
   if (master !== undefined) lines.push({ text: `${plain(master.name)}${counts(master)}`, colour: 'magenta', bold: true })
   if (pinned !== undefined) {
     const indent = master !== undefined ? '└ ' : ''
     const tail = plain(pinned.tail)
-    lines.push({ text: `${indent}${plain(pinned.name)}${counts(pinned)}${tail ? ` ${tail}` : ''}`, colour: 'cyan', bold: true })
+    if (register === null) lines.push({ text: `${indent}${plain(pinned.name)}${counts(pinned)}${tail ? ` ${tail}` : ''}`, colour: 'cyan', bold: true })
     // The tail already shows ↻N/M during a gate; outside one, a recorded round
     // gets its own line. Both numbers come from the script, never a default here.
     const round = pinned.remediation_round
@@ -180,7 +268,7 @@ export function registerPane(on: On): void {
     const width = Math.max(1, Math.floor(e.props.bodyColumns))
     const id = String(e.requestId ?? '').slice(PLAN_PANE.length + 1)
     const state = await read($, MODEL)
-    const lines = id === '' ? paneLines(state, await read($, AGENTS)) : planLines(state, id, width)
+    const lines = id === '' ? paneLines(state, await read($, AGENTS), width) : planLines(state, id, width)
     return (
       <Box flexDirection="column">
         {lines.map((line, i) =>

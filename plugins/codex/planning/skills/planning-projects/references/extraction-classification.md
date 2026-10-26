@@ -1,7 +1,7 @@
 # Extraction classification — `../SKILL.md`
 
 What each `../SKILL.md` section keeps in the trunk and where its elaboration lives.
-The trunk is **39431 B** across **37 headings**, of which 886 B is scaffolding
+The trunk is **40598 B** across **38 headings**, of which 886 B is scaffolding
 (frontmatter, title, and the preamble that precedes the first heading). Every `bytes`
 figure is re-taken by
 `python3 scripts/trunk-sections.py --all-levels core/skills/planning-projects/SKILL.md`;
@@ -51,26 +51,27 @@ short by compressing justification, not by relocating procedure.
 `bytes` is the section's current size in the trunk. `elaboration` names the file in
 this directory that holds what the trunk does not, or `—` where the section has none.
 
-### unconditional — 14 sections, 9582 B
+### unconditional — 15 sections, 10626 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
 | 1659 | — | Stage structure | the literal task/stage field template every plan is built from |
 | 1392 | `set-valued-checks.md` | Write a set-valued check as the sweep that proves it | binds every gate check an author writes |
 | 1667 | `task-fields.md` | Task and stage fields | a pointer at task-fields.md plus six load-bearing rules — among them `Depends on`/`Blocks` required and symmetric, intra-stage dependency order with no forward reference, and a consistent `Dispatch`, because a rule that survives only as a noun in a pointer sentence binds nothing |
-| 1028 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
+| 1156 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
 | 468 | `plan-document-template.md` | Plan Document Format | a pointer at the template fixture |
 | 646 | `task-fields.md` | Phase 3 — The Red-Green Loop | a pointer plus its five obligations: a runnable test, a cycle budget, a test of the promised outcome, a claim that goes red when false, and a preparing task testing that it prepared |
 | 277 | — | Phase -1 — Clarification | phase header; runs before every plan |
 | 271 | — | Research summary | every task must trace back to it |
 | 267 | — | When NOT to ask | the off-ramp rule; small and unconditional |
+| 916 | `owner-decisions.md` | Ask execution's questions now | binds every plan at the moment it is presented: the batched round of execution's questions and the `## Owner decisions` record; a pointer followed after presenting is the same as no rule |
 | 243 | — | Phase 4 — Stage Gates | phase header |
 | 233 | — | Phase 0 — Research | phase header |
 | 230 | — | Stage sizing | the >7-tasks rule; one sentence, binds every stage |
 | 1003 | — | Phase 2 — Stage Breakdown | phase header plus the write-Outcomes-first rule, which binds every stage |
 | 198 | — | Phase 1 — Preflight | phase header |
 
-### rule+elaboration — 22 sections, 28757 B
+### rule+elaboration — 22 sections, 28880 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
@@ -94,7 +95,7 @@ this directory that holds what the trunk does not, or `—` where the section ha
 | 590 | `research-scans.md` | Backlog scan | keeps fold-in-with-`Closes BL-NNN` and duplicate-is-a-planning-bug |
 | 486 | — | Online sources | keeps check version-specific behavior and use context7; the category list is compressed |
 | 419 | — | Linked notes | keeps search-the-linked-notes and the plans-path fallback |
-| 440 | — | How to ask | keeps one-question-at-a-time and state-your-assumption |
+| 563 | — | How to ask | keeps one-question-at-a-time (for scope; execution's questions wait for the batched round) and state-your-assumption |
 | 423 | — | Project context | keeps the four read-before-planning axes |
 
 ### conditional — 1 section, 206 B
@@ -127,6 +128,8 @@ that must survive verbatim, it is quoted from the trunk.
 | When to ask | Success criteria |
 | When to ask | Target environment |
 | How to ask | One question at a time |
+| Ask execution's questions now | one batched round |
+| Ask execution's questions now | An entry covers only the case it names |
 | When NOT to ask | ask because the answer would change the plan |
 | Phase -0.5 — Format triage | Size each request, not the batch |
 | Phase -0.5 — Format triage | Direct is the off-ramp |

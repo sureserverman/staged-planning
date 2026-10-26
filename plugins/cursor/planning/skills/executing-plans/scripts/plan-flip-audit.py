@@ -387,16 +387,25 @@ def stage_fields(text, stage):
     above it; a line holding only notes is skipped. Task blocks and the gate are not
     stage fields; the walk stops at the first `###` heading. An unindented line that
     follows a field's bullets without being one is kept as that field's `stray`: it is
-    most likely a wrapped bullet, and ending the field there would drop what follows."""
-    out, cur = {}, None
+    most likely a wrapped bullet, and ending the field there would drop what follows.
+    One directly under the field's own line, before any bullet, wraps that line: it
+    joins the field's text."""
+    out, cur, wrap = {}, None, False
     for line in _stage_lines(text, stage):
         f = STAGE_FIELD.match(line)
         if f:
             cur = f.group(1).strip().lower()
             out[cur] = {"text": " ".join(strip_notes(f.group(2)).split()), "items": []}
+            wrap = True
             continue
+        if not line.strip():
+            wrap = False
         if not cur or not line.strip() or _is_note_line(line):
             continue
+        if wrap and not FIELD_ITEM.match(line):
+            out[cur]["text"] = " ".join((out[cur]["text"] + " " + strip_notes(line)).split())
+            continue
+        wrap = False
         item = FIELD_ITEM.match(line)
         if item:
             out[cur]["items"].append(" ".join(strip_notes(item.group(1)).split()))

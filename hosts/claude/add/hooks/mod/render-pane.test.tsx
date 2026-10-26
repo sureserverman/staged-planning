@@ -517,3 +517,157 @@ test('a master with no sub-plans and no breakdown says both', async ($, on) => {
     await ui.unmount()
   }
 })
+
+// ---- every register entry, from the master's breakdown ----
+
+// The master's register as plan-progress.py --json lists it: one finished entry
+// discovery never chose, the executing one, an in-flight one with its own marker,
+// one not started, and one whose plan link does not resolve.
+const REGISTER = [
+  { number: 1, title: 'done', status: 'done', plan: '/r/done-sub-plan.md', name: 'done-sub', id: 'aaaa0007', done: 4, total: 4 },
+  { number: 2, title: 'pinned', status: 'open', plan: '/r/fixture-plan.md', name: 'fixture-plan', id: PINNED_ID, done: 3, total: 5 },
+  { number: 3, title: 'blocked', status: 'open', plan: '/r/blocked-sub-plan.md', name: 'blocked-sub', id: 'aaaa0005', done: 1, total: 2 },
+  { number: 4, title: 'waiting', status: 'open', plan: '/r/waiting-sub-plan.md', name: 'waiting-sub', id: 'aaaa0008', done: 0, total: 4 },
+  { number: 5, title: 'lost one', status: 'open', plan: null, name: 'lost-sub', id: null, done: null, total: null },
+] as const
+const withRegister = (subplans: unknown = REGISTER) => () =>
+  ran(JSON.stringify({
+    groups: MIXED,
+    detail: DETAIL,
+    details: { [MASTER_ID]: { ...MASTER_DETAIL, subplans }, [PINNED_ID]: DETAIL, aaaa0005: null, [OTHER_ID]: SHARED_DETAIL },
+    palette: PALETTE,
+  }))
+const ORDER = ['done-sub', 'fixture-plan', 'blocked-sub', 'waiting-sub', 'lost one']
+
+async function rowsOf(ui: { findAll: (q: { type: string }) => Promise<{ text: string; props: { wrap?: string } }[]> }) {
+  return (await ui.findAll({ type: 'Text' })).filter(t => t.props.wrap === 'truncate').map(t => t.text)
+}
+
+test("a master's own pane lists every register entry in order, each with its progress", async ($, on) => {
+  const w = world(on, withRegister())
+  await seed($ as never, w.clock)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...paneFor(MASTER_ID, 120), surface })
+    const rows = await rowsOf(ui)
+    expect(rows.join('\n')).toContain('Sub-plans 1/5 done')
+    const at = ORDER.map(name => rows.findIndex(r => r.includes(name)))
+    expect(at.every(i => i >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    const row = (name: string) => rows[at[ORDER.indexOf(name)]!]!
+    expect(row('done-sub')).toContain('4/4')
+    expect(row('done-sub')).toContain('✔ done')
+    expect(row('blocked-sub')).toContain('⊘ GATE BLOCKED')
+    expect(row('fixture-plan')).toContain('3/5')
+    expect(row('fixture-plan')).not.toContain('▶ T2.3')
+    expect(row('waiting-sub')).toContain('0/4')
+    expect(row('waiting-sub')).toContain('not started')
+    expect(row('lost one')).toContain('plan not found')
+    expect(row('lost one')).not.toContain('▐')
+    expect(row('lost one').startsWith('└─ ')).toBe(true)
+    expect(rows.join('\n')).not.toContain('Sub-plans in flight')
+    await ui.unmount()
+  }
+})
+
+test('plan-view lists every sub-plan of the executing master, the executing one with its task', async ($, on) => {
+  const w = world(on, withRegister())
+  await seed($ as never, w.clock)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...pane(120), surface })
+    const rows = await rowsOf(ui)
+    const text = rows.join('\n')
+    expect(text).toContain('quiet-master')
+    expect(text).toContain('Sub-plans 1/5 done')
+    const at = ORDER.map(name => rows.findIndex(r => r.includes(name)))
+    expect(at.every(i => i >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    expect(rows[at[1]!]).toContain('▶ T2.3')
+    expect(rows[at[0]!]).toContain('✔ done')
+    expect(rows[at[3]!]).toContain('not started')
+    expect(text.indexOf('lost one')).toBeLessThan(text.indexOf('Stage 1'))
+    for (const id of PINNED_TASKS) expect(text).toContain(id)
+    await ui.unmount()
+  }
+})
+
+test('a master with an empty register says so in both panes', async ($, on) => {
+  const w = world(on, withRegister([]))
+  await seed($ as never, w.clock)
+  for (const surface of SURFACES) {
+    for (const p of [paneFor(MASTER_ID), pane()]) {
+      const ui = await $.ui.mount({ ...p, surface })
+      expect(await shown(ui)).toContain('No sub-plans in the register')
+      if (p.requestId === PLAN_PANE) expect((await rowsOf(ui)).find(r => r.includes('fixture-plan'))).toContain('▶ T2.3')
+      await ui.unmount()
+    }
+  }
+})
+
+test('register rows fit the pane and carry no control character from a hostile name', async ($, on) => {
+  const hostile = REGISTER.map(s => ({ ...s, name: `${s.name}‮\x1b[31m\udc00` }))
+  const w = world(on, withRegister(hostile))
+  await seed($ as never, w.clock)
+  for (const surface of SURFACES) {
+    for (const cols of [30, 100]) {
+      for (const p of [paneFor(MASTER_ID, cols), pane(cols)]) {
+        const ui = await $.ui.mount({ ...p, surface })
+        const rows = await rowsOf(ui)
+        expect(rows.some(r => r.includes('waiting-sub') || r.includes('waiting'))).toBe(true)
+        for (const r of rows) expect([...r].length).toBeLessThanOrEqual(cols)
+        for (const r of rows) expect(/[\p{Cc}\p{Cf}\p{Cs}]/u.test(r)).toBe(false)
+        await ui.unmount()
+      }
+    }
+  }
+})
+
+test('an executing sub-plan its master register does not name is still drawn, with its task', async ($, on) => {
+  const unnamed = REGISTER.filter(s => s.id !== PINNED_ID)
+  const w = world(on, withRegister(unnamed))
+  await seed($ as never, w.clock)
+  for (const surface of SURFACES) {
+    const view = await $.ui.mount({ ...pane(120), surface })
+    const rows = await rowsOf(view)
+    const pinned = rows.find(r => r.includes('fixture-plan'))
+    expect(pinned).toContain('▶ T2.3')
+    expect(rows.indexOf(pinned!)).toBeGreaterThan(rows.findIndex(r => r.includes('lost one')))
+    await view.unmount()
+    const own = await $.ui.mount({ ...paneFor(MASTER_ID, 120), surface })
+    expect((await rowsOf(own)).some(r => r.includes('fixture-plan'))).toBe(true)
+    await own.unmount()
+  }
+})
+
+test('an entry with no task done reads not started whatever its register status, short of done', async ($, on) => {
+  const partial = [{ ...REGISTER[3], status: 'partial' }]
+  const w = world(on, withRegister(partial))
+  await seed($ as never, w.clock)
+  const ui = await $.ui.mount({ ...paneFor(MASTER_ID, 120), surface: 'terminal' })
+  expect((await rowsOf(ui)).find(r => r.includes('waiting-sub'))).toContain('not started')
+  await ui.unmount()
+})
+
+test('a malformed register costs its own rows, never the pane', async ($, on) => {
+  const shapes: unknown[] = [
+    'not a list',
+    { 0: REGISTER[0] },
+    [null, 7, 'x', REGISTER[0]],
+    [{ ...REGISTER[0], name: 5, title: null, status: 3, id: 9 }],
+    [{ ...REGISTER[3], done: '2', total: 4.5 }],
+    [{ ...REGISTER[3], name: '', title: 'titled' }],
+  ]
+  let current: unknown = shapes[0]
+  const w = world(on, () => withRegister(current)())
+  for (const subplans of shapes) {
+    current = subplans
+    await seed($ as never, w.clock)
+    for (const p of [paneFor(MASTER_ID, 60), pane(60)]) {
+      const ui = await $.ui.mount({ ...p, surface: 'terminal' })
+      const rows = await rowsOf(ui)
+      expect(rows.join('\n')).toContain('quiet-master')
+      for (const r of rows) expect([...r].length).toBeLessThanOrEqual(60)
+      if (subplans === shapes[5]) expect(rows.join('\n')).toContain('titled')
+      await ui.unmount()
+    }
+  }
+})

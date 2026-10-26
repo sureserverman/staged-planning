@@ -29,6 +29,7 @@ The trunk carries the authoring decisions. These load when their condition is me
 | `references/gate-authoring.md` | authoring a stage gate, or adding a verification mandate |
 | `references/authoring-checklist.md` | running the pre-presentation checklist — the full item list, Standard and Light |
 | `references/test-scope-tiers.md` | declaring the plan's test-scope commands |
+| `references/owner-decisions.md` | the draft exists — the questions execution would stop for, and how answers are recorded |
 
 ---
 
@@ -49,10 +50,24 @@ Ask clarifying questions if any of these are unclear:
 
 ### How to ask
 
-- One question at a time. Don't dump a wall of questions
+- One question at a time. Don't dump a wall of questions. This is for scope; the questions
+  execution would stop for wait for § Ask execution's questions now, which batches them
 - Prefer multiple-choice when the options are finite ("Are you targeting A, B, or C?")
 - If you can infer an answer from the codebase or context, state your assumption and ask for confirmation rather than asking open-ended
 - Stop asking once you have enough to produce a meaningful plan — you need enough to avoid building the wrong thing, not perfect information
+
+### Ask execution's questions now
+
+Execution stops to ask the owner at named points: the branch, a destructive command, a
+secret, the merge. Most of those answers are known before Stage 1, so ask them here, not
+mid-run. **Once the draft exists and before it is presented**, sweep it against the catalog
+in `references/owner-decisions.md`: every point the draft reaches is a question. Ask them
+in **one batched round** — up to four per prompt, each multiple choice with the recommended
+option first — and a follow-up round only for what the answers raise. Record each answer in
+the plan's `## Owner decisions` as `OD-N`: the owner's words quoted and dated, naming the
+case it covers. A declined question is recorded `ask at execution`; a plan that reaches no
+point records `none`. An entry covers only the case it names; execution still stops on
+anything else (`../executing-plans/SKILL.md` § Stop conditions).
 
 ### When NOT to ask
 
@@ -594,5 +609,5 @@ Five command-decided items are restated here:
 
 ## Checklist — Light plans
 
-For a **Light** plan (Phase -0.5), verify only the eleven Light items; the full checklist
+For a **Light** plan (Phase -0.5), verify only the twelve Light items; the full checklist
 does not apply. See `references/authoring-checklist.md` § Checklist — Light plans.
