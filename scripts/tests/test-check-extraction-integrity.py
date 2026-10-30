@@ -10,7 +10,9 @@ The exclusion cases are the load-bearing ones. A guard that flags
 "opt in below `high`" as deixis trains its readers to allowlist
 everything, which is how a guard stops guarding. Stdlib only.
 """
+import contextlib
 import importlib.util
+import io
 import os
 import sys
 import tempfile
@@ -386,6 +388,201 @@ def host_layer_cases():
         check(codes(f) == ["DEAD-PATH"], "another host's add/ file does not resolve for it")
 
 
+def run_main(argv):
+    """main()'s exit code and everything it printed to stdout."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = integrity.main(argv)
+    return rc, buf.getvalue()
+
+
+def referent_cases():
+    """A pointer whose referent was extracted away, pointer left in place.
+
+    Every key here is byte-identical before and after the move -- the path, the
+    code and the pointer text do not change -- so a guard that keys only on
+    them reports `0 finding(s)` over a dead pointer. The referent is checked
+    where the pointer names it.
+    """
+    trunk = "p/skills/s/SKILL.md"
+    pointer = "Retries follow `references/a.md` § Retry policy, always.\n"
+    with tempfile.TemporaryDirectory() as root:
+        allow = os.path.join(root, "none.txt")
+        write(os.path.join(root, trunk), pointer)
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n## Retry policy\n\nThree tries.\n")
+        write(os.path.join(root, "p/skills/s/references/b.md"), "# B\n")
+        rc, out = run_main(["--root", root, "--allowlist", allow])
+        check(rc == 0, "a pointer whose referent is where it says is clean")
+
+        # The extraction: the section moves to b.md, the trunk's pointer stays.
+        write(os.path.join(root, "p/skills/s/references/a.md"), "# A\n")
+        write(os.path.join(root, "p/skills/s/references/b.md"),
+              "# B\n\n## Retry policy\n\nThree tries.\n")
+        rc, out = run_main(["--root", root, "--allowlist", allow])
+        check(rc == 1, "a trunk pointer whose section moved to another file FAILS "
+                       f"(got rc={rc}: {out.strip().splitlines()[0] if out.strip() else ''})")
+        check("LOST-REFERENT" in out and "§ Retry policy" in out,
+              "the failure names the pointer")
+        check("p/skills/s/references/a.md § Retry policy" in out,
+              "the failure names the referent the pointer lost")
+        check("p/skills/s/references/b.md" in out,
+              "the failure names where the section went")
+
+        # Deleted outright rather than moved: still dead, nothing to point at.
+        write(os.path.join(root, "p/skills/s/references/b.md"), "# B\n")
+        f = integrity.scan_file(trunk, pointer, root)
+        check(codes(f) == ["LOST-REFERENT"], "a referent deleted outright is lost too")
+
+    # "trunk" qualifies a § as well as a path does, so it names a referent too.
+    with tempfile.TemporaryDirectory() as root:
+        ref = "p/skills/s/references/r.md"
+        write(os.path.join(root, trunk), "# S\n\n## Budget rules\n\nx\n")
+        text = "This is counted (trunk, § Budget rules), never free.\n"
+        write(os.path.join(root, ref), text)
+        check(codes(integrity.scan_file(ref, text, root)) == [],
+              "a trunk-qualified § whose heading is in the trunk is clean")
+        write(os.path.join(root, trunk), "# S\n")
+        check(codes(integrity.scan_file(ref, text, root)) == ["LOST-REFERENT"],
+              "a trunk-qualified § whose section left the trunk is lost")
+
+    # A dotted section number is part of the name: `§ Step 3.5` is lost when only
+    # `Step 3.0` survives, and `§ 3.5` likewise; the sibling heading must not mask it.
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n### Step 3.0 — Test the premise first\n\n## 3.0 Setup\n")
+        for text in ("see `references/a.md` § Step 3.5, then go on.\n",
+                     "see `references/a.md` § 3.5.\n"):
+            check(codes(integrity.scan_file(trunk, text, root)) == ["LOST-REFERENT"],
+                  f"a dotted section number is part of the name: {text.strip()!r}")
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n### Step 3.5 — Stage gate\n\n## 3.5 Gate\n")
+        for text in ("see `references/a.md` § Step 3.5, then go on.\n",
+                     "see `references/a.md` § 3.5.\n",
+                     "per `references/a.md` § Step 3.5. Then more.\n"):
+            check(codes(integrity.scan_file(trunk, text, root)) == [],
+                  f"a dotted section number that is there resolves: {text.strip()!r}")
+
+    # A dash or colon inside both names is part of both titles: a surviving sibling that
+    # shares only the clause before the dash does not mask a lost section.
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n## Checklist — Standard plans\n\n## Stage gate — standard plans\n\n"
+              "## Rule: one gate per stage\n")
+        for text in ("see `references/a.md` § Checklist — Light plans.\n",
+                     "see `references/a.md` § Stage gate — light plans, then go on.\n",
+                     "see `references/a.md` § Rule: two reviews per gate.\n"):
+            check(codes(integrity.scan_file(trunk, text, root)) == ["LOST-REFERENT"],
+                  f"a sibling sharing the clause before the dash does not mask: {text.strip()!r}")
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n## Checklist — Standard plans\n\n## Checklist — Light plans\n")
+        check(codes(integrity.scan_file(trunk, "see `references/a.md` § Checklist — Light plans.\n",
+                                        root)) == [],
+              "a dashed section name that is there resolves")
+
+    # A one-word heading is not the referent of a longer pointer it merely starts:
+    # `## What` must not stand in for a lost `§ What belongs here`.
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, "p/skills/s/references/a.md"), "# A\n\n## What\n\nx\n")
+        f = integrity.scan_file(trunk, "see `references/a.md` § What belongs here.\n", root)
+        check(codes(f) == ["LOST-REFERENT"],
+              f"a one-word heading does not resolve a longer pointer name ({codes(f)})")
+        f = integrity.scan_file(trunk, "see `references/a.md` § What, above.\n", root)
+        check(codes(f) == [], "the one-word heading still resolves its own name")
+
+    # How pointers are actually written: abbreviated, emphasized, followed by
+    # prose, at a line wrap, or after a path in an earlier sentence. None of
+    # these is a lost referent.
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n## Adopting a handoff (`--adopt <id>`)\n\n"
+              "### Step 3.0 — Test the premise first\n\n"
+              "## A bug is a class — sweep it, fix every instance\n\n"
+              "## Auto-registration on first plan\n\n"
+              "4. **Version bumps are deferred to the close-out.** Always.\n")
+        write(os.path.join(root, trunk), "# S\n\n### Stage sizing\n")
+        for text, why in [
+            ("after `references/a.md` § Adopting a handoff verifies it\n",
+             "heading carries a parenthetical, pointer runs into prose"),
+            ("see `references/a.md` § Step 3.0, then go on.\n",
+             "pointer abbreviates the heading"),
+            ("per `references/a.md` § *A bug is a class* and more.\n",
+             "emphasized name followed by prose"),
+            ("per `references/a.md` § A bug is a class — sweep it, fix\n",
+             "name cut by a line wrap"),
+            ("per `references/a.md` § Auto-registration (warn, write x), then\n",
+             "pointer carries its own parenthetical"),
+            ("(`references/a.md` § *Version bumps are deferred to the close-out*)\n",
+             "the § names a bold-run label, not a heading"),
+            ("`*(amended per references/a.md § no-such-rule — was: x)*`\n",
+             "a § inside a backtick span is quoted, not a pointer"),
+            ("Fields: `references/a.md`. (Stage sizing is not there; it is § Stage sizing.)\n",
+             "a path in an earlier sentence does not qualify this §"),
+        ]:
+            check("LOST-REFERENT" not in codes(integrity.scan_file(trunk, text, root)),
+                  f"not lost: {why}")
+
+
+def pinned_allowlist_cases():
+    """An allowlist entry carries the referent its finding had when allowlisted.
+
+    Key-only, the entry keeps suppressing after the place the pointer meant is
+    extracted away, because the key does not change. Pinned, it lapses.
+    """
+    trunk = "p/skills/s/SKILL.md"
+    key = f"{trunk}:DEIXIS-SECTION:Retry policy"
+    with tempfile.TemporaryDirectory() as root:
+        allow = os.path.join(root, "allow.txt")
+        write(os.path.join(root, trunk), "# S\n\nRetries follow § Retry policy.\n")
+        write(os.path.join(root, "p/skills/s/references/a.md"),
+              "# A\n\n## Retry policy\n")
+        write(allow, f"{key} -> p/skills/s/references/a.md § Retry policy\n")
+        rc, _ = run_main(["--root", root, "--allowlist", allow])
+        check(rc == 0, "a pinned entry suppresses while its referent holds")
+
+        write(os.path.join(root, "p/skills/s/references/a.md"), "# A\n")
+        write(os.path.join(root, "p/skills/s/references/b.md"),
+              "# B\n\n## Retry policy\n")
+        rc, out = run_main(["--root", root, "--allowlist", allow])
+        check(rc == 1, "a pinned entry lapses when its referent is extracted away")
+        check("p/skills/s/references/a.md § Retry policy" in out,
+              "the lapse names the referent the entry was pinned to")
+
+        write(allow, key + "\n")
+        rc, _ = run_main(["--root", root, "--allowlist", allow])
+        check(rc == 0, "an unpinned (key-only) entry still suppresses, as before")
+
+
+def reseed_cases():
+    trunk = "p/skills/s/SKILL.md"
+    key = f"{trunk}:DEIXIS-SECTION:Retry policy"
+    with tempfile.TemporaryDirectory() as root:
+        allow = os.path.join(root, "allow.txt")
+        write(os.path.join(root, trunk),
+              "# S\n\nRetries follow § Retry policy.\nThe gate rules above apply.\n")
+        write(os.path.join(root, "p/skills/s/references/b.md"),
+              "# B\n\n## Retry policy\n")
+        stale = f"{trunk}:DEAD-PATH:references/gone.md"
+        write(allow, "# header kept verbatim\n\n"
+                     f"{key} -> p/skills/s/references/a.md § Retry policy  # why\n"
+                     f"{stale}\n")
+        rc, _ = run_main(["--root", root, "--allowlist", allow, "--reseed"])
+        check(rc == 0, "--reseed exits 0")
+        with open(allow, encoding="utf-8") as fh:
+            body = fh.read()
+        check(body.startswith("# header kept verbatim\n"), "--reseed keeps the header")
+        check(f"{key} -> p/skills/s/references/b.md § Retry policy  # why" in body,
+              "--reseed re-pins an entry to its referent now, keeping its comment")
+        check(stale not in body, "--reseed drops an entry no finding uses")
+        check("DEIXIS-POSITIONAL" not in body,
+              "--reseed pins existing debt, it never adds a finding to the allowlist")
+        rc, _ = run_main(["--root", root, "--allowlist", allow])
+        check(rc == 1, "the unallowlisted finding still fails after a reseed")
+        rc, _ = run_main(["--root", root, "--allowlist", allow, "--reseed",
+                          "--scope", "p"])
+        check(rc == 2, "--reseed refuses a --scope (it would drop entries outside it)")
+
+
 if __name__ == "__main__":
     print("dead paths:")
     dead_path_cases()
@@ -407,6 +604,12 @@ if __name__ == "__main__":
     empty_sweep_cases()
     print("exclusions:")
     exclusion_cases()
+    print("lost referents:")
+    referent_cases()
+    print("pinned allowlist:")
+    pinned_allowlist_cases()
+    print("--reseed:")
+    reseed_cases()
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         sys.exit(1)

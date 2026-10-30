@@ -9,14 +9,20 @@ job running `build-capability-index.py --write` and then `git diff --exit-code` 
 catch it only where CI runs; this is that check as a validator, so the canonical runner
 runs it wherever it runs.
 
-Read-only. Exit 0 when the committed index matches a fresh build, 1 otherwise.
+It also holds each mod's declared command list (`registered-commands.json`, which the
+index reads) to the `$.command.register` calls in the mod's sources: a command the mod
+registers without declaring it would be missing from the index's
+`registered_commands`, and nothing else would notice.
+
+Read-only. Exit 0 when the committed index matches a fresh build and every mod's
+registrations match its declared list, 1 otherwise.
 """
+import argparse
 import importlib.util
 import os
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEX_PATH = os.path.join(REPO_ROOT, "capability-index.json")
 
 _spec = importlib.util.spec_from_file_location(
     "build_capability_index", os.path.join(REPO_ROOT, "scripts", "build-capability-index.py"))
@@ -24,19 +30,29 @@ bci = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bci)
 
 
-def main():
-    index = bci.build(REPO_ROOT)
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--root", default=REPO_ROOT, help="repo root to check")
+    root = ap.parse_args(argv).root
+    index_path = os.path.join(root, "capability-index.json")
+    drift = bci.registration_drift(root)
+    for problem in drift:
+        print(f"FAIL: {problem}")
+    index = bci.build(root)
     fresh, n = bci.render(index), len(index["components"])
     try:
-        with open(INDEX_PATH, encoding="utf-8") as fh:
+        with open(index_path, encoding="utf-8") as fh:
             committed = fh.read()
     except OSError as exc:
-        print(f"FAIL: cannot read {INDEX_PATH} ({exc}) — run "
+        print(f"FAIL: cannot read {index_path} ({exc}) — run "
               "`python3 scripts/build-capability-index.py --write`")
         return 1
     if fresh != committed:
         print(f"FAIL: capability-index.json is stale against the tree ({n} components "
               "built) — run `python3 scripts/build-capability-index.py --write`")
+        return 1
+    if drift:
         return 1
     print(f"capability-index.json matches a fresh build ({n} components).")
     return 0

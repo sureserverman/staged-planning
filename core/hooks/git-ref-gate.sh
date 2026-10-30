@@ -24,8 +24,15 @@
 # in flight (.claude/plan-progress.json,
 # read by plan_continue_classify.read_state), it reads that commit's own proof records
 # (from disk when the repo gitignores proof/)
-# and validates each against that commit's tree fingerprint, the record's path and
-# the plan's current wording. The claims a task must prove are upstream's claim
+# and validates each against that commit's tree (the blob of each file the record's
+# break touched and the test files its command names; a record written before that binding, the whole-tree
+# fingerprint), the
+# record's path and the plan's current wording. A commit closes stage N when its subject
+# starts `Stage N green` or when it newly ticks a box under the plan's `### Stage N Gate`
+# (the plan as that commit holds it, so only a plan inside the repo; "Stage 2 done" ticking
+# the gate is a stage close). A stage-closing commit is also refused
+# while a record of a stage-N task has drifted: a file it proved is another blob in that
+# commit. The claims a task must prove are upstream's claim
 # set — its FIRST claim and every claim that names its break "(red if …)"
 # (plan-flip-audit's required_claims), so the hook and the audit agree. A record
 # that is present is validated whether or not it is required. A claim deviation is
@@ -40,6 +47,10 @@
 # is exempt. The gate holds an agent to the plan's own commit convention; it is a
 # rail, not a sandbox.
 #
+# WHILE A PROVE-CLAIM.PY RUN IS IN PROGRESS (its lock held: it may have a break applied)
+# or an interrupted run's journal is left, a transaction adding commits is refused whatever
+# its subject and whether or not a plan is in flight: `git commit -am` would carry the break.
+#
 # WITH NO PLAN IN FLIGHT (no execution state, an untrusted one, no plan named, or
 # the named plan gone) it judges one thing: a commit whose subject starts `Stage N green`
 # (plan-flip-audit's STAGE_GREEN; a reworded subject is not read as a stage close) is refused, because a stage closed with no state could never be checked, and the
@@ -49,12 +60,17 @@
 # are not "no plan": the gate allows them, so a new plan started after a finished one
 # is ungated until `plan-state.py init` records it.
 #
+# IN A LINKED WORKTREE the plan in flight is this worktree's own, and only when it has none
+# (no state, or a finished run) the main worktree's (resolve_run_root): .claude/ is
+# git-ignored, so each worktree has its own state file.
 # IT FAILS OPEN on its own errors (no python3, unreadable state, git or
 # import failures, any uncaught exception) and says why on stderr. A record it cannot read is a problem with the
 # record, not an error of the hook: it refuses. There is deliberately NO
 # environment escape — the committing command's environment is the agent's.
-# Rebasing or cherry-picking a task commit onto a new tree is refused until it is
-# re-proven: its records were bound to the old tree.
+# A task commit rebased or cherry-picked onto a new tree is refused when the move changes a
+# file one of its blob-bound records proved, and on any change to the tree for a record
+# judged by the whole-tree fingerprint: a deviation, a record written before the blob
+# binding, or one whose command named no test file it could bind. It lands once re-proven.
 set -uo pipefail
 [[ "${1:-}" == "prepared" ]] || exit 0
 command -v python3 >/dev/null 2>&1 || {
@@ -183,17 +199,61 @@ try:
     spec.loader.exec_module(pcc)
 except Exception as e:
     allow(f"cannot load plan_continue_classify.py ({e}); allowing")
+# ---- a commit while a prove-claim.py run may have a break applied, plan in flight or not: a
+# terminal's `git commit -am` reaches no PreToolUse guard, but it moves a ref. Only a
+# transaction adding commits is judged; a fetch during a proof moves no branch.
+try:
+    live = pcc.live_proof_break(repo) if added_commits() else None
+except Exception:
+    live = None
+if live:
+    refuse(f"commit gate: refused — {live}")
+
+
+# git sets these for a hook run in a linked worktree; read there, the main worktree's owned
+# snapshot would be checked against the linked worktree's git identity.
+GIT_IDENTITY = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+
+
+def resolve_run_root(state):
+    """The worktree whose run judges these commits, and its state. .claude/plan-progress.json
+    is git-ignored, so each worktree has its own: this worktree's run first, and only when it
+    has none in flight (no state, or a finished run) the main worktree's — the parent of the
+    common git directory when that is named `.git` (git-worktree(1)). The main worktree's
+    state present but unreadable or untrusted is named, as no plan in flight."""
+    if state is not None and not pcc.finished(state, repo):
+        return repo, state
+    r = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+    common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+    if common is None or common.name != ".git" or common.parent.resolve() == repo.resolve():
+        return repo, state  # the main worktree itself, or a bare repository's linked one
+    main = common.parent
+    saved = {k: os.environ.pop(k) for k in GIT_IDENTITY if k in os.environ}
+    try:
+        main_state = pcc.read_state(main)
+    finally:
+        os.environ.update(saved)
+    path = main / ".claude" / "plan-progress.json"
+    if (main_state is None and os.path.lexists(path)) or (
+            isinstance(main_state, dict) and main_state.get("state_status") == "state_error"):
+        unstated(f"the main worktree's {path} is present but unreadable or untrusted")
+    if main_state is None or pcc.finished(main_state, main):
+        return repo, state
+    return main, main_state
+
+
 state = pcc.read_state(repo)
 if isinstance(state, dict) and state.get("state_status") == "state_error":
     allow("state_error; execution snapshot cannot establish a plan; allowing")
-if pcc.finished(state, repo):
+root, state = resolve_run_root(state)
+if pcc.finished(state, root):
     allow()  # retained terminal evidence over a plan with no open task owns no new commits
 if state is None:
     unstated()  # no plan in flight, or a state file we do not trust
 plan = state.get("plan") if isinstance(state, dict) else None
 if not isinstance(plan, str) or not plan:
     unstated("no plan named in plan-progress.json")
-plan_path = Path(plan) if os.path.isabs(plan) else repo / plan
+plan_path = Path(plan) if os.path.isabs(plan) else root / plan
 if not plan_path.is_file():
     unstated(f"plan {plan_path} not found")
 
@@ -215,8 +275,9 @@ stem = plan_path.stem
 
 
 # A repo that gitignores proof/ keeps its records local: each is read from disk instead
-# of from the commit's tree, and validate() still binds it to THIS commit's fingerprint,
-# so a record written for an earlier tree proves nothing here (plan-flip-audit reads
+# of from the commit's tree, and validate() still binds it to THIS commit's tree (the blobs
+# of the files it proved, or for an older record the whole-tree fingerprint), so a record
+# written for code this commit no longer holds proves nothing here (plan-flip-audit reads
 # local records the same way).
 local = git("-C", str(repo), "check-ignore", "-q", "--no-index",
             f"{pc.PROOF_DIR}/{stem}/x").returncode == 0
@@ -232,6 +293,8 @@ def read_evidence(sha, rel):
     None when absent; raises Unreadable when present but unreadable."""
     try:
         if local:
+            # The worktree being committed, where prove-claim.py and stage-brief.py wrote
+            # them; the run's root may be the main worktree.
             path = repo / rel
             if path.is_symlink() or not path.is_file():
                 return None
@@ -266,7 +329,7 @@ def first_copy(sha, rel):
     if local:
         return None
     try:
-        r = git("log", "--diff-filter=A", "--format=%H", sha, "--", rel)
+        r = git("--literal-pathspecs", "log", "--diff-filter=A", "--format=%H", sha, "--", rel)
         first = r.stdout.split()[-1] if r.returncode == 0 and r.stdout.split() else None
         if first is None:
             return None
@@ -276,9 +339,9 @@ def first_copy(sha, rel):
         raise Unreadable(e.__class__.__name__) from None
 
 
-def problems_of(rec, fp, expect):
+def problems_of(rec, fp, expect, blobs=None):
     try:
-        return pc.validate(rec, fp, expect)
+        return pc.validate(rec, fp, expect, blobs=blobs)
     except Exception as e:  # noqa: BLE001 — a record that crashes the validator is not valid
         return [f"malformed record ({e.__class__.__name__})"]
 
@@ -287,16 +350,42 @@ def why_of(rec):
     return str(rec.get("why", "") if isinstance(rec, dict) else "")[:200]
 
 
+# The plan's path in the commits, when it lives in the repo. A plan outside it is in no
+# commit, so there the subject is the only stage close the gate can see.
+try:
+    plan_rel = plan_path.resolve().relative_to(root.resolve()).as_posix()
+except ValueError:
+    plan_rel = None
+
+
+def ticked_gates(sha):
+    """(stages whose `### Stage N Gate` box `sha` newly ticks in the plan, error)."""
+    if plan_rel is None:
+        return [], None
+    entries, error = pfa.newly_ticked(repo, sha, plan_rel)
+    if error:
+        return [], error
+    gates = pfa.gate_box_stages(pfa.file_at(repo, sha, plan_rel) or "")
+    return sorted({gates[ln] for _k, _b, ln in entries if ln in gates}), None
+
+
 missing, deviations, advisory = [], [], []
 for sha in added:
     subject = git("log", "-1", "--format=%s", sha).stdout.strip()
     tasks = sorted(t for t in pfa.subject_tasks(subject) if t in blocks)
     green = pfa.STAGE_GREEN.match(subject)
-    if not tasks and not green:
+    closes = [green.group(1)] if green else []
+    ticked, error = ticked_gates(sha)
+    if error:
+        # A commit the gate cannot read the plan of may be closing a stage: refuse.
+        missing.append(f"{sha[:10]}: {error} — cannot tell whether it closes a stage")
+        continue
+    closes += [g for g in ticked if g.lstrip("0") not in {c.lstrip("0") for c in closes}]
+    if not tasks and not closes:
         continue
     short = sha[:10]
     try:
-        fp = pc.commit_fingerprint(repo, sha)
+        fp, blobs = pc.commit_tree(repo, sha)
     except Exception as e:
         allow(f"cannot fingerprint {short} ({e}); allowing")
     # proof/ is outside every fingerprint: anything but a record there rides along unbound.
@@ -309,12 +398,12 @@ for sha in added:
     # word, hold, and carry evidence. The word-for-word quote is what stops a report
     # from paraphrasing an Outcome away. The hook cannot tell who wrote a report, and a
     # report is not bound to the tree the way a proof record is.
-    if green:
-        n = green.group(1)[:12]
+    for close in closes:
+        n = close[:12]
         # Every failure in here refuses: it is evidence that could not be judged, and
         # the excepthook would read it as the hook's own error and allow the commit.
         try:
-            n = str(int(green.group(1)))
+            n = str(int(close))
             base = f"{pc.PROOF_DIR}/{stem}/stage-{n}"
             outcomes = pfa.stage_outcomes(plan_text, n)
             texts = {}
@@ -344,7 +433,7 @@ for sha in added:
                 demo_text = texts["demo"]
                 if pfa.declared_tier(plan_text) != "none" and not (
                         isinstance(demo_text, str) and pfa.demo_opted_out(demo_text)):
-                    kinds.append(("demo", lambda r: pfa.demo_problems(r, outcomes)))
+                    kinds.append(("demo", lambda r: pfa.demo_problems(r, outcomes, plan_text, n)))
                 for kind, check in kinds:
                     text = texts[kind]
                     if isinstance(text, Unreadable):
@@ -355,6 +444,23 @@ for sha in added:
                                        f"python3 <scripts>/stage-brief.py {kind} --stage {n}")
                         continue
                     missing.extend(f"{short} Stage {n} {kind}: {p}" for p in check(text))
+                # A skip's commit is the tree this stage ends on: a command green on an
+                # older tree says nothing about what this commit ships.
+                if len(kinds) == 2 and isinstance(demo_text, str):
+                    for at in pfa.demo_skip_shas(demo_text):
+                        if git("merge-base", "--is-ancestor", f"{at}^{{commit}}",
+                               sha).returncode != 0:
+                            missing.append(f"{short} Stage {n} demo: the skip names {at}, "
+                                           "no commit this one holds")
+                            continue
+                        spec = [":(top)", ":(top,exclude)" + pc.PROOF_DIR]
+                        if plan_rel is not None:
+                            spec.append(":(top,exclude)" + plan_rel)
+                        moved = git("diff", "--name-only", at, sha, "--", *spec).stdout.split()
+                        if moved:
+                            missing.append(f"{short} Stage {n} demo: {at} is not the tree this "
+                                           f"stage ends on: {', '.join(moved[:5])} changed after "
+                                           "it, so run the command on the last commit and name that")
                 # The worksheet holds the Outcomes as they stood at Step 3.0, as it was
                 # first committed; changing them since is the owner's call.
                 for text in dict.fromkeys(t for t in (first, prem) if t):
@@ -362,27 +468,64 @@ for sha in added:
                                    for p in pfa.outcome_drift_problems(text, plan_text, n))
         except Exception as e:  # noqa: BLE001 — evidence that crashes the check is not valid
             missing.append(f"{short} Stage {n} reports: unreadable ({e.__class__.__name__})")
+    for close in closes:
+        # Drift: a record of stage N whose bound file (one its break touched or its test
+        # runs) this commit holds at another blob.
+        # Its task commit was judged; a later commit of the stage changed the code it proves,
+        # so the stage does not close on it. A record without touched_blobs binds the whole
+        # tree and was judged at its task commit by that rule. A covered req is checked
+        # below to carry exactly the blob maps of the claim it cites.
+        try:
+            stage = str(int(close))
+            for t in sorted(t for t in blocks if t.split(".")[0] == stage):
+                b = blocks[t]
+                for kind, n_items in (("claim", len(pfa.claim_clauses(b["test"]))),
+                                      ("req", len(pfa.requirement_clauses(b["desc"])))):
+                    for k in range(1, n_items + 1):
+                        rel = f"{pc.PROOF_DIR}/{stem}/{t}/{kind}-{k}.json"
+                        moved = pc.blob_drift(record(sha, rel), blobs)
+                        if moved:
+                            missing.append(f"{short} Stage {stage}: proof drift — "
+                                           f"{', '.join(moved[:5])} changed since {rel} was "
+                                           f"proven; re-prove Task {t} {kind} {k}")
+        except Exception as e:  # noqa: BLE001 — records that crash the check are not valid
+            missing.append(f"{short} Stage {close[:12]} proof drift: unreadable "
+                           f"({e.__class__.__name__})")
     for t in tasks:
         b = blocks[t]
         required = set(pfa.required_claims(b["test"]))
-        proven = {}  # claim k -> True only for a valid kind "claim" record
+        proven = {}  # claim k -> its record, only for a valid kind "claim" record
         for k, c in enumerate(pfa.claim_clauses(b["test"]), 1):
             rec = record(sha, f"{pc.PROOF_DIR}/{stem}/{t}/claim-{k}.json")
             if rec is None:
                 if k in required:
                     missing.append(f"{short} Task {t} claim {k}: no record")
                 continue
-            probs = problems_of(rec, fp, ("claim", t, k, c))
+            probs = problems_of(rec, fp, ("claim", t, k, c), blobs)
             if probs:
                 missing.append(f"{short} Task {t} claim {k}: {probs[0]}")
             elif rec.get("kind") == "claim-deviation":
                 deviations.append(f"Task {t} claim {k}: {why_of(rec)}")
             else:
-                proven[k] = True
-        for k, c in enumerate(pfa.requirement_clauses(b["desc"]), 1):
+                proven[k] = rec
+        clauses = pfa.requirement_clauses(b["desc"])
+        for k, c in enumerate(clauses, 1):
             recs = {kind: record(sha, f"{pc.PROOF_DIR}/{stem}/{t}/{kind}-{k}.json")
                     for kind in ("req", "deviation")}
-            probs = {kind: problems_of(r, fp, (kind, t, k, c))
+            expect = {kind: (kind, t, k, c) for kind in recs}
+            for kind, r in list(recs.items()):
+                if isinstance(r, dict) and pfa.clause_key(r.get("text")) == pfa.clause_key(c):
+                    continue
+                if isinstance(r, dict) and pfa.renumbered(r, clauses) not in (None, k):
+                    recs[kind] = r = None  # another clause's record, under its old number
+                # A record proves the clause its text names: when the clause split renumbered
+                # clauses, this clause's record sits under its old number.
+                for j in range(1, len(clauses) + 1):
+                    rj = record(sha, f"{pc.PROOF_DIR}/{stem}/{t}/{kind}-{j}.json") if j != k else None
+                    if isinstance(rj, dict) and pfa.renumbered(rj, clauses) == k:
+                        recs[kind], expect[kind] = rj, (kind, t, j, rj["text"])
+                        break
+            probs = {kind: problems_of(r, fp, expect[kind], blobs)
                      for kind, r in recs.items() if r is not None}
             req_rec = recs.get("req")
             cites = req_rec.get("covered_by_claim") if isinstance(req_rec, dict) else None
@@ -390,6 +533,12 @@ for sha in added:
                 # A req "covered by claim J" is only as good as claim J's PROOF; a
                 # claim deviation discloses, it proves nothing.
                 probs["req"] = [f"cites claim {cites}, which is missing or not a valid proof"]
+            elif probs.get("req") == [] and cites is not None and any(
+                    key in req_rec and req_rec.get(key) != proven[cites].get(key)
+                    for key in pc.BLOB_MAPS):
+                # A covered req carries its claim's blob maps; any other binding is not
+                # the code that claim proves.
+                probs["req"] = [f"binds other files than claim {cites}, which it cites"]
             if not probs:
                 advisory.append(f"Task {t} requirement {k}: no req or deviation record")
             elif probs.get("req") == []:
@@ -417,6 +566,8 @@ refuse(
     "Stage the change, run prove-claim.py claim for each (a claim no repo patch can break: "
     "prove-claim.py deviation --claim K --why …), `git add proof/`, then commit again. A "
     "record proven before the last code change is stale: re-prove after staging the final "
-    "code. A task commit rebased or cherry-picked onto another tree needs re-proving too."
+    "code. A task commit rebased or cherry-picked needs re-proving when the move changes a "
+    "file one of its records proved (any file, for a deviation or a record bound to the whole "
+    "tree), and so does a record whose proven file a later commit changed (proof drift)."
 )
 PY

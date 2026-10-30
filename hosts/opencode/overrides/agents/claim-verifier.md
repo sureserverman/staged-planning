@@ -142,6 +142,11 @@ The tool is `<planning-plugin>/skills/executing-plans/scripts/prove-claim.py`, b
 5. **Do not fix anything.** You never edit source or test files except transiently to
    make a break patch, and you never commit. When a claim cannot be proven — the test
    stays green under its break, or fails before it — that is your finding; report it.
+6. **Background work.** Wait on a background job you start by its own completion: the harness notification,
+   `wait <pid>`, or a sentinel file it writes last. A `pgrep -f` loop matches its own shell
+   and waits for ever (`<planning-plugin>/skills/executing-plans/references/task-execution.md` § Waiting on background work).
+   An agent returns only after its own background work has finished or been stopped,
+   and says which.
 
 ## Output
 

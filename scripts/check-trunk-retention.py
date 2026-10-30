@@ -8,7 +8,7 @@ pointer satisfies set equality perfectly and has lost the obligation.
 
 That gap is the whole failure mode an extraction must avoid — a `references/` file is a definition site the executor may never open,
 so an unconditional rule moved out of the trunk stops binding while every
-structural check stays green. This script closes it in two directions:
+structural check stays green. This script closes it with these findings:
 
   MISSING-HEADING   a section classified `unconditional` or `rule+elaboration`
                     is not in the trunk at all.
@@ -21,42 +21,69 @@ structural check stays green. This script closes it in two directions:
                     silenced by deleting its marker rather than by keeping its
                     rule. Both binding classes are covered — `unconditional` rows
                     need markers most, being the ones that may never move at all.
+  NEGATED-RULE      the marker is there, but every occurrence of it sits behind a
+                    negation that reverses it: `You need not **Respect the cycle
+                    budget**`. The finding names the marker and the sentence.
+                    BLOCKING by the owner's decision (2026-10-29: "Blocking, gap
+                    disclosed"), though gate-authoring.md § A gate heuristic ships
+                    with a severity axis and a measured trigger rate asks for at
+                    least one true hit first; that section names it as an open
+                    gap. NEGATED-RULE:
+                    measured 2026-10-29 over this repo's three pinned trunks (206
+                    markers present) and every committed version of them in git
+                    history (224 commits on all refs, 314 trunk+table versions,
+                    21059 marker checks): 0 hits, 0 true. No inversion has ever been
+                    committed, so the rate says nothing about precision yet. What
+                    the window costs, from the same corpus: widened to 4 words it
+                    lights 1 live marker (1 distinct sentence in history), false
+                    (`(... no task creates it) → **plan defect**`); widened to the
+                    whole clause, 5 live markers (7 distinct sentences in
+                    history), all false.
 
 `conditional` sections are exempt by construction — they are the ones that were
-supposed to leave, and their retained pointer is checked by the DEAD-PATH half of
-check-extraction-integrity.py instead.
+supposed to leave, and their retained pointer is checked by
+check-extraction-integrity.py instead: DEAD-PATH for the file, LOST-REFERENT for the section.
 
 WHAT THIS GUARD CANNOT SCREEN, disclosed
 ----------------------------------------
-**A marker pins PRESENCE, never ASSERTION.** Markers are matched as plain
-case-sensitive substrings with no negation screening, so a rule can be INVERTED in
-place and stay green as long as the marker text survives inside it. For example,
-against the live trunks:
+**A marker is screened for a negation in front of it, and nowhere else.** Markers
+are matched as plain case-sensitive substrings; NEGATED-RULE then reads the text
+just before each occurrence with the contract suites' shared clause screen
+(`affirms_claim` in executing-plans' test-gate-remediation-contract.py, loaded, not
+copied). The span is derived from the text: the paragraph or list item holding the
+marker, cut back to the last clause boundary before it, and capped at the
+NEGATION_WORDS words nearest the marker. The marker's own words are not screened —
+`Never collapse BLOCKED into GREEN.` states its rule with its negation. So these are
+caught:
 
     3. **Respect the cycle budget**
-      ->  3. You need not **Respect the cycle budget** ... On exhaustion, carry on
+      ->  3. You need not **Respect the cycle budget**   (also: Never ..., You are
+          not required to ..., There is no need to ...)
 
-    **Remediation budget — default 2 rounds per gate.**
-      ->  **Remediation budget — default 2 rounds per gate.** This is advisory
-          only and never limits looping.
+And these still pass, each a measured limit rather than an oversight:
 
-Both keep every marker substring intact; this guard, check-extraction-classification.py
-and every executing-plans contract suite stay green.
+    **Remediation budget — default 2 rounds per gate.** This is advisory only and
+    never limits looping.
+      (a withdrawal AFTER the marker, or in a later sentence, is not read: the
+      trunks qualify markers with "X, not Y" constantly, and the shared screen
+      applied as it reads a requirement, after the marker included, lit 39 of 206
+      live markers, all false)
+    It is no longer necessary to **Respect the cycle budget**.
+      (the negation is 4 words back, outside the window; the window stops at 3
+      because the nearest legitimate negation in the corpus is 4 words back)
+    Never, under any circumstance, **Respect the cycle budget**.
+      (a comma ends the clause, so the "Never" belongs to the clause before)
+    ```Respect the cycle budget: optional```
+      (a marker inside a fenced block is a literal, as a `code span` is to the
+      shared screen, and is pinned for presence only)
 
-A prose guard must derive its negation-screening span from the text AND disclose
-what it cannot screen. This guard does the second and not the first,
-deliberately and for now: the screening half is a real piece of work with genuine
-false-positive risk (this corpus is full of legitimately negative rule text — "Don't
-shotgun", "never a pointer", "may not be presented"), and bolting a naive screen on
-would trade a known gap for an unknown one. The screening half is
-deferred work.
+**So read a green run as "the rule is still there and nothing just before it says
+the opposite", never as "the rule still says what it said."** The runtime output
+repeats this, because a docstring is not read by whoever is looking at a passing
+gate.
 
-**So read a green run as "the rule is still there", never as "the rule still says
-what it said."** Deletion and demotion — the failures this guard was built for — are
-caught; inversion is not. The runtime output repeats this, because a docstring is
-not read by whoever is looking at a passing gate.
-
-Read-only. Exit 0 when every promise holds, 1 otherwise.
+Read-only. Exit 0 when every promise holds, 1 otherwise; an ADVISORY finding is
+printed and never changes the exit code.
 """
 import argparse
 import collections
@@ -92,6 +119,102 @@ _spec = importlib.util.spec_from_file_location(
                                     "_skill_sections.py"))
 _sections = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_sections)
+
+
+# The negation screen is the contract suites' own, loaded rather than copied: a
+# second copy of a clause grammar drifts, and the copy that reads fewer clause
+# boundaries is the one that rejects true prose. That file's checks run only under
+# `__main__`; importing it defines functions and constants and nothing else. It is a
+# test file, and this script is a repo validator that the build never ships, so it
+# is always beside it. Loaded on first use, so a fixture tree that sweeps no marker
+# (the PINNED-MISSING case runs a copy of scripts/ alone) never needs it.
+SCREEN_PATH = os.path.join(REPO_ROOT, "core", "skills", "executing-plans", "tests",
+                           "test-gate-remediation-contract.py")
+_SCREEN = []
+
+# NEGATED-RULE's tier. gate-authoring.md asks for at least one true hit before
+# blocking; this one is blocking by the owner's decision with 0 hits, 0 true, and is
+# listed there as an open gap. The measurement is in the docstring.
+NEGATED_RULE_TIER = "blocking"
+
+# How many words before a marker the negation screen reads. Measured, not chosen:
+# see the docstring. At 4 the screen lights `no task creates it) → **plan defect**`.
+NEGATION_WORDS = 3
+
+# Stands in for the marker inside the screened text, so the marker's own words
+# ("Never collapse BLOCKED into GREEN.") are never read as a withdrawal of itself.
+_HOLE = "RETAINEDMARKER"
+_LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+\.)\s")
+
+
+def _screen():
+    if not _SCREEN:
+        if not os.path.exists(SCREEN_PATH):
+            sys.exit(f"check-trunk-retention: the shared negation screen is gone: "
+                     f"{os.path.relpath(SCREEN_PATH, REPO_ROOT)}")
+        spec = importlib.util.spec_from_file_location("_gate_contract", SCREEN_PATH)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _SCREEN.append(mod)
+    return _SCREEN[0]
+
+
+def _prose_units(body):
+    """(is_fenced, text) per paragraph, list item, or fenced line of a body.
+
+    A unit is the widest span a sentence can have: `flat()` joins wrapped lines, so
+    without these cuts a list item would run into the next item's negation.
+    """
+    out, buf, fenced = [], [], False
+
+    def flush():
+        if buf:
+            out.append((False, "\n".join(buf)))
+            buf.clear()
+    for line in body.split("\n"):
+        if _sections._FENCE_RE.match(line):
+            flush()
+            fenced = not fenced
+        elif fenced:
+            out.append((True, line))
+        elif not line.strip():
+            flush()
+        else:
+            if _LIST_ITEM.match(line):
+                flush()
+            buf.append(line)
+    flush()
+    return out
+
+
+def negated_sentence(body, needle):
+    """The sentence holding `needle` when EVERY occurrence of it is negated, else None.
+
+    One clean occurrence is enough, as it is for the shared screen. An occurrence in
+    a fenced block counts as clean: a fence holds literals.
+    """
+    g = _screen()
+    found = None
+    for fenced, unit in _prose_units(body):
+        if needle not in unit:
+            continue
+        if fenced:
+            return None
+        hay, flat_needle = g.flat(unit), g.flat(needle)
+        for m in re.finditer(re.escape(flat_needle), hay):
+            lead = hay[:m.start()]
+            words = list(re.finditer(r"\S*\w\S*", lead))
+            cut = words[-NEGATION_WORDS].start() if len(words) >= NEGATION_WORDS else 0
+            if lead[:cut].count("`") % 2:  # never start inside a `code span`
+                cut = lead.rfind("`", 0, cut)
+            if g.affirms_claim(lead[cut:] + _HOLE, _HOLE):
+                return None
+            if found is None:
+                starts = [b.end() for b in g.SENTENCE_END.finditer(lead)]
+                end = g.SENTENCE_END.search(hay, m.end())
+                found = hay[(starts[-1] if starts else 0):
+                            (end.start() if end else len(hay))].strip()
+    return found
 
 
 def trunk_headings(text):
@@ -220,6 +343,13 @@ def check_pair(root, trunk_rel, table_rel):
             if body is None:
                 continue  # MISSING-HEADING already reported it
             if needle in body:
+                sentence = negated_sentence(body, needle)
+                if sentence is not None:
+                    tier = "" if NEGATED_RULE_TIER == "blocking" else "ADVISORY "
+                    problems.append(
+                        f"{trunk_rel}: {tier}NEGATED-RULE — {section!r} keeps "
+                        f"{needle!r} only behind a negation that reverses it: "
+                        f"{sentence!r}")
                 continue
             where = " (it is elsewhere in the trunk, which is not this section's promise)" \
                 if needle in trunk else ""
@@ -255,15 +385,17 @@ def main(argv=None):
 
     # honest-gates: name the population swept, so a table that lost its rows
     # cannot report a pass over nothing.
+    advisory = [p for p in problems if "ADVISORY NEGATED-RULE" in p]
     print(f"{len(pairs)} trunk(s), {checked} binding section(s) swept; "
-          f"{len(problems)} problem(s).")
+          f"{len(problems) - len(advisory)} problem(s), "
+          f"{len(advisory)} advisory finding(s).")
     # The disclosure, at the point of use. A green line that does not say what
     # green excludes is the thing that gets quoted at a gate.
-    print("  (markers pin PRESENCE, not ASSERTION: a rule inverted in place around "
-          "its marker text passes)")
+    print(f"  (a marker is screened only for a negation in the {NEGATION_WORDS} words "
+          "before it, in its clause: a withdrawal after it, or in a fenced block, passes)")
     for p in problems:
         print(f"  {p}")
-    return 1 if problems else 0
+    return 1 if len(problems) > len(advisory) else 0
 
 
 if __name__ == "__main__":

@@ -61,7 +61,12 @@
 # Lowered 54256 -> 54254 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 54254 -> 55365 (1.1.0): § Stop conditions reads the plan's `## Owner decisions` before it asks; § Safety rails takes a destructive command's, a secret's and a stage's confirmation from an entry naming it, and names the plan's tasks, gate checks and close-out steps as never confirmation by themselves; an entry applies only when every qualifier of its `applies to:` holds, never reinterpreted to fit; `init` runs on the run's branch, which owns the run; close-out carries out a recorded merge; the reference map routes to the catalog.
 # Raised 55365 -> 55881 (1.1.1): § Stop conditions runs `owner-decision.py match`, acts only on an entry it lists and runs exactly the command it checked; § Safety rails' destructive-command, secret (--at stage --stage N) and shared-infrastructure confirmations are entries it lists (--require-command for a command); the close-out phase names it per merge step; the Stop-conditions call states --stage, once per command, and exit 1 or 2 means ask.
-core/skills/executing-plans/SKILL.md 55881
+# Raised 55881 -> 55958 (1.2.0): the record-audit bullet runs the audit with --require-all-checks and reports each check it lists NOT RUN (exit 3) as unrun — the rule binds at the gate, where a pointer to stage-gate.md is the same as no rule.
+# Raised 55958 -> 56247 (1.2.0): every brief the executor dispatches carries the background-work rules (wait on a background job by its own completion; return only after its own background work finished or was stopped, and say which); the rule binds at the dispatch.
+# Raised 56247 -> 56270 (1.2.0): rule 6's Critical re-dispatch reads the fix diff only — a fresh full review re-reads what the first pass cleared and Tier-2 reads again.
+# Raised 56270 -> 56400 (1.2.0): the gate evaluator's run condition names its exception — skipped below `high` when a recorded goal command decides the goal (stage-gate.md § Skipped when a recorded command decides the goal).
+# Raised 56400 -> 56577 (1.2.0): the gate report's reasons for an unrun review or evaluator name a fourth, the goal-command skip of the gate evaluator below `high`.
+core/skills/executing-plans/SKILL.md 56577
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -96,7 +101,8 @@ core/skills/executing-plans/SKILL.md 55881
 #   questions execution would stop for, recorded in `## Owner decisions`, binds as the plan is
 #   presented; its reference-map row and the one-at-a-time rule's deferral pay the rest. "eleven"
 #   Light items became "twelve" (byte-neutral).
-core/skills/planning-projects/SKILL.md 40598
+# Lowered 40598 -> 40499 (1.2.0): the description states triggers only; its step order and outcome are gone.
+core/skills/planning-projects/SKILL.md 40499
 
 # honest-gates.
 # Its rules are WRITE-TIME disciplines: each has to be in front of whoever is writing
@@ -135,24 +141,30 @@ core/skills/backlog/SKILL.md 16181
 # success path and every failure path; older plans' `Parallel:` read as `Dispatch:`;
 # sibling agents named as optional; pointers that name their section.
 # Lowered 17966 -> 17959 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
-core/skills/dispatching-parallel-agents/SKILL.md 17959
+# Raised 17959 -> 18139 (1.2.0): the template's Constraints tell the agent to wait on a background job by its own completion; a dispatched agent reads only its prompt.
+# Lowered 18139 -> 18086 (1.2.0): the description states triggers only; its mechanism clause is gone.
+core/skills/dispatching-parallel-agents/SKILL.md 18086
 
 # applying-design-handoff.
 # The ceiling pays for position-neutral pointers and every citation it carries: a
 # DEAD-PATH finding is fixed by repointing the citation, never by deleting it.
-core/skills/applying-design-handoff/SKILL.md 16101
+# Raised 16101 -> 16416 (1.2.0): every brief it writes, the reproducer's and the Phase 7 evaluator's, carries the background-work rules.
+core/skills/applying-design-handoff/SKILL.md 16416
 
 # project-maturity.
 # The ceiling pays for the printed `audit-detectors.py` invocation carrying the
 # records-home flag the trunk mandates; without it an executor copying the command
 # silently loses an axis.
-core/skills/project-maturity/SKILL.md 13995
+# Lowered 13995 -> 13664 (1.2.0): § get runs scripts/maturity-get.py instead of a hand-parsing procedure; § Hard rules says the script, not the skill, aggregates; § get lists every exit-2 case.
+# Raised 13664 -> 13766 (1.2.0): § get says to reply with the script's stdout verbatim; "print its output" let a session answer with a summary table (close-out demo M2).
+core/skills/project-maturity/SKILL.md 13766
 
 # brainstorming.
 # The ceiling pays for a pointer at the records-home resolver's contract (not a copy
 # of it) and the no-records-home path (exit 3), spelled out where a skill would
 # otherwise write outside the repo on a clean machine.
-core/skills/brainstorming/SKILL.md 13072
+# Raised 13072 -> 13366 (1.2.0): a brief handing Phase 1 reading to an agent carries the background-work rules.
+core/skills/brainstorming/SKILL.md 13366
 
 # decisions.
 # The register is per project only, and its format lives in
@@ -162,50 +174,82 @@ core/skills/decisions/SKILL.md 7411
 # architecting-projects.
 # The ceiling pays for the configurable records lookup and the no-records-home path
 # (exit 3); prose points at the public parser and the decisions format.
-core/skills/architecting-projects/SKILL.md 11466
+# Raised 11466 -> 11720 (1.2.0): each researcher brief carries the background-work rules.
+core/skills/architecting-projects/SKILL.md 11720
 
-core/skills/workflow-spec/SKILL.md 10580
+# Raised 10580 -> 10833 (1.2.0): the code-reviewer brief carries the background-work rules.
+core/skills/workflow-spec/SKILL.md 10833
 
 # Codex overrides: whole-file host versions of four trunks, shipped in the Codex build.
 # Each ceiling is the trunk's measured size; the same ratchet applies. Each carries
 # what its core trunk does, in the host's terms (the dispatching brief names the
 # plugin-rooted scripts folder, as core's does).
-hosts/codex/overrides/skills/applying-design-handoff/SKILL.md 17625
-hosts/codex/overrides/skills/architecting-projects/SKILL.md 13348
+# Raised 17625 -> 17956 (1.2.0): as core/skills/applying-design-handoff/SKILL.md.
+hosts/codex/overrides/skills/applying-design-handoff/SKILL.md 17956
+# Raised 13348 -> 13604 (1.2.0): as core/skills/architecting-projects/SKILL.md.
+hosts/codex/overrides/skills/architecting-projects/SKILL.md 13604
 #   - the agent list counts every role this plugin ships, and names the ones the table routes.
 # Lowered 21402 -> 21395 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
-hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21395
+# Raised 21395 -> 21575 (1.2.0): as core/skills/dispatching-parallel-agents/SKILL.md.
+# Raised 21575 -> 21674 (1.2.0): the wait rule names what Codex has (`wait_agent`; a shell call keeps no jobs for the next), and the description states triggers.
+hosts/codex/overrides/skills/dispatching-parallel-agents/SKILL.md 21674
 # Lowered 63819 -> 63818 (1.0.2): the break patch and scratch files go to "$TMPDIR" by shell redirect, the rest tightened to fit.
 # Lowered 63818 -> 63817 (1.0.3): as core/skills/executing-plans/SKILL.md.
 # Lowered 63817 -> 63815 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 63815 -> 64926 (1.1.0): as core/skills/executing-plans/SKILL.md.
 # Raised 64926 -> 65442 (1.1.1): as core/skills/executing-plans/SKILL.md.
-hosts/codex/overrides/skills/executing-plans/SKILL.md 65442
+# Raised 65442 -> 65519 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 65519 -> 65821 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 65821 -> 65844 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 65844 -> 65974 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 65974 -> 66151 (1.2.0): as core/skills/executing-plans/SKILL.md.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 66151
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
 # The Cursor executing-plans trunk names its status-line skill /plan-statusline,
 # because Cursor ships a built-in statusline.
-hosts/cursor/overrides/skills/applying-design-handoff/SKILL.md 16336
-hosts/cursor/overrides/skills/architecting-projects/SKILL.md 12304
-hosts/cursor/overrides/skills/brainstorming/SKILL.md 13907
+# Raised 16336 -> 16651 (1.2.0): as core/skills/applying-design-handoff/SKILL.md.
+hosts/cursor/overrides/skills/applying-design-handoff/SKILL.md 16651
+# Raised 12304 -> 12558 (1.2.0): as core/skills/architecting-projects/SKILL.md.
+hosts/cursor/overrides/skills/architecting-projects/SKILL.md 12558
+# Raised 13907 -> 14201 (1.2.0): as core/skills/brainstorming/SKILL.md.
+hosts/cursor/overrides/skills/brainstorming/SKILL.md 14201
 #   - the agent list names every agent this plugin ships, and how many the table routes.
-hosts/cursor/overrides/skills/dispatching-parallel-agents/SKILL.md 20585
+# Raised 20585 -> 20765 (1.2.0): as core/skills/dispatching-parallel-agents/SKILL.md.
+# Lowered 20765 -> 20712 (1.2.0): as core/skills/dispatching-parallel-agents/SKILL.md.
+hosts/cursor/overrides/skills/dispatching-parallel-agents/SKILL.md 20712
 # Lowered 66986 -> 66984 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 66984 -> 68095 (1.1.0): as core/skills/executing-plans/SKILL.md.
 # Raised 68095 -> 68690 (1.1.1): as core/skills/executing-plans/SKILL.md, and its tick rule: a plan entry is the owner's answer only when match lists it.
-hosts/cursor/overrides/skills/executing-plans/SKILL.md 68690
+# Raised 68690 -> 68979 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 68979 -> 69002 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 69002 -> 69132 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 69132 -> 69309 (1.2.0): as core/skills/executing-plans/SKILL.md.
+hosts/cursor/overrides/skills/executing-plans/SKILL.md 69309
 hosts/cursor/overrides/skills/honest-gates/SKILL.md 15462
 # Lowered 39953 -> 39952 (1.0.3): "nine" Light items became "ten", as core.
 # Lowered 39952 -> 39944 (1.0.5): the Light list grew to eleven items; its pointer line was tightened.
 # Raised 39944 -> 41111 (1.1.0): § Ask execution's questions now and its reference-map row, as core.
-hosts/cursor/overrides/skills/planning-projects/SKILL.md 41111
-hosts/cursor/overrides/skills/project-maturity/SKILL.md 14437
-hosts/opencode/overrides/skills/applying-design-handoff/SKILL.md 17317
-hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13210
+# Lowered 41111 -> 41012 (1.2.0): as core/skills/planning-projects/SKILL.md.
+hosts/cursor/overrides/skills/planning-projects/SKILL.md 41012
+# Lowered 14437 -> 14275 (1.2.0): as core/skills/project-maturity/SKILL.md.
+# Raised 14275 -> 14377 (1.2.0): as core/skills/project-maturity/SKILL.md.
+hosts/cursor/overrides/skills/project-maturity/SKILL.md 14377
+# Raised 17317 -> 17632 (1.2.0): as core/skills/applying-design-handoff/SKILL.md.
+hosts/opencode/overrides/skills/applying-design-handoff/SKILL.md 17632
+# Raised 13210 -> 13464 (1.2.0): as core/skills/architecting-projects/SKILL.md.
+hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13464
 #   - the agent list names every agent this package ships, and how many the table routes.
-hosts/opencode/overrides/skills/dispatching-parallel-agents/SKILL.md 20419
+# Raised 20419 -> 20599 (1.2.0): as core/skills/dispatching-parallel-agents/SKILL.md.
+# Lowered 20599 -> 20546 (1.2.0): as core/skills/dispatching-parallel-agents/SKILL.md.
+hosts/opencode/overrides/skills/dispatching-parallel-agents/SKILL.md 20546
 # Lowered 61122 -> 61120 (1.0.5): the fix-scope bullet points at test-scope-tiers § Outside a plan, and proven trees.
 # Raised 61120 -> 62231 (1.1.0): as core/skills/executing-plans/SKILL.md.
 # Raised 62231 -> 62747 (1.1.1): as core/skills/executing-plans/SKILL.md.
-hosts/opencode/overrides/skills/executing-plans/SKILL.md 62747
+# Raised 62747 -> 62824 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 62824 -> 63113 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 63113 -> 63136 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 63136 -> 63266 (1.2.0): as core/skills/executing-plans/SKILL.md.
+# Raised 63266 -> 63443 (1.2.0): as core/skills/executing-plans/SKILL.md.
+hosts/opencode/overrides/skills/executing-plans/SKILL.md 63443

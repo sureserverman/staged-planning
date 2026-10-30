@@ -238,6 +238,26 @@ try:
                         capture_output=True, text=True, env=env0)
     check(ir.returncode == 0 and "installed" in ir.stdout, "--install --repo writes the shim",
           ir.stdout + ir.stderr)
+    st = subprocess.run([sys.executable, installer, "--status", "--repo", repo],
+                        capture_output=True, text=True, env=env0)
+    check(st.returncode == 0 and st.stdout.startswith("installed"),
+          "--status --repo with every file the git hook loads: installed (exit 0)", st.stdout)
+    # Catches: --status checking git-ref-gate.sh alone while the hook fails open on a
+    # missing file it loads from beside itself.
+    for rel in ("hooks/plan_continue_classify.py",
+                "skills/executing-plans/scripts/plan-flip-audit.py",
+                "skills/executing-plans/scripts/prove-claim.py",
+                "skills/executing-plans/scripts/plan_state.py"):
+        f = os.path.join(out, rel)
+        os.rename(f, f + ".aside")
+        try:
+            st = subprocess.run([sys.executable, installer, "--status", "--repo", repo],
+                                capture_output=True, text=True, env=env0)
+        finally:
+            os.rename(f + ".aside", f)
+        check(st.returncode == 1 and os.path.basename(rel) in st.stdout,
+              f"--status --repo names a missing {os.path.basename(rel)} and exits 1",
+              st.stdout)
     check(gate("git status", repo)[0] == "allow", "with the shim installed git is allowed")
     for cmd in ("git -c core.hooksPath=/dev/null commit -m x",
                 f"python3 {installer} --remove --repo {repo}",
@@ -246,6 +266,63 @@ try:
     r = run("commit-gate.sh", "not json")
     check(r.returncode == 0 and json.loads(r.stdout) == {"permission": "allow"},
           "a payload that is not JSON is allowed", r.stdout)
+
+    # A commit while prove-claim.py has a break applied: the run holds
+    # its lock at `git rev-parse --git-path prove-claim.lock`; an interrupted run leaves
+    # its journal. Only prove-claim takes either, so the rule holds gated or not.
+    def git_path(root, name):
+        gp = git(root, "rev-parse", "--git-path", name).stdout.strip()
+        return gp if os.path.isabs(gp) else os.path.join(root, gp)
+
+    def holding(root):
+        held = os.path.join(tmp, "held")
+        if os.path.exists(held):
+            os.unlink(held)
+        h = subprocess.Popen([sys.executable, "-c",
+                              "import fcntl, sys, time\n"
+                              "f = open(sys.argv[1], 'w'); fcntl.flock(f, fcntl.LOCK_EX)\n"
+                              "open(sys.argv[2], 'w').close(); time.sleep(60)",
+                              git_path(root, "prove-claim.lock"), held])
+        for _ in range(50):
+            if os.path.exists(held):
+                break
+            subprocess.run(["sleep", "0.1"])
+        return h
+
+    for root in (repo, other):
+        h = holding(root)
+        try:
+            perm, r = gate("git commit -a -m x", root)
+        finally:
+            h.kill()
+            h.wait()
+        msg = json.loads(r.stdout).get("agent_message", "") if perm else ""
+        check(perm == "deny" and "prove-claim.lock" in msg,
+              f"a commit while prove-claim holds its lock is denied, naming the lock "
+              f"({os.path.basename(root)})", r.stdout)
+    check(gate("git commit -a -m x", other)[0] == "allow",
+          "with the lock free, a commit with no plan in flight is allowed")
+    jp = git_path(other, "prove-claim-journal.json")
+    with open(jp, "w") as fh:
+        fh.write("{}")
+    try:
+        perm, r = gate("git commit -a -m x", other)
+    finally:
+        os.unlink(jp)
+    check(perm == "deny" and "prove-claim-journal.json" in r.stdout,
+          "a commit while an interrupted run's journal is present is denied, naming it", r.stdout)
+    h = holding(other)
+    with open(jp, "w") as fh:
+        fh.write("{}")
+    try:
+        perm, r = gate("git commit -a -m x", other)
+    finally:
+        os.unlink(jp)
+        h.kill()
+        h.wait()
+    msg = json.loads(r.stdout).get("agent_message", "") if perm else ""
+    check(perm == "deny" and "in progress" in msg and "interrupted" not in msg,
+          "a commit during a live run (lock and journal) is denied as a run in progress", r.stdout)
 
     # ---- git-ref-gate.sh through the installed shim
     os.makedirs(os.path.join(repo, "plans"))
@@ -277,6 +354,127 @@ try:
     check(c.returncode != 0 and "plan-state.py init" in c.stderr,
           "with no execution state, the ref hook refuses a Stage N green commit", c.stderr)
     os.rename(state + ".off", state)
+    # Catches: a stage close keyed on the subject alone.
+    pp = os.path.join(repo, "plans", "p-plan.md")
+    with open(pp) as fh:
+        untick = fh.read()
+    with open(pp, "w") as fh:
+        fh.write(untick.replace("### Stage 1 Gate\n- [ ] green", "### Stage 1 Gate\n- [x] green"))
+    git(repo, "add", "-A")
+    c = git(repo, "commit", "-q", "-m", "Stage 1 done")
+    check(c.returncode != 0 and "Task 1.1 claim 1: no record" in c.stderr,
+          "a commit 'Stage 1 done' that ticks the Stage 1 Gate is judged as Stage 1's close",
+          c.stderr)
+    with open(pp, "w") as fh:
+        fh.write(untick)
+    git(repo, "add", "-A")
+    c = git(repo, "commit", "-q", "-m", "Stage 1 done")
+    check(c.returncode == 0, "a commit 'Stage 1 done' that ticks no gate box is not gated",
+          c.stderr)
+    # A terminal commit while prove-claim.py holds its lock: no shell hook sees it, the ref
+    # hook does — any subject, plan in flight or not.
+    with open(os.path.join(repo, "calc.py"), "a") as fh:
+        fh.write("# during a proof\n")
+    h = holding(repo)
+    try:
+        c = git(repo, "commit", "-q", "-am", "wip during a proof")
+    finally:
+        h.kill()
+        h.wait()
+    check(c.returncode != 0 and "prove-claim.lock" in c.stderr,
+          "the ref hook refuses a commit while prove-claim holds its lock, naming it", c.stderr)
+    git(repo, "checkout", "--", "calc.py")
+
+    # ---- a linked worktree and the run in the main worktree
+    # .claude/plan-progress.json is git-ignored, so each worktree has its own. The hooks read
+    # their own worktree first, and the main worktree's run when its own has none.
+    plan_src = os.path.join(repo, "plans", "p-plan.md")
+
+    def wt_pair(name, plan=True):
+        main = mkrepo(name + "-main", plan=plan)
+        git(main, "commit", "-q", "--allow-empty", "-m", "base")
+        linked = os.path.join(tmp, name + "-linked")
+        git(main, "worktree", "add", "-q", "-b", name + "-side", linked)
+        return main, linked
+
+    main, linked = wt_pair("wt-dl")
+    r = run("dispatch-log.sh", task_payload(linked, "wt-1"))
+    mlog = os.path.join(main, ".claude", "dispatch-log.jsonl")
+    rows = [json.loads(x) for x in open(mlog).read().splitlines()] if os.path.exists(mlog) else []
+    check(json.loads(r.stdout) == {"permission": "allow"} and len(rows) == 1
+          and rows[0]["tool_use_id"] == "wt-1" and not os.path.exists(os.path.join(linked, ".claude")),
+          "a Task launch from a linked worktree is logged to the main worktree's run, and allowed",
+          (r.stdout, r.stderr, rows))
+    main, linked = wt_pair("wt-dn", plan=False)
+    run("dispatch-log.sh", task_payload(linked, "wt-2"))
+    check(not os.path.exists(os.path.join(main, ".claude", "dispatch-log.jsonl"))
+          and not os.path.exists(os.path.join(linked, ".claude")),
+          "with no state in either worktree a linked worktree's Task launch writes nothing")
+    main, linked = wt_pair("wt-cg")
+    perm, r = gate("git status", linked)
+    check(perm == "deny" and "--install --repo" in json.loads(r.stdout).get("agent_message", ""),
+          "in flight in the main worktree with no shim, git in a linked worktree is denied", r.stdout)
+    main, linked = wt_pair("wt-cn", plan=False)
+    check(gate("git status", linked)[0] == "allow",
+          "with no state in either worktree, git in a linked worktree is allowed")
+    main, linked = wt_pair("wt-cu", plan=False)
+    mstate = os.path.join(main, ".claude", "plan-progress.json")
+    with open(mstate, "w") as fh:
+        fh.write("not json\n")
+    perm, r = gate('git commit -q -m "Stage 1 green"', linked)
+    check(perm == "deny" and mstate in json.loads(r.stdout).get("agent_message", ""),
+          "an unreadable state file in the main worktree denies a Stage N green commit, naming it",
+          r.stdout)
+    main, linked = wt_pair("wt-co", plan=False)
+    done = os.path.join(tmp, "done-plan.md")
+    with open(done, "w") as fh:
+        fh.write("# Plan\n")
+    ps = os.path.join(out, "skills", "executing-plans", "scripts", "plan-state.py")
+    fin = [subprocess.run([sys.executable, ps, op, "--repo", main, "--expected-revision", rev,
+                           "--operation-id", oid], input=json.dumps(body), capture_output=True,
+                          text=True, env=env0)
+           for op, rev, oid, body in (
+               ("init", "0", "op-1", {"plan": done, "scope": "fixture", "source": "owner: fixture"}),
+               ("finish", "1", "op-2", {"evidence": "fixture finished"}))]
+    os.makedirs(os.path.join(linked, ".claude"))
+    write_state(linked)
+    perm, r = gate("git status", linked)
+    check(all(x.returncode == 0 for x in fin) and perm == "deny",
+          "the linked worktree's own run gates first, over a finished run in the main worktree",
+          ([x.stdout + x.stderr for x in fin], r.stdout))
+    main, linked = wt_pair("wt-rg")
+    os.makedirs(os.path.join(main, "plans"))
+    shutil.copy(plan_src, os.path.join(main, "plans", "p-plan.md"))
+    subprocess.run([sys.executable, installer, "--install", "--repo", main],
+                   capture_output=True, text=True, env=env0)
+    with open(os.path.join(linked, "calc.py"), "w") as fh:
+        fh.write("def add(a, b):\n    return a + b\n")
+    git(linked, "add", "-A")
+    c = git(linked, "commit", "-q", "-m", "Stage 1 green")
+    check(c.returncode != 0 and "Task 1.1 claim 1: no record" in c.stderr,
+          "a linked worktree's Stage 1 green commit is judged against the main worktree's plan",
+          c.stderr)
+    # Catches: with proof/ local, records read from the main worktree rather than from the
+    # worktree being committed, where prove-claim.py wrote them.
+    with open(os.path.join(linked, ".gitignore"), "a") as fh:
+        fh.write("proof/\n")
+    os.makedirs(os.path.join(linked, "proof", "p-plan", "1.1"))
+    with open(os.path.join(linked, "proof", "p-plan", "1.1", "claim-1.json"), "w") as fh:
+        fh.write("{}\n")
+    git(linked, "add", "-A")
+    c = git(linked, "commit", "-q", "-m", "Stage 1 green")
+    check(c.returncode != 0 and "Task 1.1 claim 1:" in c.stderr
+          and "Task 1.1 claim 1: no record" not in c.stderr,
+          "with proof/ local, a linked worktree's records are read from that worktree", c.stderr)
+    main, linked = wt_pair("wt-rn", plan=False)
+    subprocess.run([sys.executable, installer, "--install", "--repo", main],
+                   capture_output=True, text=True, env=env0)
+    with open(os.path.join(linked, "calc.py"), "w") as fh:
+        fh.write("def add(a, b):\n    return a + b\n")
+    git(linked, "add", "-A")
+    c = git(linked, "commit", "-q", "-m", "Task 1.1: calc")
+    check(c.returncode == 0, "with no state in either worktree, a linked worktree's commit lands",
+          c.stderr)
 
     # ---- hooks-install.py user route
     home = os.path.join(tmp, "home")

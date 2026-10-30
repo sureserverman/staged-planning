@@ -16,11 +16,20 @@ The field exists for the two exceptions, and it takes two values:
 | Value | Means | Use when |
 |---|---|---|
 | `Review: skip` | do not review this task even though the tier would | the tier is `high` and this one task is non-code or throwaway |
-| `Review: required` | review this task even though the tier would not | the plan is `light`/`standard` overall but *this* task touches something risky |
+| `Review: required` | review this task even though the tier would not | the plan is `light`/`standard` overall but *this* task's `Scope:` names a risk-listed path |
 
 `Review: required` is what keeps a single dangerous task from dragging a whole plan up a
 tier — the cheaper and more honest move than declaring `high` for nine tasks because one
 of them touches auth.
+
+**Grant it by path, never by word.** Mark `Review: required` only on a task whose `Scope:`
+names a risk-listed path: the function that checks a credential, the statement that drops
+or migrates a table, the signature a downstream caller binds to. The list and its reading
+are in `../../executing-plans/references/review-scope.md` § Risk-listed names a path. A
+task whose text mentions identity, permission or protocol, and whose diff
+touches no such path, does not get it: the stage's Tier-2 pass reads that diff anyway.
+Granted by those words, the field landed on 8 of 17 tasks in one master plan
+(one owner's run, 2026-10-26), and each bought a review and a re-review that Tier-2 repeated.
 
 **Both values are the user's to author, never the executor's.** The field exists in this
 template precisely so the annotation has a provenance: it lands in the plan the user reads
@@ -55,6 +64,15 @@ So write each claim as the property a user would care about, and when it is not 
 the claim could fail, say so in the field: `— page 2 holds the sales chart (red if
 CHART_SCRATCH is unset)`. That clause is what an executor breaks to prove the test can fail; without it
 they break whatever is easiest, and the claim the task exists for is never tried.
+
+**One command, before the first ` — `, covers every claim.** An executor runs only the
+commands written before the field's first ` — `. Everything after it is read as claims.
+Suppose a field reads "`python3 tests/test_x.py` — it parses; the doc says so:
+`grep -q 'parses' docs/x.md`". The grep comes after the dash, so nothing runs it, and that
+claim cannot be proven. Chain a claim's own command into the one before the dash with `&&`:
+"`python3 tests/test_x.py && grep -q 'parses' docs/x.md` — it parses; the doc says so".
+`validate-gate-checks.py` notes a field with a command after the dash
+(TEST-COMMAND-AFTER-DASH, advisory).
 
 **It never checks what the task was for.** A task that exists to prepare something for later
 tasks — a scaffold that owns the build file so parallel siblings need not touch it — is done

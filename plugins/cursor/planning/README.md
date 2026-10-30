@@ -1,6 +1,6 @@
 # planning
 
-An eleven-skill pipeline (v1.1.1) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
+An eleven-skill pipeline (v1.2.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
 
 This is the **Cursor** build. Beside the eleven skills it ships two Cursor-only skills, `hooks` and `plan-statusline`, four agents, and the plugin's hooks (`hooks/hooks.json`). Skills are invoked by their bare names (`/executing-plans`, `/backlog`, …); Cursor does not trigger a skill reliably from prose, so name the one you want.
 
@@ -126,7 +126,7 @@ A scoped gate report always discloses what actually ran. Policy lives in `skills
 |---|---|---|
 | **none** | docs / config / version-bump / comment-only | the plan's own tests and gate checks, nothing else |
 | **light** | no new executable behavior, **or** under ~200 changed lines across ≤ ~5 files, and nothing risk-listed | + **one** whole-plan-diff review, at close-out |
-| **standard** | multi-file code with new behavior — the default, and what an undeclared run gets | + one Tier-2 review per stage gate; an evaluator only at gates carrying a `(judgment)` check or whose stage has Outcomes (there it demos them as their user), plus a close-out evaluator when the final gate carries one or any stage has Outcomes |
+| **standard** | multi-file code with new behavior — the default, and what an undeclared run gets | + one Tier-2 review per stage gate; an evaluator only at gates carrying a `(judgment)` check or whose stage has Outcomes (there it demos them as their user), unless a recorded goal command decides it, plus a close-out evaluator when the final gate carries one or any stage has Outcomes |
 | **high** | security / auth, data-destructive, public API, schema / migration | the full apparatus: per-task Tier-1, per-gate Tier-2 + evaluator, a second independent close-out pass |
 
 **What the tier gates** is every mandate that costs an agent dispatch: both review tiers, the gate and close-out evaluators, the Preflight dispatch probe, and the design-fidelity verify loop's evaluator. What it never gates is the cheap-but-load-bearing half — the dispatch roster, the executor trailer, the dispatch reconciliation, honest-gates disclosure, the class sweep run on any bug found during execution, and the plan's own tests. Concretely, counting **verification** dispatches only — the plan's own `Dispatch: YES` task dispatches are execution, not verification, and are never tiered — a Standard 3-stage / 9-task plan whose gates each carry a `(judgment)` check costs **7** at `standard` (3 Tier-2, 3 gate evaluators, 1 probe; 8 if its close-out evaluator is a separate dispatch, 4 if its gates are all executable sweeps). Running every mandate on the same plan would cost **17** (9 Tier-1, 3 Tier-2, 3 gate evaluators, 1 close-out, 1 probe) before any re-dispatch after a fix — and an unbounded re-dispatch is the larger cost the tiers remove.

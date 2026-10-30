@@ -230,4 +230,9 @@ Next: <author action | re-review trigger | recommend an installed specialist, e.
 - **Do not leak secrets** the diff contains. Flag it Critical as a hardcoded-or-logged credential, point at the line, and never quote the secret back. The catalog's Secrets item carries the CWE ids.
 - **Escalate architectural patterns** spanning many files rather than redesigning the project inside a code review.
 - **Do not auto-approve on "LGTM"** — an Approve verdict carries at least one specific "was done well" observation and a literally empty Critical list.
+- Wait on a background job you start by its own completion: `wait <pid>` for a job this
+  shell started, or a sentinel file it writes last. A Codex shell call keeps no jobs for
+  the next call, so a job meant to outlive one writes its pid and sentinel to files. A
+  `pgrep -f` loop matches its own shell and waits for ever. An agent returns only after its
+  own background work has finished or been stopped, and says which.
 '''

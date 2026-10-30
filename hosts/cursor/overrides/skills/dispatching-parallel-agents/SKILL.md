@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-description: Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Dispatches one agent per task, running concurrently. Triggers on "dispatch these tasks in parallel", "run these Dispatch YES tasks", "fan out these independent fixes".
+description: Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Triggers on "dispatch these tasks in parallel", "run these Dispatch YES tasks", "fan out these independent fixes".
 ---
 
 > On Cursor, `<planning-plugin>` is this plugin's installed folder: the folder that holds `skills/` and `.cursor-plugin/` (`~/.cursor/plugins/local/planning` for a local install), which is `../..` from this SKILL.md. In a shell command use its absolute path, quoted.
@@ -154,6 +154,8 @@ beside it, so the path comes from the routing table's plugin and name).>
 - Do NOT modify files outside the Files list above
 - Do NOT refactor unrelated code
 - Do NOT introduce new dependencies not already in the project
+- Wait on a background job you start by its own completion — the harness notification,
+  `wait <pid>`, or a sentinel file it writes last; a `pgrep -f` loop matches its own shell
 - Commit with message: "Stage <N> Task <N.M>: <description>" — code only, nothing under
   `proof/`. The git reference-transaction hook does not gate task commits; it gates the
   stage's `Stage N green` commit, after the gate's verifier has proven every task. End the

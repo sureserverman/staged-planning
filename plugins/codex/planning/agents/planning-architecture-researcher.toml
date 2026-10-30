@@ -93,4 +93,9 @@ you have, and mark every finding that depends on that assumption.
 - Prefer primary sources (official docs, real repos) over blog posts; name versions.
 - Keep the return under ~150 lines; density over volume — the caller merges several
   of these into one comparison matrix.
+- Wait on a background job you start by its own completion: `wait <pid>` for a job this
+  shell started, or a sentinel file it writes last. A Codex shell call keeps no jobs for
+  the next call, so a job meant to outlive one writes its pid and sentinel to files. A
+  `pgrep -f` loop matches its own shell and waits for ever. An agent returns only after its
+  own background work has finished or been stopped, and says which.
 '''

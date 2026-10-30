@@ -170,6 +170,10 @@ def execution_module():
     return module
 
 
+# The most bytes read from a legacy state file (see the core file's READ CAPS).
+STATE_READ_CAP = 512 << 10
+
+
 def projection_state(state_file):
     """Legacy display is compatible; owned/versioned display must validate."""
     module = execution_module()
@@ -190,7 +194,7 @@ def projection_state(state_file):
         return outcome['state']
     # No run pointer: keep the legacy renderer's silence for unusable legacy
     # files. A parsed version marker still requires the shared owned reader.
-    state = json.loads(state_file.read_text())
+    state = json.loads(pu.read_capped(state_file, STATE_READ_CAP))
     if isinstance(state, dict) and 'schema_version' in state:
         outcome = module.result(repo_root_of(state_file), 'show', {})
         if outcome['status'] != 'ok':
@@ -342,6 +346,10 @@ def dispatch_check(args):
         return fail(f"cannot read plan {plan}: {e}")
 
     roster = parse_roster(text)
+    # A Light plan has no Preflight, so no roster: its tasks run inline by format.
+    if roster is None and pu.is_light_plan(text, plan):
+        print("dispatch: 0 of 0 (light plan, inline by format)")
+        return 0
     if roster is None:
         return fail(f"roster missing — no `Dispatch roster` item in {plan}")
     count, ids = roster

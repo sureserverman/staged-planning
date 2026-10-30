@@ -11,7 +11,16 @@ or a gate fix landed after it.
                              `Stage 1 green` -> no blocking finding 8 for Task 1.1
   local, stale               the same, but the code changes after proving and before
                              `Stage 1 green` -> blocking finding 8
+  in-repo plan, flipped      the plan lives in the repo and its boxes are ticked after the
+                             proof: the record binds its touched files' blobs, so the ref
+                             hook lets `Stage 1 green` through and finding 8 stays clean
+  drift                      a later commit changes a touched file -> the ref hook refuses
+                             that tree as `Stage 1 green`, and finding 8 reports drift naming
+                             the file and the record: blocking while the stage's gate is
+                             open, advisory once it is ticked and `Stage 1 green` holds the
+                             files as proven (a later stage may edit them)
 """
+import datetime
 import json
 import os
 import shutil
@@ -64,7 +73,25 @@ try:
         return subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-C", repo, *a],
                               capture_output=True, text=True, env=dict(env0), check=True)
 
-    def world(name, stale):
+    def gate(repo, plan, subject):
+        """The Cursor ref hook's verdict on a commit of the staged tree named `subject`,
+        with `plan` in flight at its stage 1 gate. The commit is made, not moved to."""
+        os.makedirs(os.path.join(repo, ".claude"), exist_ok=True)
+        state = os.path.join(repo, ".claude", "plan-progress.json")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(state, "w") as fh:
+            json.dump({"plan": plan, "phase": "gate", "stage": 1, "updated": now}, fh)
+        try:
+            tree = git(repo, "write-tree").stdout.strip()
+            head = git(repo, "rev-parse", "HEAD").stdout.strip()
+            c = git(repo, "commit-tree", tree, "-p", head, "-m", subject).stdout.strip()
+            return subprocess.run(["bash", os.path.join(out, "hooks", "git-ref-gate.sh"),
+                                   "prepared"], cwd=repo, input=f"{head} {c} refs/heads/main\n",
+                                  capture_output=True, text=True, env=dict(env0))
+        finally:
+            os.remove(state)
+
+    def world(name, stale, in_repo=False, later=False, gate_open=False):
         repo = os.path.join(tmp, name)
         plans = os.path.join(tmp, name + "-plans")
         os.makedirs(os.path.join(repo, "tests"))
@@ -77,12 +104,14 @@ try:
         with open(os.path.join(repo, "tests", "test_calc.py"), "w") as fh:
             fh.write(TESTPY)
         with open(os.path.join(repo, ".gitignore"), "w") as fh:
-            fh.write("__pycache__/\nproof/\n")
+            fh.write("__pycache__/\nproof/\n.claude/\n")
+        plan = os.path.join(repo if in_repo else plans, "2026-10-04-calc-plan.md")
+        with open(plan, "w") as fh:
+            # In the repo, the boxes are ticked only after the proof (below).
+            fh.write(PLAN.replace("[x]", "[ ]") if in_repo else
+                     PLAN.replace("- [x] the suite", "- [ ] the suite") if gate_open else PLAN)
         git(repo, "add", "-A")
         git(repo, "commit", "-q", "-m", "base")
-        plan = os.path.join(plans, "2026-10-04-calc-plan.md")
-        with open(plan, "w") as fh:
-            fh.write(PLAN)
         with open(calc, "a") as fh:
             fh.write("\n\ndef twice(a):\n    return 2 * a\n")
         git(repo, "add", "-A")
@@ -114,8 +143,20 @@ try:
         if stale:
             with open(calc, "a") as fh:
                 fh.write("# changed after the proof\n")
+        if in_repo:
+            with open(plan, "w") as fh:
+                fh.write(PLAN)   # the task's Status and the gate box, ticked after the proof
         git(repo, "add", "-A")
+        verdict = gate(repo, plan, "Stage 1 green")
         git(repo, "commit", "-q", "-m", "Stage 1 green")
+        if later:
+            # A later commit changes the proven code, or the test that proved it: the
+            # stage's records have drifted.
+            with open(calc if later is True else os.path.join(repo, later), "a") as fh:
+                fh.write("# tidied after the stage closed\n")
+            git(repo, "add", "-A")
+            verdict = gate(repo, plan, "Stage 1 green")
+            git(repo, "commit", "-q", "-m", "tidy calc")
         r = subprocess.run([sys.executable, os.path.join(scripts, "plan-flip-audit.py"), plan,
                             "--repo", repo, "--json"],
                            capture_output=True, text=True, env=dict(env0))
@@ -125,18 +166,52 @@ try:
             return None, r.stdout + r.stderr
         f8 = [f for f in doc.get("findings", []) if f.get("finding") == 8
               and f.get("text") == "Task 1.1"]
-        return f8, doc
+        return f8, doc, verdict
 
-    f8, doc = world("ok", stale=False)
+    f8, doc, _v = world("ok", stale=False)
     check(f8 is not None and not [f for f in f8 if f["severity"] == "blocking"],
           "a local record proven at the gate binds to the `Stage 1 green` commit "
           "(red if only commits naming the task are tried)",
           json.dumps(f8 if f8 is not None else doc)[:900])
 
-    f8, doc = world("stale", stale=True)
+    f8, doc, _v = world("stale", stale=True)
     check(f8 is not None and [f for f in f8 if f["severity"] == "blocking"],
           "a local record proven on a tree no commit records stays blocking",
           json.dumps(f8 if f8 is not None else doc)[:900])
+
+    f8, doc, v = world("flip", stale=False, in_repo=True)
+    check(v.returncode == 0,
+          "the ref hook lets `Stage 1 green` through when the in-repo plan's boxes were ticked "
+          "after the proof (red under the index binding)", v.stderr)
+    check(f8 is not None and not [f for f in f8 if f["severity"] == "blocking"],
+          "a record proven before the in-repo plan's Status flip verifies after it",
+          json.dumps(f8 if f8 is not None else doc)[:900])
+
+    f8, doc, v = world("drift", stale=False, later=True, gate_open=True)
+    rel = "proof/2026-10-04-calc-plan/1.1/claim-1.json"
+    check(v.returncode != 0 and "calc.py" in v.stderr and "different tree" in v.stderr,
+          "the ref hook refuses as `Stage 1 green` a tree whose touched file changed after "
+          "the proof, naming the file", v.stderr)
+    drift = [f for f in (f8 or []) if f["severity"] == "blocking" and "drift" in f["rule"]
+             and "calc.py" in f["rule"] and rel in f["rule"]]
+    check(bool(drift), "a later commit changing a touched file is blocking drift naming the "
+          "file and the record", json.dumps(f8 if f8 is not None else doc)[:900])
+
+    f8, doc, v = world("drift-closed", stale=False, later=True)
+    drift = [f for f in (f8 or []) if "drift" in f["rule"] and "calc.py" in f["rule"]]
+    check(bool(drift) and all(f["severity"] == "advisory" for f in drift),
+          "on a closed stage whose `Stage 1 green` held the files as proven, later drift is "
+          "advisory (red if every stage's drift blocks)",
+          json.dumps(f8 if f8 is not None else doc)[:900])
+
+    f8, doc, v = world("drift-test", stale=False, later="tests/test_calc.py", gate_open=True)
+    check(v.returncode != 0 and "tests/test_calc.py" in v.stderr,
+          "the ref hook refuses as `Stage 1 green` a tree whose test file changed after the "
+          "proof, naming it", v.stderr)
+    drift = [f for f in (f8 or []) if f["severity"] == "blocking" and "drift" in f["rule"]
+             and "tests/test_calc.py" in f["rule"] and rel in f["rule"]]
+    check(bool(drift), "a later commit changing the test file is blocking drift naming it and "
+          "the record", json.dumps(f8 if f8 is not None else doc)[:900])
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

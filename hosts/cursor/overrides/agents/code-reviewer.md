@@ -238,3 +238,8 @@ Next: <author action | re-review trigger | recommend an installed specialist, e.
 - **Do not leak secrets** the diff contains. Flag it Critical as a hardcoded-or-logged credential, point at the line, and never quote the secret back. The catalog's Secrets item carries the CWE ids.
 - **Escalate architectural patterns** spanning many files rather than redesigning the project inside a code review.
 - **Do not auto-approve on "LGTM"** — an Approve verdict carries at least one specific "was done well" observation and a literally empty Critical list.
+- **Background work.** Wait on a background job you start by its own completion: the harness notification,
+  `wait <pid>`, or a sentinel file it writes last. A `pgrep -f` loop matches its own shell
+  and waits for ever (`<planning-plugin>/skills/executing-plans/references/task-execution.md` § Waiting on background work).
+  An agent returns only after its own background work has finished or been stopped,
+  and says which.

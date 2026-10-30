@@ -87,6 +87,58 @@ try:
                  start("g2", "planning:code-reviewer", AFTER),
                  start("e1", "planning:goal-evaluator", AFTER)], [TIER1, TIER2, SECOND, EVAL])
     check(rc == 0, f"each claim with its own start in its window matches ({rc}: {o[-300:]})")
+
+    # goal skip: the gate evaluator skipped because the ticked (goal) command decides the
+    # goal; the fork reads the line as the core does (stage-gate.md § Skipped when a
+    # recorded command decides the goal).
+    head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True,
+                          text=True, check=True).stdout.strip()
+    skip = f"evaluator: skipped — goal command `python3 t.py` at {head}"
+    goal = "- [x] **(goal)** it works: `python3 t.py`\n"
+    for gate, want, msg in ((goal, 0, "a skip naming the ticked (goal) command passes"),
+                            (goal + "- [x] **(judgment)** reads well\n", 1,
+                             "a skip at a gate with a (judgment) line fails"),
+                            (goal.replace("[x]", "[ ]"), 1,
+                             "a skip whose (goal) box is not ticked fails")):
+        with open(plan, "w") as fh:
+            fh.write("# Project Plan: fixture\n\n## Stage 1: one\n\n### Stage 1 Gate\n" + gate)
+        rc, o = run([], [skip])
+        check(rc == want, f"{msg} ({rc}: {o[-200:]})")
+    with open(plan, "w") as fh:
+        fh.write("# Project Plan: fixture\n\n## Stage 1: one\n\n### Stage 1 Gate\n" + goal)
+    rc, o = run([], ["evaluator: skipped"])
+    check(rc == 1 and "name the command" in o, f"a bare `evaluator: skipped` fails ({rc}: {o[-200:]})")
+    rc, o = run([], ["evaluator: skipped — docs-only diff"])
+    check(rc == 1, f"an excuse word does not make a skip stand ({rc}: {o[-200:]})")
+    # The fork's own loop reads the same two rules: the skip's commit is the tree the stage
+    # ends on, and a missing log leaves the skip checks on.
+    with open(os.path.join(repo, "later.py"), "w") as fh:
+        fh.write("x = 1\n")
+    subprocess.run(["git", "-C", repo, "add", "later.py"], check=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                    "commit", "-qm", "later"], check=True)
+    rc, o = run([], [skip])
+    check(rc == 1 and "later.py" in o, f"a skip at a commit the stage changed files after fails ({rc}: {o[-200:]})")
+    moved = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True,
+                           text=True, check=True).stdout.strip()
+    skip = f"evaluator: skipped — goal command `python3 t.py` at {moved}"
+    rc, o = run([], [skip])
+    check(rc == 0, f"a skip at the commit the stage ends on passes ({rc}: {o[-200:]})")
+    rows_gone = ["--plan", plan, "--stage", "1", "--repo", repo, "--report", "-"]
+    os.remove(os.path.join(repo, ".claude", "dispatch-log.jsonl"))
+    for line, want, msg in (("evaluator: skipped", 1, "with no log a bare skip still fails"),
+                            (skip, 0, "with no log a correct skip and no claim passes"),
+                            (skip + "\n" + TIER2, 3, "with no log a claim stays NOT RUN")):
+        r = subprocess.run([sys.executable, script, *rows_gone], input=line + "\n",
+                           capture_output=True, text=True)
+        check(r.returncode == want, f"{msg} ({r.returncode}: {r.stdout[-200:]})")
+    with open(plan, "w") as fh:
+        fh.write("# Project Plan: fixture\n\n## Stage 1: one\n\n**Outcomes:** the user\n"
+                 "- Works: it reads a file.\n\n### Stage 1 Gate\n" + goal)
+    rc, o = run([], ["evaluator: not run — the diff looked small"])
+    check(rc == 1 and "mandated" in o, f"a scope line at a stage with Outcomes fails ({rc}: {o[-200:]})")
+    rc, o = run([], ['evaluator: not run — owner, 2026-10-30: "no evaluator here"'])
+    check(rc == 0, f"the owner's quoted words excuse it ({rc}: {o[-200:]})")
 finally:
     shutil.rmtree(tmp)
 

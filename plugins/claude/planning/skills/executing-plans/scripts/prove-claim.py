@@ -23,21 +23,30 @@ proven only by this tool having watched it:
      flags hiding a change — the record binds to exactly what will be committed
   2. --test is a command written in the task's `Test:` field, never free text
      (a "test" of `git diff --quiet` goes red for any change at all)
-  3. the build (when given) and the test PASS as the code stands
+  3. the build (when given) and the test PASS as the code stands, under bash when
+     bash is on PATH (else sh); the record names the shell
   4. the break — a content edit of existing, tracked, regular, non-test files
      only, read once into a private copy — is applied; a journal under .git
      records what it touched, so a killed run is undone by the next one
   5. the code still builds with the break (a break that stops compilation turns
      every test red); the test FAILS, and not because it could not run
   6. every touched file is restored and verified byte-identical, with an mtime
-     newer than anything built under the break; the build runs again; the whole
-     tree must then be exactly as before — otherwise exit 3
-  7. a record is written to proof/<plan-stem>/<task>/claim-<K>.json
+     newer than anything built under the break; the build runs again (also after
+     a refusal under the break); the whole tree must then be exactly as before —
+     the untracked files the build and the baseline wrote before the break aside,
+     which a later run's step 1 still refuses unless ignored — otherwise exit 3
+  7. a record is written to proof/<plan-stem>/<task>/claim-<K>.json. It binds the
+     blob of each file the break touched (`touched_blobs`) and of each tracked file
+     the test command names (`witness_blobs`), read from the index the proof ran on, and
+     keeps the whole-index `fingerprint` beside it; a command whose test files it cannot
+     resolve gets neither map, and the fingerprint binds the record
 
 `req` records that a requirement clause was checked — by a command that passes,
 and FAILS under a break of that requirement, through the same run as a claim
 (a check that cannot fail, like `echo ok`, is refused) — or is covered by a
-proven claim. `deviation --req` records one that could not be checked.
+proven claim. `deviation --req` records one that could not be checked. Either first moves
+a req or deviation record already at that number whose text is another clause's (the
+clauses were renumbered) to that clause's number, and refuses when that number is taken.
 `deviation --claim` records a CLAIM no repo patch can break — its evidence lives
 outside the repo (a file in the records home, a device) — at claim-K.json as kind
 `claim-deviation`: disclosed, so the audit reports it, but never proof.
@@ -47,8 +56,23 @@ claim deviation has no break and is listed as skipped.
 WHAT THIS DOES NOT DO. Whether a break, or a req check, is the one that matters
 is judgment — a reviewer's, reading the record. The plan's "red if …"
 is recorded as `named_break` so a reader can compare. A record written by hand
-is still possible; replay, the fingerprint binding and validate() make it a
-deliberate lie rather than an oversight. One run each: a flaky test can pass.
+is still possible; replay, the binding to the touched files' blobs and validate()
+make it a deliberate lie rather than an oversight. One run each: a flaky test can pass.
+
+WHAT A RECORD BINDS. A record names the files its break touched, and `touched_blobs`
+holds the blob each had when the test was watched; `witness_blobs` holds the blob of
+every tracked file the test command names, runs as a script or reads its recipe from
+(witness_files(): a directory argument binds the tracked files under it).
+validate() judges a record against a tree by those blobs alone: a change elsewhere in the
+tree (the task's own Status flip in a plan kept in the repo, a rebase, a squash or a
+cherry-pick that leaves the bound files as they were) leaves it valid, and a change to a
+bound file makes it stale. Not bound: what the test imports or sources (a conftest.py, a
+helper, a fixture) unless the command names it or a directory holding it, other files the
+touched code depends on, and file modes. A command whose test files cannot be resolved (bare
+`pytest`, `python3 -m pytest`, a path that names nothing tracked) writes neither map, and
+the record is judged by its whole-index `fingerprint`, as is one without both maps (written
+before the blob binding) or with an empty witness. A deviation proves no file and keeps the
+fingerprint rule too; a req covered by a claim binds that claim's blobs.
 
 EXIT CODES: 0 proven / recorded / replay clean · 1 not proven or refused (no
 record written) · 2 usage or IO error, or another run holds the lock · 3 the tree
@@ -63,6 +87,7 @@ import argparse
 import base64
 import datetime
 import fcntl
+import fnmatch
 import hashlib
 import importlib.util
 import json
@@ -71,6 +96,7 @@ import re
 import shlex
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -101,6 +127,12 @@ RECORD_PATH = re.compile(rf"^{PROOF_DIR}/[^/]+/(\d+\.\d+/(claim|req|deviation)-[
 NAMED_BREAK = re.compile(r"\(red if (.+?)\)\s*$", re.S)
 TRIVIAL_BUILD = {"", "true", ":", "exit 0", "/bin/true", "/usr/bin/true"}
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+# A git object id: SHA-1 (40 hex) or SHA-256 (64 hex) repositories.
+OBJECT_ID = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+# What a record binds, path -> blob: the files its break touched, and the tracked files its
+# test (or check) command names (not what that test imports). A record binds by blobs only
+# when it carries both and its witness is not empty (binds_by_blobs).
+BLOB_MAPS = ("touched_blobs", "witness_blobs")
 
 # The staleness probe lives in the plugin's lib/, not beside this file: loaded by
 # explicit path, as in check-master-register.py, so a stale plugin-cache copy says so
@@ -186,19 +218,50 @@ def index_fingerprint(repo):
     return _fingerprint_lines(index_entries(repo))
 
 
-def commit_fingerprint(repo, rev):
-    """Fingerprint of a commit's tree in the same form as index_fingerprint."""
+def commit_entries(repo, rev):
+    """`(mode, sha, path)` entries of a commit's tree, in the form index_entries gives."""
     out, entries = git(repo, "ls-tree", "-r", "-z", rev).stdout, []
     for rec in out.split("\0"):
         if rec:
             meta, path = rec.split("\t", 1)
             mode, _type, sha = meta.split()
             entries.append((mode, sha, path))
-    return _fingerprint_lines(entries)
+    return entries
 
 
-def require_clean(repo):
+def commit_fingerprint(repo, rev):
+    """Fingerprint of a commit's tree in the same form as index_fingerprint."""
+    return _fingerprint_lines(commit_entries(repo, rev))
+
+
+def blobs_of(entries):
+    """{path: blob id} of a tree's entries: what a record's touched_blobs is judged against."""
+    return {path: sha for _mode, sha, path in entries}
+
+
+def commit_blobs(repo, rev):
+    """{path: blob id} of a commit's tree."""
+    return blobs_of(commit_entries(repo, rev))
+
+
+def commit_tree(repo, rev):
+    """(fingerprint, {path: blob id}) of a commit's tree, from one listing."""
+    entries = commit_entries(repo, rev)
+    return _fingerprint_lines(entries), blobs_of(entries)
+
+
+def untracked_files(repo):
+    """Untracked, unignored paths outside proof/ and the top-level .claude/."""
+    ex = f":(exclude){PROOF_DIR}"
+    return [u for u in git(repo, "ls-files", "--others", "--exclude-standard", "-z", "--",
+                           ".", ex, ":(top,exclude).claude/").stdout.split("\0") if u]
+
+
+def require_clean(repo, allowed_untracked=()):
     """Worktree == index outside proof/; nothing hides a difference; proof/ holds records only.
+
+    `allowed_untracked` is the after-the-proof check's: what the build and the baseline
+    run wrote before the break was applied is the tree the break started from.
 
     `git diff` is told to see everything: file modes, submodule dirt, no external
     diff or textconv. Index flags that make git LOOK AWAY from a file
@@ -221,8 +284,7 @@ def require_clean(repo):
     # The top-level .claude/ holds what the host and its plugins write on their own
     # (progress cache, state files, other plugins' sidecars), never the change being
     # proven; counted, it blocks every proof in a repo that does not ignore .claude/.
-    untracked = [u for u in git(repo, "ls-files", "--others", "--exclude-standard", "-z", "--",
-                                ".", ex, ":(top,exclude).claude/").stdout.split("\0") if u]
+    untracked = [u for u in untracked_files(repo) if u not in allowed_untracked]
     if untracked:
         raise Refused("untracked files outside proof/ would not be in the commit this proof "
                       f"is bound to — add or ignore them: {', '.join(untracked[:5])}")
@@ -285,7 +347,27 @@ def require_planned_test(test, test_field, task):
 
 # ------------------------------------------------------------------- runs
 
-def run(cmd, repo, timeout):
+def test_shell(wanted=None):
+    """(name, path) of the shell a test runs under: bash when it is on PATH, else sh.
+
+    A Test may use bash syntax (`<(…)`, `{a,b}`), which /bin/sh rejects as a syntax
+    error where sh is dash. A record names its shell, and a replay asks for that one:
+    a bash record is never re-run under sh, and a record without the field (written
+    before it existed) ran under sh.
+    """
+    if wanted in (None, "bash"):
+        bash = shutil.which("bash")
+        if bash:
+            # Absolute now: a relative PATH entry (`.`) would otherwise be resolved
+            # after the chdir into the repo, running a repo-supplied ./bash.
+            return "bash", os.path.abspath(bash)
+        if wanted == "bash":
+            raise Refused("the record ran its test under bash, and bash is not on PATH "
+                          "here — replay it where bash is installed")
+    return "sh", "/bin/sh"
+
+
+def run(cmd, repo, timeout, shell="/bin/sh"):
     """(exit code, output tail); exit None on timeout. The whole process group dies.
 
     No .pyc from any run this tool makes: a break and its restore can land in the
@@ -294,7 +376,7 @@ def run(cmd, repo, timeout):
     GROUP — a test's grandchildren must not keep writing to the tree after restore.
     """
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    p = subprocess.Popen(cmd, shell=True, cwd=repo, stdout=subprocess.PIPE,
+    p = subprocess.Popen(cmd, shell=True, executable=shell, cwd=repo, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, text=True, errors="replace", env=env,
                          start_new_session=True)
     try:
@@ -321,29 +403,416 @@ def _kill_group(p):
 
 INTERPRETERS = {"python", "python3", "bash", "sh", "zsh", "dash", "node", "ruby", "perl",
                 "deno", "bun", "pwsh", "tclsh", "lua", "Rscript"}
+# Shell syntax a simple command can open with, before its program: `{ python3 t.py; }`,
+# `( bash t.sh )`, `! grep …`, `if python3 t.py; then …`. A segment opening with a
+# closer (`}`, `fi`, `done`) runs nothing.
+SHELL_OPENERS = {"!", "{", "(", "if", "then", "elif", "else", "while", "until", "do"}
+SHELL_CLOSERS = {"}", ")", "fi", "done", "esac"}
+# Commands that run the program they are given: name -> (the options that take a
+# separate value, how many positional words come before the program).
+WRAPPERS = {"timeout": ({"-s", "--signal", "-k", "--kill-after"}, 1),
+            "env": ({"-u", "--unset", "-C", "--chdir"}, 0),
+            "time": ({"-f", "--format", "-o", "--output"}, 0)}
+# The file each build-tool runner reads its recipe from. `make` reads the first of
+# these that exists — any of them is its definition.
+MAKEFILES = ("GNUmakefile", "makefile", "Makefile")
+MAKE_DIR, MAKE_FILE = ("-C", "--directory"), ("-f", "--file", "--makefile")
+JS_RUNNER_DIR = {"npm": ("--prefix",), "yarn": ("--cwd",), "pnpm": ("-C", "--dir")}
+# Shells whose `-c STRING` is itself a command line: its commands are read, not the shell.
+C_SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+# What this reading of shell text does NOT see, so a break there is not refused: a
+# runner behind another wrapper (`sudo`, `nice`, `nohup`, `exec`, `xargs`, `npx`,
+# `uv run`), a `case` arm, an interpreter option taking a value (`python3 -W error
+# t.py` names `error`), a variable other than a `for` loop's, a make variable or a
+# prerequisite's recipe, and a `cd` to an absolute path or a variable. It reads the
+# command (and a make or npm runner's recipe); it does not run a shell.
 
 
-def command_programs(cmd):
-    """The programs a command runs — each segment's first word, or the script an
+def killed_by_signal(rc):
+    """A run a signal ended: negative (Popen's -N for its own child), or 128+N for a
+    signal N of 1..64, as a shell reports its child's death. 128 itself and 193..255
+    are exit codes a program chose — `exit(-1)` is 255 — a red like any other."""
+    return rc < 0 or 128 < rc <= 128 + 64
+
+
+def _is_paren(word):
+    return bool(word) and set(word) <= {"(", ")"}
+
+
+def _program_words(words):
+    """A simple command's words from its program on: leading shell syntax and wrapper
+    commands (with their options and positional arguments) skipped, and cut at a
+    closing parenthesis; [] when the segment only closes a compound command."""
+    i, n = 0, len(words)
+    while i < n:
+        w = words[i]
+        if w in SHELL_OPENERS or _is_paren(w):
+            i += 1
+        elif w in SHELL_CLOSERS:
+            return []
+        elif Path(w).name in WRAPPERS:
+            takes_value, positional = WRAPPERS[Path(w).name]
+            i += 1
+            while i < n and words[i].startswith("-"):
+                opt = words[i]
+                i += 2 if opt in takes_value else 1
+                if opt == "--":
+                    break
+            i += positional
+        else:
+            break
+    rest = words[i:]
+    cut = next((j for j, w in enumerate(rest) if _is_paren(w)), len(rest))
+    return rest[:cut]
+
+
+def _substitutions(cmd):
+    """(`cmd` with each `$(…)`, `<(…)`, `>(…)` and backquoted command replaced by one
+    placeholder word, [the commands they held]). Text in single quotes runs nothing
+    and is left alone; nesting is followed by counting parentheses."""
+    out, inner, i, n, quote = [], [], 0, len(cmd), None
+    while i < n:
+        c = cmd[i]
+        if quote == "'":
+            quote = None if c == "'" else quote
+            out.append(c)
+            i += 1
+        elif c == "'" and quote is None:
+            quote = "'"
+            out.append(c)
+            i += 1
+        elif c == '"':
+            quote = None if quote == '"' else '"'
+            out.append(c)
+            i += 1
+        elif c in "$<>" and cmd.startswith("(", i + 1):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                depth += {"(": 1, ")": -1}.get(cmd[j], 0)
+                j += 1
+            inner.append(cmd[i + 2:j - 1])
+            out.append("_subst_")
+            i = j
+        elif c == "`":
+            j = cmd.find("`", i + 1)
+            j = n if j < 0 else j
+            inner.append(cmd[i + 1:j])
+            out.append("_subst_")
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out), inner
+
+
+def _segments(cmd):
+    """`cmd` split at `&&`, `||`, `;`, `|` and newlines outside quotes."""
+    seg, quote, i, n = [], None, 0, len(cmd)
+    while i < n:
+        c = cmd[i]
+        if quote:
+            quote = None if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif cmd.startswith(("&&", "||"), i) or c in ";|\n":
+            yield "".join(seg)
+            seg = []
+            i += 2 if cmd.startswith(("&&", "||"), i) else 1
+            continue
+        seg.append(c)
+        i += 1
+    yield "".join(seg)
+
+
+def _braces(word):
+    """`word` with each `{a,b}` list expanded, as a shell does before anything else."""
+    m = re.search(r"\{([^{}]*,[^{}]*)\}", word)
+    if not m:
+        return [word]
+    return [w for alt in m.group(1).split(",")
+            for w in _braces(word[:m.start()] + alt + word[m.end():])]
+
+
+def _loop_expand(words, loops):
+    """One copy of `words` per value of the first `for` variable they use."""
+    for i, w in enumerate(words):
+        for var, values in loops.items():
+            if f"${var}" in w or f"${{{var}}}" in w:
+                return [words[:i] + [w.replace(f"${{{var}}}", v).replace(f"${var}", v)]
+                        + words[i + 1:] for v in values]
+    return [words]
+
+
+def located_commands(cmd, base=".", _depth=0):
+    """(directory, words) for each simple command `cmd` runs, the words from the
+    program on — so the program of `timeout 60 python3 t.py` is python3, not timeout.
+    Variable assignments (`A=1`) are dropped wherever they stand. `directory` is where
+    it runs, relative to the test's: a `cd sub` moves the commands after it, until the
+    subshell it stands in closes. A command substitution, a process substitution and a
+    shell's `-c STRING` are read as commands of their own."""
+    if _depth > 8:
+        return
+    cmd, inner = _substitutions(cmd)
+    for sub in inner:
+        yield from located_commands(sub, base, _depth + 1)
+    stack, loops = [], {}
+    for seg in _segments(cmd):
+        try:
+            # punctuation_chars: `(bash t.sh)` splits into `(`, `bash`, `t.sh`, `)`.
+            lex = shlex.shlex(seg, posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            words = list(lex)
+        except ValueError:
+            words = re.findall(r"[()]|[^\s()]+", seg)
+        words = [w for w in words if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w)]
+        # A subshell opened before the program keeps the directory to return to; a
+        # `{ }` group is no subshell, so a `cd` inside it carries on after it.
+        for w in words:
+            if _is_paren(w):
+                stack += [base] * w.count("(")
+            elif w not in SHELL_OPENERS:
+                break
+        prog = _program_words(words)
+        if prog and prog[0] == "for":
+            # `for v in a {b,c} d*.py` — the body's `$v` is each word (a glob stays a
+            # pattern, matched against a break's paths).
+            if len(prog) > 3 and prog[2] == "in":
+                loops[prog[1]] = [x for w in prog[3:] for x in _braces(w)]
+            prog = []
+        if prog and prog[0] == "cd":
+            dest = prog[1] if len(prog) > 1 else ""
+            base = (os.path.normpath(os.path.join(base, dest))
+                    if dest and not dest.startswith(("/", "~", "$", "-")) else ".")
+        elif prog and Path(prog[0]).name in C_SHELLS and "-c" in prog[1:-1]:
+            yield from located_commands(prog[prog.index("-c", 1) + 1], base, _depth + 1)
+        elif prog:
+            for each in _loop_expand(prog, loops):
+                yield base, each
+        for _ in range(sum(w.count(")") for w in words if _is_paren(w))):
+            if stack:
+                base = stack.pop()
+
+
+def simple_commands(cmd):
+    """Each simple command `cmd` runs, as its words from the program on (see
+    located_commands)."""
+    for _base, words in located_commands(cmd):
+        yield words
+
+
+def command_programs(cmd, base="."):
+    """The programs a command runs — each simple command's program, or the script an
     interpreter is given — so a break of the test runner itself can be refused.
     A source file the command merely names (`grep x calc.py`) is not one."""
     out = set()
-    for seg in re.split(r"&&|\|\||[;|\n]", cmd):
-        try:
-            words = shlex.split(seg)
-        except ValueError:
-            words = seg.split()
-        words = [w for w in words if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w)]
-        if not words:
-            continue
+    for base, words in located_commands(cmd, base):
         prog = words[0]
         if Path(prog).name in INTERPRETERS:
             rest = [w for w in words[1:] if not w.startswith("-")]
             if "-m" in words[1:] or "-c" in words[1:] or not rest:
                 continue
-            prog = rest[0]
+            prog = os.path.join(base, rest[0])
+        elif "/" in prog:
+            prog = os.path.join(base, prog)
         out.add(os.path.normpath(prog))
     return out
+
+
+def _option_values(args, names):
+    """The values given to any of the options `names`, as `-C dir`, `-Cdir` or `--dir=dir`."""
+    vals, i = [], 0
+    while i < len(args):
+        a = args[i]
+        if a in names and i + 1 < len(args):
+            vals.append(args[i + 1])
+            i += 2
+            continue
+        vals += [a.split("=", 1)[1] for nm in names
+                 if nm.startswith("--") and a.startswith(nm + "=")]
+        vals += [a[len(nm):] for nm in names
+                 if not nm.startswith("--") and a.startswith(nm) and len(a) > len(nm)]
+        i += 1
+    return vals
+
+
+def runner_files(cmd):
+    """{path: runner} — the files a build-tool runner in `cmd` reads its recipe from:
+    make's makefiles (its -f files, under its -C directory) and the package.json of
+    npm (--prefix), yarn (--cwd) or pnpm (-C/--dir). A break there edits the runner,
+    not the code the claim is about."""
+    out = {}
+    for where, words in located_commands(cmd):
+        name, args = Path(words[0]).name, words[1:]
+        if name in ("make", "gmake"):
+            base = os.path.join(where, *_option_values(args, MAKE_DIR))
+            for f in _option_values(args, MAKE_FILE) or MAKEFILES:
+                out[os.path.normpath(os.path.join(base, f))] = name
+        elif name in JS_RUNNER_DIR:
+            base = os.path.join(where, *_option_values(args, JS_RUNNER_DIR[name]))
+            out[os.path.normpath(os.path.join(base, "package.json"))] = name
+    return out
+
+
+def _make_recipe(text, targets):
+    """The recipe lines `make <targets>` runs from a makefile's text (the first rule's
+    target when none is named), each with its `@`, `-` and `+` prefixes dropped."""
+    rules, order, cur = {}, [], None
+    for ln in text.splitlines():
+        if ln.startswith("\t"):
+            for t in cur or ():
+                rules[t].append(ln[1:].lstrip("@-+ "))
+            continue
+        m = re.match(r"^([^\s#:=][^:=]*?)\s*::?(?!=)(.*)$", ln)
+        if m:
+            cur = m.group(1).split()
+            for t in cur:
+                rules.setdefault(t, [])
+                order.append(t)
+            if ";" in m.group(2):
+                for t in cur:
+                    rules[t].append(m.group(2).split(";", 1)[1].strip())
+        elif ln.strip() and not ln.lstrip().startswith("#"):
+            cur = None
+    targets = targets or [t for t in order if not t.startswith(".")][:1]
+    return [c for t in targets for c in rules.get(t, [])]
+
+
+NPM_ALIASES = {"t": "test", "tst": "test", "run-script": "run"}
+
+
+def recipe_lines(repo, cmd, base="."):
+    """(directory, command line) for each line of a make recipe or an npm/yarn/pnpm script
+    that `cmd` runs, one level down: the directory is where the recipe runs."""
+    for where, words in located_commands(cmd, base):
+        name, args = Path(words[0]).name, words[1:]
+        recipes, at = [], where
+        if name in ("make", "gmake"):
+            at = os.path.normpath(os.path.join(where, *_option_values(args, MAKE_DIR)))
+            files = _option_values(args, MAKE_FILE) or MAKEFILES
+            skip = {v for v in _option_values(args, MAKE_DIR + MAKE_FILE)}
+            targets = [a for a in args if not a.startswith("-") and "=" not in a
+                       and a not in skip and not a.isdigit()]
+            for f in files:
+                mk = Path(repo) / at / f
+                if mk.is_file():
+                    recipes = _make_recipe(mk.read_text(errors="replace"), targets)
+                    break
+        elif name in JS_RUNNER_DIR:
+            at = os.path.normpath(os.path.join(where, *_option_values(args, JS_RUNNER_DIR[name])))
+            pos = [a for a in args if not a.startswith("-") and a not in _option_values(args, JS_RUNNER_DIR[name])]
+            pos = [NPM_ALIASES.get(a, a) for a in pos]
+            script = pos[1] if pos[:1] == ["run"] and len(pos) > 1 else (pos[0] if pos else None)
+            try:
+                scripts = json.loads((Path(repo) / at / "package.json").read_text()).get("scripts", {})
+            except (OSError, ValueError, AttributeError):
+                scripts = {}
+            if script and isinstance(scripts, dict):
+                recipes = [scripts[k] for k in (f"pre{script}", script, f"post{script}")
+                           if isinstance(scripts.get(k), str)]
+        for rc in recipes:
+            yield at, rc
+
+
+def recipe_programs(repo, cmd, base=".", _depth=0):
+    """The programs a make recipe or an npm/yarn/pnpm script runs, when `cmd` runs one:
+    the recipe's runner is the test's runner, one file further on."""
+    out = set()
+    if _depth > 4:
+        return out
+    for at, rc in recipe_lines(repo, cmd, base):
+        out |= command_programs(rc, at)
+        out |= recipe_programs(repo, rc, at, _depth + 1)
+    return out
+
+
+# Programs whose arguments name the tests they run: an interpreter's script, a test
+# runner's files and directories. An argument of one that reads as a path but names nothing
+# tracked is a test the witness cannot bind (witness_files answers None).
+TEST_RUNNERS = {"pytest", "py.test", "go", "cargo", "jest", "vitest", "mocha", "bats",
+                "rspec", "phpunit", "tox", "nox", "ctest"}
+# The option of an interpreter whose value is program text, not a path.
+CODE_OPTION = {"python": "-c", "python3": "-c", "node": "-e", "perl": "-e", "ruby": "-e"}
+PATH_LIKE = re.compile(r"/|^\.\.?$|\.(py|sh|bash|bats|js|mjs|cjs|ts|tsx|jsx|rb|pl|go|rs|lua"
+                       r"|r|tcl|ps1|php|java|kt|swift|json|toml|ini|cfg|ya?ml)$", re.I)
+DOTTED_MODULE = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$")
+
+
+def _tracked_under(n, tracked):
+    """The tracked paths `n` (a path relative to the repo root) names: a glob's matches, the
+    file itself, or every tracked file under a directory (`.`, and Go's `dir/...`)."""
+    if n == "...":
+        n = "."
+    elif n.endswith("/..."):
+        n = n[:-4]
+    if any(ch in n for ch in "*?["):
+        return {t for t in tracked if fnmatch.fnmatchcase(t, n)}
+    if n in tracked:
+        return {n}
+    return set(tracked) if n == "." else {t for t in tracked if t.startswith(n + "/")}
+
+
+def _argument_witness(cmd, base, tracked):
+    """({tracked paths the arguments of `cmd`'s commands name}, complete). Not complete when
+    a runner or interpreter is given an argument that reads as a path (or a dotted module
+    after `-m`) and names nothing tracked: a test file the record could not bind."""
+    out, complete = set(), True
+    for where, words in located_commands(cmd, base):
+        prog = Path(words[0]).name
+        runner = prog in INTERPRETERS or prog in TEST_RUNNERS
+        module = prog in INTERPRETERS and "-m" in words[1:]
+        code = CODE_OPTION.get(prog)
+        args = [w for i, w in enumerate(words[1:], 1)
+                if w and not w.startswith("-") and not (code and words[i - 1] == code)]
+        for w in args:
+            if w.startswith(("/", "~", "$")):
+                complete &= not runner
+                continue
+            n = os.path.normpath(os.path.join(where, w.split("::", 1)[0]))
+            hit = _tracked_under(n, tracked)
+            if not hit and module and DOTTED_MODULE.match(w):
+                n = os.path.normpath(os.path.join(where, *w.split(".")))
+                hit = _tracked_under(n + ".py", tracked) or _tracked_under(n, tracked)
+                complete &= bool(hit)
+            elif not hit and runner and PATH_LIKE.search(w.split("::", 1)[0]):
+                complete = False
+            out |= hit
+    return out, complete
+
+
+def witness_files(repo, cmd, tracked):
+    """The tracked files a Test (or req --check) command runs or reads its recipe from, or
+    None when the record cannot bind its test by blobs.
+
+    Each program and interpreter script (command_programs), what a make recipe or an npm
+    script runs (recipe_programs), the recipe files themselves (runner_files), and every
+    argument of the command and its recipes that names a tracked path: a file
+    (`pytest tests/x.py::t`, the `::node` dropped), every tracked file under a directory
+    (`pytest tests`, `go test ./...`), a glob's matches, and a dotted module after `-m`
+    (`python3 -m unittest tests.test_a` names tests/test_a.py). These are the record's
+    witness: a test edited after the proof proves nothing about the code. Not bound: what the
+    test imports or sources (a conftest.py, a helper, a fixture) unless the command names it
+    or a directory holding it.
+
+    None — no blob maps, so the record keeps the whole-tree fingerprint rule — when the
+    witness is empty (bare `pytest`, `python3 -m pytest`, `cargo test`) or a runner or
+    interpreter is given a path that names nothing tracked. `tracked` is the set of tracked
+    paths; proof/ never counts."""
+    named = command_programs(cmd) | recipe_programs(repo, cmd) | set(runner_files(cmd))
+    out = set()
+    for n in named:
+        if any(ch in n for ch in "*?["):
+            out |= {t for t in tracked if fnmatch.fnmatchcase(t, n)}
+        elif n in tracked:
+            out.add(n)
+    complete, todo = True, [(".", cmd, 0)]
+    while todo:
+        base, line, depth = todo.pop()
+        got, whole = _argument_witness(line, base, tracked)
+        out, complete = out | got, complete and whole
+        if depth < 4:
+            todo += [(at, rc, depth + 1) for at, rc in recipe_lines(repo, line, base)]
+    out = sorted(t for t in out if not t.startswith(PROOF_DIR + "/"))
+    return out if out and complete else None
 
 
 def check_patch(repo, patch, test=None):
@@ -375,14 +844,20 @@ def check_patch(repo, patch, test=None):
         raise Refused("the break changes no file")
     modes = {path: mode for mode, _sha, path in index_entries(repo)}
     gitlinks = [p for p, m in modes.items() if m == "160000"]
-    runs = command_programs(test) if test else set()
+    runs = (command_programs(test) | recipe_programs(repo, test)) if test else set()
+    patterns = {r for r in runs if any(ch in r for ch in "*?[")}
+    recipes = runner_files(test) if test else {}
     for p in paths:
         if TEST_PATH.search(p):
             raise Refused(f"the break touches a test file ({p}) — break the code the claim "
                           "is about, not the test that checks it")
-        if os.path.normpath(p) in runs:
+        if os.path.normpath(p) in runs or any(fnmatch.fnmatchcase(p, r) for r in patterns):
             raise Refused(f"the break edits {p}, which the test command runs — breaking the "
                           "test runner proves only that a runner can be made to fail")
+        if os.path.normpath(p) in recipes:
+            raise Refused(f"the break edits {p}, the file `{recipes[os.path.normpath(p)]}` "
+                          "reads to run the test — breaking the runner's recipe proves only "
+                          "that a runner can be made to fail; break the code it runs")
         if p.startswith((PROOF_DIR + "/", ".git/")) or p == ".git":
             raise Refused(f"the break touches {p}")
         if any(p == g or p.startswith(g + "/") for g in gitlinks):
@@ -450,7 +925,14 @@ def restore_files(repo, saved, modes, broken_mtimes=None):
         f = Path(repo) / p
         try:
             f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_bytes(data)
+            try:
+                f.write_bytes(data)
+            except PermissionError:
+                # A file left read-only — by the build, or by an earlier partial restore
+                # that already put a saved read-only mode back — is still ours to put
+                # back: made writable for the write, its saved mode set just below.
+                os.chmod(f, stat.S_IMODE(f.stat().st_mode) | stat.S_IWUSR)
+                f.write_bytes(data)
             os.chmod(f, modes[p] & 0o7777)
         except OSError as e:
             bad.append(f"{p}: {e}")
@@ -544,13 +1026,14 @@ def require_build(build, no_build):
                     "or --no-build-step WHY")
 
 
-def prove(repo, plan, task, index, patch_src, test, build, no_build, timeout, write=True):
+def prove(repo, plan, task, index, patch_src, test, build, no_build, timeout, write=True,
+          shell=None):
     plan_text = read_plan(plan)
     block = task_block(plan_text, task)
     text = pick(PFA.claim_clauses(block["test"]), index, "claim")
     require_planned_test(test, block["test"], task)
     require_build(build, no_build)
-    seen = observe(repo, patch_src, test, build, no_build, timeout, text)
+    seen = observe(repo, patch_src, test, build, no_build, timeout, text, shell)
     if not write:
         return None
     named = NAMED_BREAK.search(text)
@@ -564,23 +1047,39 @@ def prove(repo, plan, task, index, patch_src, test, build, no_build, timeout, wr
     return write_record(repo, plan, task, "claim", index, rec)
 
 
-def observe(repo, patch_src, test, build, no_build, timeout, text):
+def observe(repo, patch_src, test, build, no_build, timeout, text, shell=None):
     """Watch `test` pass, fail under the break, and the tree come back. Returns the
     record fields the run proves; raises Refused / RestoreFailed otherwise."""
+    shell_name, shell_path = test_shell(shell)
     require_clean(repo)
     fp = index_fingerprint(repo)
+    # The blobs the record binds, from the same index: the after-the-proof check below
+    # refuses a run whose index moved, so these are the blobs the test was watched on.
+    staged = blobs_of(index_entries(repo))
     # The break is read ONCE, into a private copy: validated, applied and recorded
     # from the same bytes, so nothing can swap it between check and use.
     fd, private = tempfile.mkstemp(dir=git_dir(repo), prefix="prove-claim-", suffix=".patch")
     try:
         with os.fdopen(fd, "wb") as out:
             out.write(Path(patch_src).read_bytes())
-        patch_text = Path(private).read_text(errors="replace")
+        patch_bytes = Path(private).read_bytes()
         paths = check_patch(repo, private, test)
-        base, red = _observe(repo, private, paths, test, build, no_build, timeout, fp, text)
+        base, red = _observe(repo, private, paths, test, build, no_build, timeout, fp, text,
+                             shell_path)
     finally:
         Path(private).unlink(missing_ok=True)
-    return {"break_patch": patch_text, "touched": paths, "fingerprint": fp,
+    try:
+        stored = {"break_patch": patch_bytes.decode("utf-8")}
+    except UnicodeDecodeError:
+        # Not UTF-8: the readable text is for a person, the exact bytes are for replay.
+        stored = {"break_patch": patch_bytes.decode("utf-8", errors="replace"),
+                  "break_patch_b64": base64.b64encode(patch_bytes).decode()}
+    # No witness (the command names no test file the record can bind): no blob maps, and
+    # the record is judged by the whole-tree fingerprint.
+    witness = witness_files(repo, test, set(staged))
+    maps = ({"touched_blobs": {p: staged[p] for p in paths},
+             "witness_blobs": {w: staged[w] for w in witness}} if witness else {})
+    return {**stored, "touched": paths, **maps, "fingerprint": fp, "shell": shell_name,
             "baseline": {"exit": base[0], "tail": base[1], "elapsed_s": base[2]},
             "red": {"exit": red[0], "tail": red[1], "elapsed_s": red[2]}}
 
@@ -603,13 +1102,13 @@ def unparseable(repo, paths):
     return bad
 
 
-def _observe(repo, patch, paths, test, build, no_build, timeout, fp, text):
+def _observe(repo, patch, paths, test, build, no_build, timeout, fp, text, shell):
     if build:
-        b_rc, b_tail = run(build, repo, timeout)
+        b_rc, b_tail = run(build, repo, timeout, shell)
         if b_rc != 0:
             raise Refused(f"the code does not build before the break (exit {b_rc})\n{b_tail}")
     t0 = time.monotonic()
-    base_rc, base_tail = run(test, repo, timeout)
+    base_rc, base_tail = run(test, repo, timeout, shell)
     base_s = round(time.monotonic() - t0, 1)
     if base_rc is None:
         raise OverBudget(f"the test ran over --timeout {timeout} s before the break "
@@ -618,30 +1117,44 @@ def _observe(repo, patch, paths, test, build, no_build, timeout, fp, text):
     if base_rc != 0:
         raise Refused(f"the test does not pass before the break (exit {base_rc}) — a test "
                       f"that fails anyway proves nothing\n{base_tail}")
-    with Broken(repo, patch, paths):
-        if build:
-            b_rc, b_tail = run(build, repo, timeout)
-            if b_rc != 0:
-                raise Refused(f"the code does not build with the break (exit {b_rc}) — a "
-                              f"break that stops the build turns every test red\n{b_tail}")
-        else:
-            # No build step to catch it: a break that leaves a file unparseable turns
-            # every test red, which is the "easier substituted break" this tool exists
-            # to refuse. Checked where the language is known.
-            broken = unparseable(repo, paths)
-            if broken:
-                raise Refused(f"the break leaves {', '.join(broken)} unparseable — with no "
-                              "build step that fails every test, not this claim")
-        t0 = time.monotonic()
-        red_rc, red_tail = run(test, repo, timeout)
-        red_s = round(time.monotonic() - t0, 1)
+    # What the build and the baseline wrote is the tree the break starts from, and
+    # the after-the-proof check compares against it: only what appears under the
+    # break is a change the restore failed to undo.
+    before = set(untracked_files(repo))
+    refused = None
+    try:
+        with Broken(repo, patch, paths):
+            if build:
+                b_rc, b_tail = run(build, repo, timeout, shell)
+                if b_rc != 0:
+                    raise Refused(f"the code does not build with the break (exit {b_rc}) — a "
+                                  f"break that stops the build turns every test red\n{b_tail}")
+            else:
+                # No build step to catch it: a break that leaves a file unparseable turns
+                # every test red, which is the "easier substituted break" this tool exists
+                # to refuse. Checked where the language is known.
+                broken = unparseable(repo, paths)
+                if broken:
+                    raise Refused(f"the break leaves {', '.join(broken)} unparseable — with no "
+                                  "build step that fails every test, not this claim")
+            t0 = time.monotonic()
+            red_rc, red_tail = run(test, repo, timeout, shell)
+            red_s = round(time.monotonic() - t0, 1)
+    except Refused as e:
+        # Even a refusal under the break (the build stopped, a file left unparseable)
+        # rebuilds below: the broken build must not outlive the proof either way.
+        refused = e
     if build:
         # Rebuild on the restored sources, so the broken build does not outlive the proof.
-        a_rc, a_tail = run(build, repo, timeout)
+        a_rc, a_tail = run(build, repo, timeout, shell)
         if a_rc != 0:
-            raise RestoreFailed(f"the build fails after the restore (exit {a_rc})\n{a_tail}")
+            raise RestoreFailed(f"the build fails after the restore (exit {a_rc})\n{a_tail}"
+                                + (f"\n(the proof was already refused: {refused})"
+                                   if refused else ""))
+    if refused:
+        raise refused
     try:
-        require_clean(repo)
+        require_clean(repo, before)
         after = index_fingerprint(repo)
     except Refused as e:
         raise RestoreFailed(f"the tree is not as it was before the proof: {e}")
@@ -650,14 +1163,40 @@ def _observe(repo, patch, paths, test, build, no_build, timeout, fp, text):
                             "something; the record would bind to a tree nobody proved")
     if red_rc is None:
         raise Refused(f"the test hung under the break ({red_tail}) — inconclusive")
-    if red_rc in (126, 127) or red_rc < 0 or red_rc >= 128:
-        raise Refused(f"the test could not RUN under the break (exit {red_rc}: not found, "
-                      f"not executable, or killed by a signal) — that is not the claim "
-                      f"failing\n{red_tail}")
+    if red_rc in (126, 127) or killed_by_signal(red_rc):
+        why = ({126: "not executable", 127: "not found"}.get(red_rc)
+               or f"killed by signal {-red_rc if red_rc < 0 else red_rc - 128}")
+        raise Refused(f"the test could not RUN under the break (exit {red_rc}: {why}) — "
+                      f"that is not the claim failing\n{red_tail}")
     if red_rc == 0:
         raise Refused("the test still PASSES with the break in place — it does not check "
                       f"this:\n  {text}\n{red_tail}")
     return (base_rc, base_tail, base_s), (red_rc, red_tail, red_s)
+
+
+def make_room(repo, plan, task, index, clauses):
+    """Before a req or deviation record is written at `index`: a req or deviation record
+    there whose text is another clause j's (the clause split renumbered it: PFA.renumbered)
+    is moved to number j, its `index` rewritten, so the new record does not overwrite the
+    proof of clause j. Refused, naming both files, when j already holds a record of that kind."""
+    for kind in ("req", "deviation"):
+        here = record_path(repo, plan, task, kind, index)
+        if not here.is_file():
+            continue
+        old = load(here)
+        j = PFA.renumbered(old, clauses)
+        if j is None or j == index:
+            continue
+        there = record_path(repo, plan, task, kind, j)
+        if there.exists():
+            raise Refused(f"{here.relative_to(repo)} proves requirement {j} by its text, and "
+                          f"{there.relative_to(repo)} already holds a record for requirement {j}: "
+                          f"keep the one that proves it, remove the other, then record "
+                          f"requirement {index} again")
+        write_atomic(there, json.dumps(dict(old, index=j), indent=1, sort_keys=True) + "\n")
+        here.unlink()
+        print(f"prove-claim: moved {here.relative_to(repo)} to {there.relative_to(repo)}: "
+              f"its text is requirement {j}'s since the clauses were renumbered")
 
 
 def req(repo, plan, task, index, check, covered_by, timeout, brk=None, build=None,
@@ -665,6 +1204,7 @@ def req(repo, plan, task, index, check, covered_by, timeout, brk=None, build=Non
     plan_text = read_plan(plan)
     block = task_block(plan_text, task)
     text = pick(PFA.requirement_clauses(block["desc"]), index, "requirement")
+    make_room(repo, plan, task, index, PFA.requirement_clauses(block["desc"]))
     require_clean(repo)
     fp = index_fingerprint(repo)
     rec = {"schema": SCHEMA, "kind": "req", "plan": str(Path(plan).resolve()), "task": task,
@@ -675,7 +1215,8 @@ def req(repo, plan, task, index, check, covered_by, timeout, brk=None, build=Non
             raise Refused(f"claim {covered_by} does not exist in Task {task}")
         claim = record_path(repo, plan, task, "claim", covered_by)
         crec = load(claim) if claim.exists() else None
-        problems = (validate(crec, fp, ("claim", task, covered_by, claims[covered_by - 1]))
+        problems = (validate(crec, fp, ("claim", task, covered_by, claims[covered_by - 1]),
+                             blobs=blobs_of(index_entries(repo)))
                     if claim.exists() else [f"{claim} does not exist"])
         if not problems and crec.get("kind") != "claim":
             # validate() accepts a reasoned claim deviation as a RECORD; it is still
@@ -685,6 +1226,10 @@ def req(repo, plan, task, index, check, covered_by, timeout, brk=None, build=Non
             raise Refused(f"claim {covered_by} is not a valid proof for this tree: "
                           + "; ".join(problems))
         rec["covered_by_claim"] = covered_by
+        for key in BLOB_MAPS:
+            if key in crec:
+                # Covered by a claim, the requirement is bound to what that claim proves.
+                rec[key] = crec[key]
     else:
         if not check or check.strip() in TRIVIAL_BUILD:
             raise Usage(f"--check {check!r} checks nothing")
@@ -708,6 +1253,8 @@ def deviation(repo, plan, task, index, why, target="req"):
         text = pick(PFA.requirement_clauses(block["desc"]), index, "requirement")
     if not why or len(why.strip()) < 10:
         raise Usage("--why must say what differs and why (10+ characters)")
+    if target != "claim":
+        make_room(repo, plan, task, index, PFA.requirement_clauses(block["desc"]))
     kind = "claim-deviation" if target == "claim" else "deviation"
     rec = {"schema": SCHEMA, "kind": kind, "plan": str(Path(plan).resolve()),
            "task": task, "index": index, "text": text, "why": why.strip(),
@@ -738,10 +1285,12 @@ def replay(repo, plan, task, timeout):
             fd, tmp = tempfile.mkstemp(dir=git_dir(repo), prefix="prove-claim-replay-",
                                        suffix=".patch")
             try:
-                with os.fdopen(fd, "w") as out:
-                    out.write(rec["break_patch"])
+                with os.fdopen(fd, "wb") as out:
+                    out.write(base64.b64decode(rec["break_patch_b64"])
+                              if "break_patch_b64" in rec else rec["break_patch"].encode())
                 prove(repo, plan, rec["task"], rec["index"], tmp, rec["test"],
-                      rec.get("build"), rec.get("no_build_reason"), timeout, write=False)
+                      rec.get("build"), rec.get("no_build_reason"), timeout, write=False,
+                      shell=rec.get("shell", "sh"))
             except (Refused, Usage, OverBudget) as e:
                 # One slow record is that record's failure; the rest still replay.
                 problems = [str(e).splitlines()[0]]
@@ -797,10 +1346,19 @@ def _check_run(rec, p, what):
     if not _is_int(_exit(rec, "baseline")) or _exit(rec, "baseline") != 0:
         p.append("baseline run did not pass")
     red = _exit(rec, "red")
-    if not _is_int(red) or red == 0 or red in (126, 127) or red < 0 or red >= 128:
+    if not _is_int(red) or red == 0 or red in (126, 127) or killed_by_signal(red):
         p.append(f"the {what} did not fail under the break")
     if not isinstance(rec.get("break_patch"), str) or not rec["break_patch"].strip():
         p.append("no break recorded")
+    if "break_patch_b64" in rec:
+        try:
+            raw = base64.b64decode(rec["break_patch_b64"], validate=True)
+        except (TypeError, ValueError):
+            p.append("break_patch_b64 is not base64")
+        else:
+            # The bytes replay applies and the text a person reads must be one break.
+            if not raw or raw.decode("utf-8", errors="replace") != rec.get("break_patch"):
+                p.append("break_patch_b64 is not the break that break_patch shows")
     touched = rec.get("touched")
     if not isinstance(touched, list) or not touched:
         p.append("no touched files recorded")
@@ -818,9 +1376,64 @@ def is_legacy(rec):
             and "covered_by_claim" not in rec)
 
 
-def validate(rec, fingerprint=None, expect=None, allow_legacy=False):
+def _blob_map_sound(m):
+    return isinstance(m, dict) and all(
+        isinstance(k, str) and k and isinstance(v, str) and OBJECT_ID.match(v)
+        for k, v in m.items())
+
+
+def touched_blobs_problems(rec):
+    """Problems with the shape of a record's blob maps, [] when they are sound:
+    `touched_blobs` a non-empty {path: blob id} naming exactly the files the break touched
+    (a req covered by a claim carries that claim's, and has no break of its own), and
+    `witness_blobs`, when present, a {path: blob id}. An empty witness map is sound in shape
+    but binds no test, so validate() judges that record by its fingerprint (binds_by_blobs)."""
+    tb = rec.get("touched_blobs")
+    if "touched_blobs" in rec and (not isinstance(tb, dict) or not tb):
+        return ["touched_blobs binds no file"]
+    if "touched_blobs" in rec and not _blob_map_sound(tb):
+        return ["touched_blobs holds an entry that is not a path and a blob id"]
+    if "witness_blobs" in rec and not _blob_map_sound(rec.get("witness_blobs")):
+        return ["witness_blobs is not a map of paths to blob ids"]
+    if "touched_blobs" not in rec:
+        return ["witness_blobs without touched_blobs binds no touched file"]
+    touched = rec.get("touched")
+    if "covered_by_claim" not in rec and (
+            not isinstance(touched, list) or set(tb) != {t for t in touched if isinstance(t, str)}):
+        return ["touched_blobs does not bind exactly the files the break touched"]
+    return []
+
+
+def binds_by_blobs(rec):
+    """True when a record is judged by its blob maps: a claim or req carrying both, its
+    witness naming at least one test file. An empty witness binds no test, so a test edited
+    after the proof would go unseen: that record, like one without both maps (written
+    before the blob binding) and a deviation, is judged by its whole-tree fingerprint."""
+    return (isinstance(rec, dict) and rec.get("kind") in ("claim", "req")
+            and all(isinstance(rec.get(k), dict) for k in BLOB_MAPS)
+            and bool(rec["witness_blobs"]))
+
+
+def blob_drift(rec, blobs):
+    """The paths a record binds (`touched_blobs` and `witness_blobs`) whose blob in `blobs`
+    — {path: blob id} of the tree judged — is another one, or none. [] for a record that
+    does not bind by blobs (binds_by_blobs): its fingerprint binds it."""
+    if not binds_by_blobs(rec):
+        return []
+    maps = [rec.get(k) for k in BLOB_MAPS]
+    return sorted({str(p) for m in maps for p, b in m.items() if blobs.get(p) != b})
+
+
+def validate(rec, fingerprint=None, expect=None, allow_legacy=False, blobs=None):
     """Problems with a record, [] when valid. Shared by the audit and the commit gate
     (hooks/git-ref-gate.sh).
+
+    The tree a record is judged against: `blobs` ({path: blob id}) and `fingerprint`,
+    both of that tree. A claim or req record carrying `touched_blobs` and a non-empty
+    `witness_blobs` is judged by the blobs of the files they bind; any other by the
+    whole-tree `fingerprint` (binds_by_blobs). Neither given: no tree is compared (replay re-runs the
+    break instead). A record with `touched_blobs` judged with no `blobs` falls back to
+    the fingerprint, the stricter rule.
 
     `expect` = (kind, task, index, text) from the record's PATH and the plan: a
     record copied to another name, or proven against a claim the plan has since
@@ -878,9 +1491,19 @@ def validate(rec, fingerprint=None, expect=None, allow_legacy=False):
             p.append("a deviation without a reason")
     else:
         p.append(f"unknown kind {kind!r}")
+    if "shell" in rec and rec["shell"] not in ("bash", "sh"):
+        p.append(f"shell {rec['shell']!r} is not one this tool runs a test under (bash, sh)")
+    bound = binds_by_blobs(rec)
+    if kind in ("claim", "req") and any(k in rec for k in BLOB_MAPS):
+        p.extend(touched_blobs_problems(rec))
     fpr = rec.get("fingerprint")
     if not isinstance(fpr, str) or not HEX64.match(fpr):
         p.append("no valid fingerprint")
+    elif bound and blobs is not None:
+        moved = blob_drift(rec, blobs)
+        if moved:
+            p.append("proven on a different tree than this one: "
+                     f"{', '.join(moved[:5])} changed since the proof")
     elif fingerprint and fpr != fingerprint:
         p.append("proven on a different tree than this one")
     return p

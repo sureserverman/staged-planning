@@ -199,6 +199,116 @@ got="$(printf '%s' "$big" | python3 -c 'import json,sys; print(json.dumps({"sess
 if [ "$got" = deny ]; then ok "a 300 KB payload with TMPDIR unwritable is still denied"
 else bad "a large payload with TMPDIR unwritable must be denied, got $got" "$(cat "$T/err")"; fi
 
+
+echo
+echo "a commit while prove-claim.py has a break applied"
+# Catches: `git commit -a` carrying a break a live prove-claim run applied. The run holds an exclusive lock at `git rev-parse --git-path prove-claim.lock`
+# while the break is in the tree; an interrupted run leaves its journal there. Only this
+# plugin's own tool takes either, so the rule holds in every repo, gated or not.
+hold_lock() {  # $1 = repo; holds the lock in the background, pid in $holder
+    local lp; lp="$(git -C "$1" rev-parse --git-path prove-claim.lock)"
+    case "$lp" in /*) ;; *) lp="$1/$lp" ;; esac
+    rm -f "$T/held"
+    python3 -c 'import fcntl, sys, time
+f = open(sys.argv[1], "w"); fcntl.flock(f, fcntl.LOCK_EX)
+open(sys.argv[2], "w").close(); time.sleep(60)' "$lp" "$T/held" &
+    holder=$!
+    for _ in $(seq 50); do [ -f "$T/held" ] && return; sleep 0.1; done
+}
+for r in "$REPO" "$OTHER"; do
+    hold_lock "$r"
+    got="$(payload 'git commit -a -m "Stage 1 Task 1.1: x"' "$r" | decide)"
+    why="$(payload 'git commit -a -m x' "$r" | reason 2>/dev/null)"
+    kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+    if [ "$got" = deny ] && [[ $why == *prove-claim.lock* ]]; then
+        ok "a commit while the lock is held is denied, naming the lock ($(basename "$r"))"
+    else bad "a commit while prove-claim holds its lock must be denied naming it ($(basename "$r")), got $got" "$why"; fi
+done
+got="$(payload 'git commit -a -m x' "$OTHER" | decide)"
+if [ "$got" = none ]; then ok "with the lock free a commit gets no decision"
+else bad "a commit with the lock free must get no decision, got $got" "$(cat "$T/err")"; fi
+JP="$(git -C "$OTHER" rev-parse --git-path prove-claim-journal.json)"
+case "$JP" in /*) ;; *) JP="$OTHER/$JP" ;; esac
+printf '{}' > "$JP"
+got="$(payload 'git commit -a -m x' "$OTHER" | decide)"
+why="$(payload 'git commit -a -m x' "$OTHER" | reason 2>/dev/null)"
+rm -f "$JP"
+if [ "$got" = deny ] && [[ $why == *prove-claim-journal.json* ]]; then
+    ok "a commit while an interrupted run's journal is present is denied, naming it"
+else bad "a commit with a prove-claim journal present must be denied, got $got" "$why"; fi
+# A live run holds the lock AND has its journal while the break is applied: it is
+# reported in progress, never as interrupted (re-running it then only meets the lock).
+hold_lock "$OTHER"
+printf '{}' > "$JP"
+got="$(payload 'git commit -a -m x' "$OTHER" | decide)"
+why="$(payload 'git commit -a -m x' "$OTHER" | reason 2>/dev/null)"
+# `commit` reaches the rule (the pre-filter passes it) but no `git`: not a commit.
+neg="$(payload 'echo commit done' "$OTHER" | decide)"
+# Under Cursor this guard steps aside, the lock rule included (Cursor's own gate has it).
+cur="$(python3 -c 'import json,sys; print(json.dumps({"session_id": "s", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "git commit -a -m x"}, "cwd": sys.argv[1], "cursor_version": "1.0"}))' "$OTHER" | decide)"
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+rm -f "$JP"
+if [ "$got" = deny ] && [[ $why == *"in progress"*prove-claim.lock* ]] && [[ $why != *interrupted* ]]; then
+    ok "a commit during a live run (lock and journal both present) is denied as a run in progress"
+else bad "a live run must be reported in progress, naming the lock, got $got" "$why"; fi
+if [ "$neg" = none ]; then ok "with the lock held a command that is not a git commit gets no decision"
+else bad "a non-commit command must get no decision while the lock is held, got $neg"; fi
+if [ "$cur" = none ]; then ok "a Cursor payload gets no decision from the lock rule (the guard steps aside)"
+else bad "under Cursor the lock rule must step aside, got $cur"; fi
+# A linked worktree's lock lives under the main repo's .git/worktrees/<name>/: the
+# git-path is absolute there, and the rule must still find it.
+WMAIN="$T/wmain"; git init -q -b main --template= "$WMAIN"
+git -C "$WMAIN" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m base
+git -C "$WMAIN" worktree add -q "$T/wlinked" 2>/dev/null
+hold_lock "$T/wlinked"
+got="$(payload 'git commit -a -m x' "$T/wlinked" | decide)"
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+if [ "$got" = deny ]; then ok "a commit in a linked worktree whose run holds its lock is denied"
+else bad "the lock rule must find a linked worktree's lock, got $got" "$(cat "$T/err")"; fi
+
+echo
+echo "a linked worktree and the run in the main worktree"
+# .claude/plan-progress.json is git-ignored, so each worktree has its own. The guard reads
+# the command's own worktree first, and the main worktree's run when its own has none.
+PS="$HERE/../../skills/executing-plans/scripts/plan-state.py"
+wt_pair() {  # $1 = name: a main repo with the shim and no state, and a linked worktree
+    WMAIN="$T/$1-main"; WLINK="$T/$1-linked"; mkrepo "$WMAIN"
+    git -C "$WMAIN" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m base
+    python3 "$INSTALL" --install --repo "$WMAIN" >/dev/null 2>&1
+    git -C "$WMAIN" worktree add -q -b "$1-side" "$WLINK" 2>/dev/null
+}
+# Catches: the guard silently off in a linked worktree while the main worktree has a plan in flight.
+wt_pair gl
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$T/plan.md" > "$WMAIN/.claude/plan-progress.json"
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
+if [ "$got" = deny ]; then ok "a hooksPath command in a linked worktree is denied while the main worktree has a plan in flight"
+else bad "the main worktree's run must gate a linked worktree, got $got" "$(cat "$T/err")"; fi
+# Catches: a main-worktree lookup that strays into deciding where no plan is in flight.
+wt_pair gn
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
+if [ "$got" = none ]; then ok "with no state in either worktree, a linked worktree gets no decision"
+else bad "no plan in flight anywhere must see no decision, got $got"; fi
+# Catches: a main-only lookup: the linked worktree's own run must gate while the main
+# worktree holds a finished one.
+wt_pair go
+printf '{"plan": "%s", "scope": "fixture", "source": "owner: run the fixture"}' "$T/plan.md" \
+    | python3 "$PS" init --repo "$WMAIN" --expected-revision 0 --operation-id op-1 >/dev/null \
+    && printf '{"evidence": "fixture finished"}' \
+    | python3 "$PS" finish --repo "$WMAIN" --expected-revision 1 --operation-id op-2 >/dev/null \
+    || bad "fixture: init/finish in the main worktree failed"
+mkdir -p "$WLINK/.claude"
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$T/plan.md" > "$WLINK/.claude/plan-progress.json"
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
+if [ "$got" = deny ]; then ok "the linked worktree's own run gates first, over a finished run in the main worktree"
+else bad "the linked worktree's own run must gate, got $got" "$(cat "$T/err")"; fi
+# Catches: the main worktree's untrusted state read as "no plan" in silence.
+wt_pair gu
+printf 'not json\n' > "$WMAIN/.claude/plan-progress.json"
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
+if [ "$got" = none ] && grep -q -- "$WMAIN/.claude/plan-progress.json" "$T/err"; then
+    ok "an unreadable state file in the main worktree is no plan in flight, and is named"
+else bad "an unreadable main-worktree state must be named, got $got" "$(cat "$T/err")"; fi
+
 echo
 echo "passed: $pass   failed: $fail"
 [ "$fail" -eq 0 ]

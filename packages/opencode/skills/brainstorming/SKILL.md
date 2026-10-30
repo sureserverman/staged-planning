@@ -52,6 +52,8 @@ Before asking anything of the user, gather what the repo already tells you. The 
 
 If the project has linked notes (a notes folder or tool it already uses), search them for relevant architecture and gotcha pages before asking the user.
 
+If you hand any of this reading to an agent, its brief says: wait on a background job by its own completion (`../executing-plans/references/task-execution.md` § Waiting on background work), and an agent returns only after its own background work has finished or been stopped, and says which.
+
 ## Phase 2 — Clarify, one question at a time
 
 Ask only what you cannot infer. For each question:

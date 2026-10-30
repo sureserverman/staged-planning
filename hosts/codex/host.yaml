@@ -45,7 +45,7 @@ rewrites:
     replace: '\1description: "Integrity rules for gates and done claims: green only when the real check ran here and passed."\n'
   - glob: skills/planning-projects/SKILL.md
     pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
-    replace: '\1description: "Plan a project of any size: triage to Direct, Light, Standard or Master first, then staged, tested tasks."\n'
+    replace: '\1description: "Use when asked for a plan or roadmap, to break this down, or how to build a project of any size."\n'
   - glob: skills/project-maturity/SKILL.md
     pattern: '\A(---\n(?:(?!---\n).*\n)*?)description:.*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*'
     replace: '\1description: "Ship-readiness checklist (MATURITY.md) across six axes: scaffold it, audit it with detectors, read it."\n'

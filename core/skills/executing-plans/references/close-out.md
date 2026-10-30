@@ -23,7 +23,7 @@ procedure. Work the steps in order.
    At `standard` and `high` the Tier-2 passes already ran per stage gate, so nothing is owed
    here except `high`'s second independent pass. At `none`, nothing. Handle the verdict by the
    same rules a gate uses: a **Critical blocks the merge** (fix, re-run at fix-scope,
-   re-dispatch — and that re-dispatch counts a remediation round), and every **Important**
+   re-dispatch over the fix diff only — and that re-dispatch counts a remediation round), and every **Important**
    leaves close-out **fixed** per the exit criterion. Report it in the close-out list with the
    agent and the diff range, exactly as a gate report would. This step exists because
    `light`'s single review is the whole plan's only white-box pass; a close-out that forgot it

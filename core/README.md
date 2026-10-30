@@ -1,6 +1,6 @@
 # planning
 
-An eleven-skill pipeline (v1.1.1) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
+An eleven-skill pipeline (v1.2.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
 
 ## Highlights
 
@@ -110,7 +110,7 @@ A scoped gate report always discloses what actually ran. Policy lives in `skills
 |---|---|---|
 | **none** | docs / config / version-bump / comment-only | the plan's own tests and gate checks, nothing else |
 | **light** | no new executable behavior, **or** under ~200 changed lines across ≤ ~5 files, and nothing risk-listed | + **one** whole-plan-diff review, at close-out |
-| **standard** | multi-file code with new behavior — the default, and what an undeclared run gets | + one Tier-2 review per stage gate; an evaluator only at gates carrying a `(judgment)` check or whose stage has Outcomes (there it demos them as their user), plus a close-out evaluator when the final gate carries one or any stage has Outcomes |
+| **standard** | multi-file code with new behavior — the default, and what an undeclared run gets | + one Tier-2 review per stage gate; an evaluator only at gates carrying a `(judgment)` check or whose stage has Outcomes (there it demos them as their user), unless a recorded goal command decides it, plus a close-out evaluator when the final gate carries one or any stage has Outcomes |
 | **high** | security / auth, data-destructive, public API, schema / migration | the full apparatus: per-task Tier-1, per-gate Tier-2 + evaluator, a second independent close-out pass |
 
 **What the tier gates** is every mandate that costs an agent dispatch: both review tiers, the gate and close-out evaluators, the Preflight dispatch probe, and the design-fidelity verify loop's evaluator. What it never gates is the cheap-but-load-bearing half — the dispatch roster, the executor trailer, the dispatch reconciliation, honest-gates disclosure, the class sweep run on any bug found during execution, and the plan's own tests. Concretely, counting **verification** dispatches only — the plan's own `Dispatch: YES` task dispatches are execution, not verification, and are never tiered — a Standard 3-stage / 9-task plan whose gates each carry a `(judgment)` check costs **7** at `standard` (3 Tier-2, 3 gate evaluators, 1 probe; 8 if its close-out evaluator is a separate dispatch, 4 if its gates are all executable sweeps). Running every mandate on the same plan would cost **17** (9 Tier-1, 3 Tier-2, 3 gate evaluators, 1 close-out, 1 probe) before any re-dispatch after a fix — and an unbounded re-dispatch is the larger cost the tiers remove.
@@ -261,6 +261,33 @@ without valid `prove-claim.py` records, while a plan is in flight. A task commit
 subject names a task of the plan (*"Stage 2 Task 2.3: …"*). It reads the finished commit, so
 `--no-verify`, `-a`, `--amend`, `commit-tree` + `update-ref`, cherry-pick and a detached HEAD
 all pass through it. A record must match the commit's own tree and the plan's current wording.
+A record binds two maps of `{path: blob id}`, read from the index the proof ran on:
+`touched_blobs`, the files its break touched (`touched`), and `witness_blobs`, the tracked
+files the test (or a req's check) command names — an interpreter's script argument, a tracked
+path the command names (a directory binds every tracked file under it, `go test ./...` too;
+`tests/x.py::t` binds `tests/x.py`; `python3 -m unittest tests.x` binds `tests/x.py`), a
+makefile or `package.json` and what its recipe runs. It keeps the whole-index `fingerprint`
+beside them. A record with both maps matches any tree that holds those blobs, so the task's own
+Status flip in a plan kept in the repo, or a rebase, squash or cherry-pick that leaves those
+files alone, keeps it valid. The binding does not cover what the test imports or sources (a
+`conftest.py`, a helper, a fixture) unless the command names it or its directory, other files
+the touched code depends on, nor file modes (a blob id is content only). A command whose test
+files cannot be resolved — bare `pytest`, `python3 -m pytest`, a path that names nothing
+tracked — writes neither map, and the record falls back to the fingerprint rule: it is judged
+against the whole tree, as is a record without both maps (written before this binding). So is a
+deviation, which proves no file: in a plan kept in the repo, record a deviation after the
+task's Status flip, or the flip stales it. A req covered by a claim carries that claim's maps,
+and the commit gate refuses a covered req carrying a map that differs from the claim it
+cites. A record has drifted when a later commit holds another blob for a file it binds: a
+`Stage N green` commit is refused while a record of a stage-N task has drifted, naming the
+file and the record. `plan-flip-audit.py --repo` reports drift against HEAD (finding 8, once
+per record, a covered req under its claim): blocking for a task whose stage gate is not yet
+fully ticked, as the commit gate refuses it; advisory once that gate is fully ticked and a
+`Stage N green` commit holds the files as proven, since a later stage may edit a file an
+earlier stage proved. A stage whose green commit already held a changed file closed on a stale
+proof, and its drift stays blocking. Re-proving rebinds the record to the tree it
+runs on. With `proof/` committed, the new record lands with the commit that carries it; with
+`proof/` kept local, it binds to the next commit whose subject names that task.
 A file under `proof/` that is not a record is refused, and so is a requirement whose only records fail
 to validate (the audit only advises on requirements). A proven commit lands by
 any route. Not checked: a commit naming no task; a commit already reachable from a local branch

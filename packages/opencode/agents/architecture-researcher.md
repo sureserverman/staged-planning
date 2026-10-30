@@ -109,6 +109,11 @@ you have, and mark every finding that depends on that assumption.
 - Prefer primary sources (official docs, real repos) over blog posts; name versions.
 - Keep the return under ~150 lines; density over volume — the caller merges several
   of these into one comparison matrix.
+- Wait on a background job you start by its own completion: the harness notification,
+  `wait <pid>`, or a sentinel file it writes last. A `pgrep -f` loop matches its own shell
+  and waits for ever (the planning plugin's `skills/executing-plans/references/task-execution.md` § Waiting on background work).
+  An agent returns only after its own background work has finished or been stopped,
+  and says which.
 
 ## Host note (OpenCode)
 

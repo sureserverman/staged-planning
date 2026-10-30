@@ -1,0 +1,8 @@
+{
+  "commands": [
+    {
+      "name": "plan-view",
+      "description": "Show the executing plan, its stages and tasks, and dispatched agents in a pane"
+    }
+  ]
+}

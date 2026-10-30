@@ -37,6 +37,7 @@ WIRED = [
     ("executing-plans", "proof-hooks-install.py"),
     ("executing-plans", "prove-claim.py"),
     ("executing-plans", "review-ledger-check.py"),
+    ("project-maturity", "maturity-get.py"),
 ]
 
 NOT_WIRED = {

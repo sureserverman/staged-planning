@@ -258,6 +258,14 @@ def cmd_clean(home, dry_run, verb):
 
 # ---------------------------------------------------------------- git hook
 GIT_HOOK = HOOKS_DIR / "git-ref-gate.sh"
+# git-ref-gate.sh loads the others from beside itself (plan_state.py through
+# plan_continue_classify.py) and fails open (allows every
+# commit) when one is missing, so --status --repo checks them all.
+REQUIRED = (GIT_HOOK,
+            HOOKS_DIR / "plan_continue_classify.py",
+            PLUGIN_ROOT / "skills" / "executing-plans" / "scripts" / "plan-flip-audit.py",
+            PLUGIN_ROOT / "skills" / "executing-plans" / "scripts" / "prove-claim.py",
+            PLUGIN_ROOT / "skills" / "executing-plans" / "scripts" / "plan_state.py")
 HOOK_NAME = "reference-transaction"
 SHIM_MARK = "planning commit gate"
 SHIM_LINE2 = f"# {SHIM_MARK} — installed by hooks-install.py"
@@ -329,10 +337,10 @@ def git_status(repo):
         return 1
     if shim_is_ours(hook):
         print(f"installed — git {HOOK_NAME} hook in {top} ({hook})")
-        if not GIT_HOOK.exists():
-            print(f"  ! {GIT_HOOK} does not exist — the shim lets every update through")
-            return 1
-        return 0
+        missing = [f for f in REQUIRED if not f.exists()]
+        for f in missing:
+            print(f"  ! {f} does not exist — the shim lets every update through")
+        return 1 if missing else 0
     if hook.exists() or hook.is_symlink():
         print(f"not installed — {hook} is another {HOOK_NAME} hook (not ours, left alone)")
     else:

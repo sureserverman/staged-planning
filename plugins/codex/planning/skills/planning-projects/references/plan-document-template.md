@@ -115,7 +115,9 @@ checks and records it in the worksheet, never a second worksheet. A fixture cann
 - [ ] [No regressions in touched scope (stage-scope — see references/test-scope-tiers.md)]
 - [ ] [Stage goal verified end-to-end]
 <!-- A stage with **Outcomes:** gets an evaluator at every tier above `none`, grading those
-     lines as their user; do not restate them here. A `(judgment)` line also buys an
+     lines as their user, unless a recorded goal command decides it (below `high`, every
+     Outcome decided by a ticked gate command; executing-plans stage-gate.md § Skipped when
+     a recorded command decides the goal); do not restate them here. A `(judgment)` line also buys an
      evaluator dispatch, and a fresh evaluator never returns empty-handed. Add one only where
      a reader decides something else no command can, and say what:
 - [ ] **(judgment)** [what a reader decides here that no command can] -->

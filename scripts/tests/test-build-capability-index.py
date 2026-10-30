@@ -8,7 +8,9 @@ model + disable-model-invocation extraction, requires_enablement detection
 sort, and byte-idempotent output (the CI freshness check depends on it).
 Stdlib only.
 """
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -177,6 +179,223 @@ def stability_cases():
         check(ordered == sorted(ordered), "components sorted by (plugin, kind, name)")
 
 
+CHECK_SCRIPT = os.path.join(os.path.dirname(HERE), "check-capability-index.py")
+REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
+MOD = "hosts/claude/add/hooks/mod"
+
+
+def declared(*commands):
+    return json.dumps({"commands": [{"name": n, "description": d} for n, d in commands]})
+
+
+def registering(name, desc):
+    # The construct a mod registers a slash command with (pane.tsx), not a loose
+    # string: `$.command.register({ name, description })` inside session.start.
+    return ("export function registerX(on) {\n"
+            "  on('session.start', {}, async ($, e, next) => {\n"
+            "    const started = await next(e)\n"
+            "    await $.command.register({\n"
+            f"      name: '{name}',\n"
+            f"      description: '{desc}',\n"
+            "    })\n"
+            "    return started\n"
+            "  })\n"
+            f"  on('command.run', {{ command: '{name}' }}, async $ => ({{ text: 'ok' }}))\n"
+            "}\n")
+
+
+def run_check(root):
+    spec = importlib.util.spec_from_file_location("capcheck", CHECK_SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = mod.main(["--root", root])
+    return rc, buf.getvalue()
+
+
+def registered_command_cases():
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, "core/skills/a/SKILL.md"), skill("a", "desc a"))
+        write(os.path.join(root, MOD, "registered-commands.json"),
+              declared(("plan-view", "Show the plan in a pane")))
+        index = capindex.build(root)
+        cmds = index.get("registered_commands", [])
+        check([c["name"] for c in cmds] == ["plan-view"],
+              "built index lists plan-view from the declared registered-commands.json")
+        check(cmds and cmds[0]["description"] == "Show the plan in a pane"
+              and cmds[0]["plugin"] == "planning"
+              and cmds[0]["path"] == f"{MOD}/registered-commands.json",
+              "declared command carries description, plugin and repo-relative path")
+        check([c["name"] for c in index["components"]] == ["a"],
+              "declared commands stay out of components (no file to Read-and-follow)")
+
+    # The real tree: the mod's /plan-view is in the index, as the mod describes it.
+    real = capindex.build(REPO_ROOT)
+    plan_view = [c for c in real.get("registered_commands", []) if c["name"] == "plan-view"]
+    check(len(plan_view) == 1 and plan_view[0]["description"] ==
+          "Show the executing plan, its stages and tasks, and dispatched agents in a pane",
+          "real tree: built index lists /plan-view with the mod's own description")
+
+
+def registration_drift_cases():
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, "core/skills/a/SKILL.md"), skill("a", "desc a"))
+        write(os.path.join(root, MOD, "registered-commands.json"),
+              declared(("plan-view", "Show the plan")))
+        write(os.path.join(root, MOD, "pane.tsx"), registering("plan-view", "Show the plan"))
+        # A test file's registrations are test doubles, not the mod's commands.
+        write(os.path.join(root, MOD, "pane.test.tsx"), registering("test-only", "x"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            capindex.main(["--root", root, "--write",
+                           "--out", os.path.join(root, "capability-index.json")])
+        rc, out = run_check(root)
+        check(rc == 0, f"check passes when every registration is declared (rc={rc}: {out.strip()})")
+
+        write(os.path.join(root, MOD, "ghost.ts"), registering("ghost-cmd", "Haunt"))
+        rc, out = run_check(root)
+        check(rc == 1 and "ghost-cmd" in out,
+              "a mod registration absent from the declared list fails the check, naming it")
+
+        os.remove(os.path.join(root, MOD, "ghost.ts"))
+        write(os.path.join(root, MOD, "pane.tsx"), registering("plan-view", "Show it all"))
+        rc, out = run_check(root)
+        check(rc == 1 and "plan-view" in out and "description" in out,
+              "a declared description that differs from the mod's fails the check")
+
+        write(os.path.join(root, MOD, "pane.tsx"), "export const x = 1\n")
+        rc, out = run_check(root)
+        check(rc == 1 and "plan-view" in out,
+              "a declared command the mod no longer registers fails the check")
+
+        write(os.path.join(root, MOD, "pane.tsx"),
+              "await $.command.register({ name: NAME, description: 'd' })\n")
+        rc, out = run_check(root)
+        check(rc == 1 and "pane.tsx" in out,
+              "a registration whose name is not a string literal fails the check")
+
+        # A registration passed anything but an object literal can't be read at all.
+        write(os.path.join(root, MOD, "pane.tsx"),
+              registering("plan-view", "Show the plan") + "await $.command.register(spec)\n")
+        rc, out = run_check(root)
+        check(rc == 1 and "pane.tsx:" in out,
+              f"a registration whose argument is not an object literal fails the check (rc={rc})")
+
+        # A commented-out registration registers nothing.
+        write(os.path.join(root, MOD, "pane.tsx"),
+              "// " + registering("plan-view", "Show the plan").replace("\n", "\n// ")
+              + "\n/* " + registering("plan-view", "Show the plan") + " */\n")
+        rc, out = run_check(root)
+        check(rc == 1 and "no mod source registers" in out,
+              f"a commented-out registration does not count as registered (rc={rc})")
+
+        # A registration in a subdirectory, or in a .js/.mjs/.jsx source, is the mod's too.
+        write(os.path.join(root, MOD, "pane.tsx"), registering("plan-view", "Show the plan"))
+        for rel in ("sub/extra.js", "more.mjs", "view.jsx"):
+            write(os.path.join(root, MOD, rel), registering("ghost-cmd", "Haunt"))
+            rc, out = run_check(root)
+            check(rc == 1 and "ghost-cmd" in out and rel in out,
+                  f"a registration in {rel} is seen (rc={rc})")
+            os.remove(os.path.join(root, MOD, rel))
+        # Comment markers inside a string are text: `'src/*.ts'` opens no comment that
+        # would swallow the registration after it.
+        write(os.path.join(root, MOD, "pane.tsx"),
+              "const glob = 'src/*.ts', url = \"https://x.org\"\n"
+              + registering("plan-view", "Show the plan") + "const end = '*/'\n")
+        rc, out = run_check(root)
+        check(rc == 0, f"comment markers inside strings are not comments (rc={rc}: {out.strip()})")
+
+
+def registration_lexing_cases():
+    """The drift check against JS/TS a comment-blanker misreads. Its property: every
+    live registration is matched or fails by name and line, and a commented-out one
+    never counts. Where the reading is uncertain, the check fails rather than passes."""
+    good = registering("plan-view", "Show the plan")
+    ghost = "$.command.register({ name: 'ghost-cmd', description: 'Haunt' })\n"
+
+    def drift(files, declared_cmds=(("plan-view", "Show the plan"),)):
+        with tempfile.TemporaryDirectory() as root:
+            write(os.path.join(root, MOD, "registered-commands.json"), declared(*declared_cmds))
+            for rel, text in files.items():
+                write(os.path.join(root, MOD, rel), text)
+            return capindex.registration_drift(root)
+
+    # A live call is never hidden: a regex literal holding a comment marker opens no
+    # comment, before the call or on its own line.
+    for label, src in (
+            ("a regex literal holding /*", "const r = /src\\/*.ts/\n" + ghost + "const z = 1 /* */\n"),
+            ("a regex literal holding //", "s.replace(/\\//g, ''); " + ghost),
+            ("a regex class holding /", "const r = /[/]x/; " + ghost)):
+        out = drift({"pane.tsx": good + src})
+        check(any("ghost-cmd" in p for p in out), f"{label} hides no registration ({out})")
+
+    # Every call shape that reaches register is read or fails, naming file and line.
+    for label, src in (
+            ("a generic call", "$.command.register<Spec>({ name: 'ghost-cmd', description: 'H' })\n"),
+            ("a chained call", "$.command\n  .register({ name: 'ghost-cmd', description: 'H' })\n"),
+            ("an optional call", "$.command.register?.({ name: 'ghost-cmd', description: 'H' })\n"),
+            ("a computed member", "$.command['register']({ name: 'ghost-cmd', description: 'H' })\n"),
+            ("an alias", "const r = $.command.register; r({ name: 'ghost-cmd' })\n"),
+            ("a destructured register", "const { register } = $.command\n")):
+        out = drift({"pane.tsx": good + src})
+        check(any("pane.tsx:" in p and ("ghost-cmd" in p or "can't be checked" in p) for p in out),
+              f"{label} is read or fails ({out})")
+
+    # The object literal is read whole: a nested `})` does not cut it short, and a
+    # second argument or a cast fails as such.
+    out = drift({"pane.tsx": "$.command.register({ name: 'plan-view', run: () => f({b: 1}), "
+                             "description: 'Show the plan' })\n"})
+    check(out == [], f"a nested `}})` inside the literal does not truncate it ({out})")
+    out = drift({"pane.tsx": "$.command.register({ meta: { name: 'inner' }, name: 'plan-view', "
+                             "description: 'Show the plan' })\n"})
+    check(out == [], f"a nested object's `name:` is not the command's ({out})")
+    for label, src in (("a second argument", "{ name: 'plan-view', description: 'Show the plan' }, opts"),
+                       ("a cast", "{ name: 'plan-view', description: 'Show the plan' } as Spec")):
+        out = drift({"pane.tsx": f"$.command.register({src})\n"})
+        check(any("pane.tsx:1:" in p and "one object literal" in p for p in out),
+              f"{label} fails as such ({out})")
+
+    # A quote that opens no string, or a nested template, never revives a commented-out
+    # registration: the declared command stays unregistered.
+    for label, src in (
+            ("a JSX apostrophe", "const v = <p>Don't</p>\n// " + good.replace("\n", "\n// ") + "\n"),
+            ("a quote in a regex", "const q = /\"/\n// $.command.register({ name: 'plan-view', "
+                                   "description: 'Show the plan' })\n"),
+            ("a nested template", "const t = `a${ '`' }b`\n// $.command.register({ name: "
+                                  "'plan-view', description: 'Show the plan' })\n")):
+        out = drift({"pane.tsx": src})
+        check(any("no mod source registers" in p for p in out),
+              f"{label} does not revive a commented-out registration ({out})")
+
+    # Line numbers survive a multi-line block comment.
+    head = good + "/*\n * one\n * two\n */\n"
+    out = drift({"pane.tsx": head + ghost})
+    want = head.count("\n") + 1
+    check(any(f"pane.tsx:{want}:" in p and "ghost-cmd" in p for p in out),
+          f"the line number holds after a block comment (want {want}: {out})")
+
+    # Text inside a string is not a registration, and says so rather than misnaming it.
+    out = drift({"pane.tsx": good + "throw new Error('call $.command.register(spec) first')\n"})
+    check(any("string" in p for p in out) and not any("object literal" in p for p in out),
+          f"a registration inside a string fails as one ({out})")
+
+    # Which files are the mod's: doubles (.test./.spec. sources, __tests__/) and
+    # dependencies are not; a symlink is refused rather than skipped or crashed on.
+    out = drift({"pane.tsx": good, "pane.spec.ts": ghost, "__tests__/x.ts": ghost,
+                 "node_modules/dep/index.js": ghost, "sub/a.test.ts": ghost})
+    check(out == [], f"test doubles and dependencies are not the mod's sources ({out})")
+    with tempfile.TemporaryDirectory() as root:
+        write(os.path.join(root, MOD, "registered-commands.json"),
+              declared(("plan-view", "Show the plan")))
+        write(os.path.join(root, MOD, "pane.tsx"), good)
+        os.symlink("missing.ts", os.path.join(root, MOD, "dangling.ts"))
+        os.symlink(os.path.join(root, "elsewhere"), os.path.join(root, MOD, "linked"))
+        out = capindex.registration_drift(root)
+        check(any("dangling.ts" in p and "symlink" in p for p in out) and
+              any("linked" in p and "symlink" in p for p in out),
+              f"a symlinked file or directory in the mod tree fails, naming it ({out})")
+
+
 def main_cli_cases():
     with tempfile.TemporaryDirectory() as root:
         write(os.path.join(root, "p/skills/a/SKILL.md"), skill("a", "desc a"))
@@ -201,6 +420,12 @@ if __name__ == "__main__":
     enablement_cases()
     print("stability:")
     stability_cases()
+    print("registered commands:")
+    registered_command_cases()
+    print("registration drift:")
+    registration_drift_cases()
+    print("registration lexing:")
+    registration_lexing_cases()
     print("cli:")
     main_cli_cases()
     if FAILURES:

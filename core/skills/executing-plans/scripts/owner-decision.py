@@ -3,9 +3,20 @@
 the executor is at. The executor acts on an entry only when this lists it, and then runs
 exactly the command it passed as --command.
 
-    owner-decision.py match --plan P --at preflight|stage|closeout
+    owner-decision.py match --plan P [--at preflight|stage|closeout]
                             [--stage N] [--task N.M] [--command C] [--require-command] [--json]
     owner-decision.py check P
+
+THE CASE comes from the run state while a run of P is in flight: the state of the
+worktree the command runs in, else of the one other worktree of the repo running P, read
+as the hooks read it (phase preflight, task or gate at its stage, closeout). --at, --stage
+and --task may then be left out; one that disagrees with the state is refused (exit 1), so
+a what-if `--task 1.1` at Task 1.2 lists nothing. The run opens a stage with a `transition`
+naming the stage and no task, so an ask as Stage N opens is not judged at the last gate. A
+run at another phase (blocked, handoff) is at no case to match (exit 1); this worktree's
+state that cannot be read, or runs of P in two other worktrees, refuse (exit 2). With no
+run of P in flight (planning time, no state, a finished run, a state for another plan) the
+arguments are the case, and --at is required.
 
 WHY A SCRIPT. An executor reading `applies to:` itself stretches an entry to the case in
 front of it: "the Stage 2 close-out merge offer only" was applied to a one-stage plan's
@@ -63,11 +74,15 @@ section: exit 1 when there is one, else 0; 2 when the plan cannot be read.
 import argparse
 import importlib.util
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 _LIB = Path(__file__).resolve().parents[3] / "lib"
+# The hooks' state reader (owned v2 snapshot and legacy file), at <plugin root>/hooks/.
+_CLASSIFY = Path(__file__).resolve().parents[3] / "hooks" / "plan_continue_classify.py"
 _spec = importlib.util.spec_from_file_location("staged_planning_plan_parser", _LIB / "plan_parser.py")
 pu = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pu)
@@ -375,13 +390,156 @@ def master_entries(text, plan_path):
     return [(mpath, n, i, t, num, bad) for n, i, t in ents]
 
 
+class Refused(Exception):
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code
+
+
+GIT_IDENTITY = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+
+
+def run_case(plan_path):
+    """(at, stage, task) where the run of this plan is, or None when no run of it is in
+    flight (no repo, no state, a finished run, a state for another plan). Read as the
+    hooks read it: the git top level of the working directory first, then every other
+    worktree of the repo, since each keeps its own git-ignored state. Raises Refused when
+    this worktree's state cannot be read, when two other worktrees run this plan, or when
+    the run is at no case match can judge."""
+    try:
+        r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True,
+                           text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    root = Path(r.stdout.strip())
+    try:
+        spec = importlib.util.spec_from_file_location("plan_continue_classify", _CLASSIFY)
+        cls = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls)
+    except Exception as e:  # noqa: BLE001 — no reader means no answer, never the arguments
+        raise Refused(f"cannot read the run state {root / '.claude' / 'plan-progress.json'} "
+                      f"({type(e).__name__}); ask the owner", 2)
+    # Each worktree holds its own copy of a tracked plan, so another worktree's run of
+    # this plan names the same path relative to that worktree.
+    try:
+        rel = plan_path.resolve().relative_to(root.resolve())
+    except ValueError:
+        rel = None
+    state = run_in(cls, root, plan_path, own=True)
+    if state is not None:
+        return case_of(state, root)
+    found = []
+    for wt in worktrees(root):
+        if wt.resolve() != root.resolve():
+            state = run_in(cls, wt, plan_path, own=False, rel=rel)
+            if state is not None:
+                found.append((wt, state))
+    if len(found) > 1:
+        raise Refused(f"runs of this plan are in flight in {len(found)} worktrees ("
+                      + ", ".join(str(wt) for wt, _ in found) + "); ask the owner", 2)
+    return case_of(found[0][1], found[0][0]) if found else None
+
+
+def worktrees(root):
+    """Every worktree of root's repository, from `git worktree list --porcelain`."""
+    try:
+        r = subprocess.run(["git", "-C", str(root), "worktree", "list", "--porcelain"],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [Path(l[len("worktree "):]) for l in r.stdout.splitlines() if l.startswith("worktree ")]
+
+
+def run_in(cls, root, plan_path, own, rel=None):
+    """root's state when it is a run of this plan in flight, else None. Only this
+    worktree's own unreadable state refuses: another worktree's unreadable state cannot
+    say which plan it runs, so it is named on stderr and not counted."""
+    state_file = root / ".claude" / "plan-progress.json"
+    # git sets these in a hook or a linked worktree's environment; another worktree's
+    # owned snapshot is read with git pointed at that worktree, as the hooks read it.
+    saved = {} if own else {k: os.environ.pop(k) for k in GIT_IDENTITY if k in os.environ}
+    try:
+        state = cls.read_state(str(root))
+    except Exception as e:  # noqa: BLE001
+        state = {"state_status": "state_error", "note": type(e).__name__}
+    finally:
+        os.environ.update(saved)
+    unreadable = (state is None and os.path.lexists(state_file)) or not (
+        state is None or (isinstance(state, dict) and state.get("state_status") != "state_error"))
+    if unreadable:
+        note = state.get("note", "") if isinstance(state, dict) else ""
+        if own:
+            raise Refused(f"cannot read the run state {state_file}"
+                          + (f" ({note})" if note else "") + "; ask the owner", 2)
+        print(f"owner-decision: note: cannot read the run state {state_file}; not counted",
+              file=sys.stderr)
+        return None
+    if state is None or cls.finished(state, str(root)):
+        return None
+    named = state.get("plan")
+    if not isinstance(named, str) or not named.strip():
+        return None
+    named = (Path(named) if os.path.isabs(named) else root / named).resolve()
+    if named == plan_path.resolve():
+        return state
+    return state if rel is not None and named == (root / rel).resolve() else None
+
+
+def case_of(state, root):
+    """(at, stage, task) of a run state, or Refused when it is at no case match judges."""
+    state_file = root / ".claude" / "plan-progress.json"
+    phase = state.get("phase")
+    if phase == "preflight":
+        return "preflight", None, None
+    if phase == "closeout":
+        return "closeout", None, None
+    if phase in ("task", "gate"):
+        try:
+            stage = int(state.get("stage"))
+        except (TypeError, ValueError):
+            raise Refused(f"cannot read the run state {state_file} (stage "
+                          f"{state.get('stage')!r}); ask the owner", 2)
+        task = state.get("task") if phase == "task" else None
+        task = task.strip() if isinstance(task, str) and task.strip() else None
+        if task is not None and task.split(".")[0] != str(stage):
+            task = None  # a stage opened with no task keeps the last stage's task field
+        return "stage", stage, task
+    raise Refused(f"the run state is at phase {phase!r} ({state_file}), not at a task, stage "
+                  "or close-out match can judge; ask the owner", 1)
+
+
+def case_from_run(a, at_run):
+    """(at, stage, task) of the run, refusing any argument that disagrees with it."""
+    at, stage, task = at_run
+    where = f"stage {stage}" if stage is not None else f"at {at}"
+    if a.at is not None and a.at != at:
+        raise Refused(f"--at {a.at} disagrees with the run state (at {at}); ask the owner", 1)
+    if a.stage is not None and a.stage != stage:
+        raise Refused(f"--stage {a.stage} disagrees with the run state ({where}); ask the owner", 1)
+    if a.task is not None and a.task.strip() != task:
+        shown = f"task {task}" if task else f"no task: {where}"
+        raise Refused(f"--task {a.task} disagrees with the run state ({shown}); ask the owner", 1)
+    return at, stage, task
+
+
 def cmd_match(a):
-    if a.at == "stage" and a.stage is None:
+    plan_path = Path(a.plan)
+    try:
+        at_run = run_case(plan_path)
+        at, stage, task = case_from_run(a, at_run) if at_run else (a.at, a.stage, a.task)
+    except Refused as e:
+        print(f"owner-decision: {e}", file=sys.stderr)
+        return e.code
+    if at is None:
+        print("owner-decision: --at is needed when no run of this plan is in flight", file=sys.stderr)
+        return 2
+    if at == "stage" and stage is None:
         print("owner-decision: --at stage needs --stage", file=sys.stderr)
         return 2
-    case = {"at": a.at, "stage": a.stage, "task": a.task, "command": a.command,
+    case = {"at": at, "stage": stage, "task": task, "command": a.command,
             "require_command": a.require_command}
-    plan_path = Path(a.plan)
     text = read(plan_path)
     stages, tasks = plan_places(text)
     is_master = pu.is_master_plan(text, plan_path)
@@ -448,7 +606,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="op", required=True)
     m = sub.add_parser("match")
     m.add_argument("--plan", required=True)
-    m.add_argument("--at", required=True, choices=AT)
+    m.add_argument("--at", choices=AT)
     m.add_argument("--stage", type=int)
     m.add_argument("--task")
     m.add_argument("--command")

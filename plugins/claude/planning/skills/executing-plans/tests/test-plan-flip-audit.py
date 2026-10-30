@@ -23,6 +23,7 @@ and a named test here goes red.
 import importlib.util
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -311,6 +312,41 @@ for vocab in ["soft residual", "BLOCKED", "not automated", "no device",
         bad(f"strong phrase '{vocab}' NOT flagged blocking",
             json.dumps(hits, indent=2)[:300])
 
+# A gate line is a claim about this gate; a finding quoted from another tool goes
+# on the line after it (stage-gate.md § A gate line is a claim about this gate).
+# The scan reads the checkbox line only, so the quote below is data, and neither
+# the box nor a **Completed:** line over it is voided by it.
+dd = newdir("f2next")
+pp = dd / "p.md"
+pp.write_text("# Plan\n\n**Completed:** 2026-01-01\n\n**Gate:**\n"
+              "- [x] `make check` passes\n"
+              "  the linter printed `BLOCKED` and BLOCKED; residual work is still open;"
+              " soft residual, no device\n")
+r, dv = run_json(str(pp))
+if dv is not None and not findings_of(dv, 2) and not findings_of(dv, 4) and r.returncode == 0:
+    ok("a finding quoted on the line after a ticked box is not read as a claim about that gate")
+else:
+    bad("a quote on the line after a ticked box voided it (red if the scan reads past "
+        "the checkbox line)", json.dumps(dv, indent=2)[:400] if dv else r.stderr[:400])
+pp.write_text("# Plan\n\n**Gate:**\n- [x] `make check` passes BLOCKED\n")
+_, dv = run_json(str(pp))
+hits = findings_of(dv, 2) if dv else []
+if hits and hits[0].get("severity") == "blocking":
+    ok("the same word on the checkbox line itself still voids the tick (blocking)")
+else:
+    bad("BLOCKED on the checkbox line itself was not flagged", json.dumps(hits, indent=2)[:300])
+# An unindented line straight after the box is not off it: markdown runs it into the
+# box's own text, so it is scanned as part of the box, and so is the Completed over it.
+pp.write_text("# Plan\n\n**Completed:** 2026-01-01\n\n**Gate:**\n"
+              "- [x] `make check` passes\nwaived by me, exit 2\n")
+_, dv = run_json(str(pp))
+hits = findings_of(dv, 2) if dv else []
+if hits and hits[0].get("severity") == "blocking" and findings_of(dv, 4):
+    ok("an unindented line run into the box is scanned with it (blocking), Completed included")
+else:
+    bad("an unindented continuation of a ticked box went unscanned",
+        json.dumps(dv, indent=2)[:400] if dv else "")
+
 # WEAK qualifiers do NOT void a tick alone. `amended` shows why: executing-plans
 # tells the executor to write it whenever a check changes, so firing on it alone
 # would punish the disclosure itself.
@@ -527,10 +563,10 @@ r, doc = run_json(str(p))
 if doc is not None:
     not_run = {c["finding"] for c in doc.get("checks_not_run", [])}
     run_ = set(doc.get("checks_run", []))
-    if not_run == {1, 3, 5, 8, 9, 10}:
-        ok("outside a git repo, findings 1/3/5 (and 8-10: no --repo) are reported NOT RUN")
+    if not_run == {1, 3, 5, 8, 9, 10, 11}:
+        ok("outside a git repo, findings 1/3/5/11 (and 8-10: no --repo) are reported NOT RUN")
     else:
-        bad(f"checks_not_run was {sorted(not_run)}, expected [1, 3, 5, 8, 9, 10]",
+        bad(f"checks_not_run was {sorted(not_run)}, expected [1, 3, 5, 8, 9, 10, 11]",
             json.dumps(doc, indent=2)[:600])
     if run_ == {2, 4, 6, 7}:
         ok("findings 2/4/6/7 (the on-disk checks) are reported as actually run")
@@ -650,8 +686,8 @@ untracked.write_text(preflight_plan(ticked=True))
 r, doc = run_json(str(untracked), cwd=repo)
 if doc is not None:
     nr = {c["finding"] for c in doc.get("checks_not_run", [])}
-    if nr == {1, 3, 5, 8, 9, 10}:
-        ok("untracked plan reports 1/3/5 NOT RUN despite the repo having history")
+    if nr == {1, 3, 5, 8, 9, 10, 11}:
+        ok("untracked plan reports 1/3/5/11 NOT RUN despite the repo having history")
     else:
         bad("REGRESSION: untracked plan given a clean bill over checks that never ran",
             json.dumps(doc, indent=2)[:600])
@@ -1521,9 +1557,9 @@ def snap(plan, proj):
 plans_dir, proj, env, plan = baseline_world("bl-none")
 r, doc = run_json(str(plan), "--repo", str(proj))
 reasons = " ".join(c.get("reason", "") for c in (doc or {}).get("checks_not_run", []))
-if doc is not None and {c["finding"] for c in doc["checks_not_run"]} == {1, 3, 5, 8, 9, 10} \
+if doc is not None and {c["finding"] for c in doc["checks_not_run"]} == {1, 3, 5, 8, 9, 10, 11} \
         and "--snapshot" in reasons:
-    ok("with no baseline, 1/3/5 are NOT RUN and the reason says to --snapshot")
+    ok("with no baseline, 1/3/5 and 11 are NOT RUN and the reason says to --snapshot")
 else:
     bad("no baseline must leave 1/3/5 not run, pointing at --snapshot",
         json.dumps(doc, indent=2)[:500] if doc else r.stderr)
@@ -1552,9 +1588,9 @@ if doc is not None and {1, 3, 5} <= got and r.returncode == 1:
 else:
     bad(f"expected findings 1, 3, 5 and exit 1; got {sorted(got)}, exit {r.returncode}",
         json.dumps(doc, indent=2)[:900] if doc else r.stderr)
-if doc is not None and set(doc.get("checks_run", [])) == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10} \
+if doc is not None and set(doc.get("checks_run", [])) == set(range(1, 12)) \
         and doc.get("baseline"):
-    ok("baseline mode with --repo reports all ten checks run, and names the baseline")
+    ok("baseline mode with --repo reports all eleven checks run, and names the baseline")
 else:
     bad("baseline mode must report 1-7 run", json.dumps(doc, indent=2)[:500] if doc else "")
 f3 = findings_of(doc, 3) if doc else []
@@ -1614,6 +1650,188 @@ if r.returncode == 2 and "different plan" in r.stderr:
     ok("a baseline recording a different plan exits 2")
 else:
     bad(f"foreign baseline must exit 2, got {r.returncode}", r.stdout[:300] + r.stderr[:300])
+
+# Finding 11: a plan outside git that has LOST structure since its --snapshot. A deleted
+# task takes its tick and its proof obligation with it, and every other check reads only
+# what is still there, so the deletion itself is the thing to report — each missing item
+# by name, so a rename that hides a deletion in the totals is still seen.
+print()
+print("baseline — structure the snapshot had and the plan on disk lost (STRUCTURE-SHRANK)")
+
+def struct_plan(drop=(), no_status=(), extra=()):
+    """Stage 1 (Task 1.1) and Stage 2 (Tasks 2.1-2.3), each with a gate block. `drop`
+    names what to leave out ("Stage 2", "Task 2.3", "Stage 2 Gate"); `no_status` the
+    tasks written without their Status line; `extra` tasks added to Stage 2."""
+    out = ["# Plan", ""]
+    for s, tasks in ((1, ["1.1"]), (2, ["2.1", "2.2", "2.3", *extra])):
+        if f"Stage {s}" not in drop:
+            out += [f"## Stage {s}", ""]
+        for t in tasks:
+            if f"Task {t}" in drop:
+                continue
+            out += [f"### Task {t}: thing {t}"]
+            if t not in no_status:
+                out += ["- **Status:** [ ]"]
+            out += [f"- Build thing {t}.", ""]
+        if f"Stage {s} Gate" not in drop:
+            out += [f"### Stage {s} Gate", "", "- [ ] `make test` exits 0", ""]
+    return "\n".join(out)
+
+plans_dir, proj, env = newdir("ss-plans"), *newrepo("ss-proj")
+plan = plans_dir / "plan.md"
+plan.write_text(struct_plan())
+(proj / "README").write_text("x\n"); commit(proj, env, "chore: initial commit")
+r = snap(plan, proj)
+if r.returncode != 0:
+    bad(f"--snapshot failed: exit {r.returncode}", r.stderr[:300])
+
+def shrank(**kw):
+    plan.write_text(struct_plan(**kw))
+    r, doc = run_json(str(plan), "--repo", str(proj), "--require-all-checks")
+    got = (doc or {}).get("findings", [])
+    return r, doc, got, [f for f in got if f.get("finding") == 11]
+
+r, doc, got, f11 = shrank(drop=("Task 2.3",))
+if len(got) == 1 and len(f11) == 1 and f11[0].get("severity") == "advisory" \
+        and f11[0].get("text") == "STRUCTURE-SHRANK ### Task 2.3" and r.returncode == 4:
+    ok("a plan missing Task 2.3 since its snapshot gets one advisory STRUCTURE-SHRANK naming it, exit 4")
+else:
+    bad(f"a deleted task must be one advisory STRUCTURE-SHRANK finding naming Task 2.3, exit 4 "
+        f"(red if the deleted task goes unreported); exit {r.returncode}",
+        json.dumps(got, indent=2)[:900] if doc else r.stderr)
+
+r, doc, got, f11 = shrank(drop=("Stage 2 Gate",))
+if len(got) == 1 and len(f11) == 1 and f11[0].get("text") == "STRUCTURE-SHRANK ### Stage 2 Gate" \
+        and r.returncode == 4:
+    ok("a plan missing its Stage 2 gate block gets one STRUCTURE-SHRANK naming it, exit 4")
+else:
+    bad(f"a deleted gate block must be one STRUCTURE-SHRANK naming Stage 2 Gate; exit {r.returncode}",
+        json.dumps(got, indent=2)[:900] if doc else r.stderr)
+
+r, doc, got, f11 = shrank(no_status=("2.2",))
+if len(got) == 1 and len(f11) == 1 \
+        and f11[0].get("text") == "STRUCTURE-SHRANK - **Status:** of Task 2.2" and r.returncode == 4:
+    ok("a plan with one fewer Status: line gets one STRUCTURE-SHRANK naming its task, exit 4")
+else:
+    bad(f"a vanished Status: line must be one STRUCTURE-SHRANK naming Task 2.2; exit {r.returncode}",
+        json.dumps(got, indent=2)[:900] if doc else r.stderr)
+
+# Catches: counting totals instead of identities. One task added, one deleted: the
+# count of tasks is unchanged, the deleted one is still gone.
+r, doc, got, f11 = shrank(drop=("Task 2.2",), extra=("2.4",))
+if [f.get("text") for f in f11] == ["STRUCTURE-SHRANK ### Task 2.2"]:
+    ok("a rename-plus-delete with the same task count still names the deleted task")
+else:
+    bad("a deletion masked by an added task must still be named",
+        json.dumps(got, indent=2)[:900] if doc else r.stderr)
+
+r, doc, got, f11 = shrank(drop=("Stage 2", "Task 2.1", "Task 2.2", "Task 2.3", "Stage 2 Gate"))
+texts = sorted(f.get("text", "") for f in f11)
+want = sorted(f"STRUCTURE-SHRANK {n}" for n in (
+    "## Stage 2", "### Task 2.1", "### Task 2.2", "### Task 2.3", "### Stage 2 Gate"))
+if texts == want:
+    ok("a deleted stage names its heading, each task and its gate — not each task's Status line too")
+else:
+    bad("a deleted stage must be named item by item, once each",
+        f"got {texts}\nwant {want}")
+
+r, doc, got, f11 = shrank(extra=("2.4",))
+if doc is not None and not got and r.returncode == 0 and 11 in doc.get("checks_run", []):
+    ok("a plan that only grew gets no finding, and the structural check reports as run")
+else:
+    bad(f"a grown plan must be clean with 11 run; exit {r.returncode}",
+        json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+
+r, doc, got, f11 = shrank()
+if doc is not None and not got and r.returncode == 0 \
+        and set(doc.get("checks_run", [])) == set(range(1, 12)):
+    ok("an unchanged plan gets no finding and every check, 11 included, reports as run")
+else:
+    bad(f"an unchanged plan must be clean with 1-11 run; exit {r.returncode}",
+        json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+
+# A baseline that cannot be parsed is not tampering (its hash and plan cannot even be read):
+# the checks that need it say they did not run, and every other check still runs.
+key = _hl.sha256(str(plan.resolve()).encode()).hexdigest()[:16]
+(proj / ".claude" / "plan-baseline" / f"{key}.json").write_text("{not json")
+plan.write_text(struct_plan(drop=("Task 2.3",)).replace(
+    "- **Status:** [ ]", "- **Status:** [x] done (amended — soft residual)", 1))
+r = run(str(plan), "--repo", str(proj), "--require-all-checks", "--json")
+try:
+    doc = json.loads(r.stdout)     # parsed here, so an exit-2 regression fails the check below
+except json.JSONDecodeError:
+    doc = None
+nr = {c["finding"]: c.get("reason", "") for c in (doc or {}).get("checks_not_run", [])}
+said = [ln for ln in r.stderr.splitlines() if "structural check" in ln]
+if doc is not None and r.returncode == 1 and {1, 3, 5, 11} == set(nr) \
+        and findings_of(doc, 2) and not findings_of(doc, 11) \
+        and {2, 4, 6, 7, 8, 9, 10} <= set(doc.get("checks_run", [])) and len(said) == 1:
+    ok("an unreadable snapshot says so in one line; 1/3/5/11 are not run and the rest still run")
+else:
+    bad(f"an unreadable snapshot must skip only 1/3/5/11 and say so once; exit {r.returncode}",
+        r.stderr[:600] + (json.dumps(doc, indent=2)[:600] if doc else ""))
+plan.write_text(struct_plan())
+r = run(str(plan), "--repo", str(proj), "--require-all-checks")
+if r.returncode == 3:
+    ok("with an unreadable snapshot and no findings, --require-all-checks still exits 3")
+else:
+    bad(f"an unreadable snapshot is never a clean bill: expected exit 3, got {r.returncode}",
+        r.stdout[:300] + r.stderr[:300])
+
+# JSON that is not an object is no more a baseline than text that is not JSON.
+(proj / ".claude" / "plan-baseline" / f"{key}.json").write_text("[]")
+r = run(str(plan), "--repo", str(proj), "--require-all-checks")
+if r.returncode == 3 and "structural check" in r.stderr:
+    ok("a snapshot holding JSON that is not an object is unreadable too: not run, exit 3")
+else:
+    bad(f"a non-object snapshot must read as unreadable, not exit 2; got {r.returncode}",
+        r.stderr[:300])
+
+
+def shrank_from(before, after, label):
+    """Snapshot `before`, then audit `after`: the finding-11 texts and the exit."""
+    pd, pj, ev = newdir(f"{label}-plans"), *newrepo(f"{label}-proj")
+    pl = pd / "plan.md"
+    pl.write_text(before)
+    (pj / "README").write_text("x\n"); commit(pj, ev, "chore: initial commit")
+    snap(pl, pj)
+    pl.write_text(after)
+    r, doc = run_json(str(pl), "--repo", str(pj))
+    return r, [f.get("text") for f in (doc or {}).get("findings", []) if f.get("finding") == 11]
+
+# A stage whose title says "gate" is a stage, not a gate block: retitling it loses nothing.
+titled = struct_plan().replace("## Stage 2\n", "## Stage 2: Hosts and gate review\n")
+r, f11 = shrank_from(titled, titled.replace(": Hosts and gate review", ": Hosts"), "ss-title")
+if f11 == [] and r.returncode == 0:
+    ok("retitling a stage whose title says 'gate' reports nothing lost")
+else:
+    bad(f"a stage title containing 'gate' was read as a gate block; exit {r.returncode}", f11)
+_gm = importlib.util.module_from_spec(importlib.util.spec_from_file_location("pfa_gate", SCRIPT))
+_gm.__spec__.loader.exec_module(_gm)
+if _gm.gate_box_stages("## Stage 3: Hosts and gate review\n\n- [x] a\n") == {} \
+        and _gm.gate_box_stages("### Stage 3 Gate\n\n- [x] a\n") == {3: "3"} \
+        and _gm.gate_box_stages("### Stage 7-light gate\n\n- [x] a\n") == {3: "7"}:
+    ok("gate boxes are the boxes under a gate heading, not under a stage titled with 'gate'")
+else:
+    bad("gate_box_stages must read `### Stage N Gate` only",
+        str(_gm.gate_box_stages("## Stage 3: Hosts and gate review\n\n- [x] a\n")))
+
+# A fenced example is not structure: deleting it loses nothing, and a `# comment` in a
+# fenced block inside a task does not hide the task's Status line.
+fenced = struct_plan().replace("- Build thing 2.1.\n", "- Build thing 2.1.\n\n```\n"
+                               "### Task 9.9: an example\n- **Status:** [ ]\n## Stage 9\n```\n")
+r, f11 = shrank_from(fenced, struct_plan(), "ss-fence")
+if f11 == [] and r.returncode == 0:
+    ok("deleting a fenced example of a task and a stage reports nothing lost")
+else:
+    bad(f"a fenced example was counted as structure; exit {r.returncode}", f11)
+commented = struct_plan().replace("### Task 2.2: thing 2.2\n",
+                                  "### Task 2.2: thing 2.2\n```sh\n# run it\n```\n")
+r, f11 = shrank_from(struct_plan(), commented, "ss-fcomment")
+if f11 == [] and r.returncode == 0:
+    ok("a fenced `# comment` above a Status line does not hide it")
+else:
+    bad(f"a fenced comment line hid a task's Status line; exit {r.returncode}", f11)
 
 
 # Finding 1 counts a stage's gate boxes only while that stage has no `Stage N green`
@@ -1992,6 +2210,8 @@ prove_task(plan, proj)
 rp = proj / "proof" / plan.stem / "1.1" / "req-1.json"
 data = json.loads(rp.read_text())
 data.pop("covered_by_claim", None)
+data.pop("touched_blobs", None)   # a bare-check record binds no claim's blobs
+data.pop("witness_blobs", None)
 data.update({"schema": 1, "check": "python3 tests/test_calc.py",
              "result": {"exit": 0, "tail": ""}})
 rp.write_text(json.dumps(data))
@@ -2137,6 +2357,8 @@ for label, schema, sev, dated in (("rec-legacy-req", 1, "legacy schema-1", BEFOR
     rp = proj / "proof" / plan.stem / "1.1" / "req-1.json"
     data = json.loads(rp.read_text())
     data.pop("covered_by_claim", None)
+    data.pop("touched_blobs", None)   # a bare-check record binds no claim's blobs
+    data.pop("witness_blobs", None)
     data.update({"schema": schema, "check": "python3 tests/test_calc.py",
                  "result": {"exit": 0, "tail": ""}})
     rp.write_text(json.dumps(data))
@@ -2381,6 +2603,206 @@ else:
     bad("a deviation on a claim is tied to the tree of its commit (red when fingerprints go uncompared)",
         str(f8)[:400])
 
+# A record binds the blobs of the files its break touched (touched_blobs), not the whole
+# tree: the task's own Status flip in a plan kept in the repo, or a rebase onto a commit
+# that touches other files, leaves it valid. A later commit that changes a touched file
+# is drift: blocking, naming the file and the record. A record with no touched_blobs is
+# judged by the whole-tree fingerprint, as before.
+TWICE = CALC + "\n\ndef twice(a):\n    return 2 * a\n"
+
+
+def inrepo_world(label):
+    plan0, proj, env = rec_world(label)
+    plan = proj / "docs" / plan0.name
+    plan.parent.mkdir()
+    plan.write_text(REC_PLAN.replace("**Status:** [x]", "**Status:** [ ]"))
+    commit(proj, env, "the plan lives in the repo")
+    return plan, proj, env
+
+
+plan, proj, env = inrepo_world("blob-flip")
+(proj / "calc.py").write_text(TWICE)
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+plan.write_text(REC_PLAN)   # the task's own Status flip, after its proof
+commit(proj, env, "Stage 1 Task 1.1: twice")
+r, doc = run_json(str(plan), "--repo", str(proj))
+if doc is not None and not task_findings(doc, 8) and not task_findings(doc, 9):
+    ok("records proven before the task's Status flip in an in-repo plan verify after it")
+else:
+    bad("a proof must survive its own task's Status flip in an in-repo plan (red under the "
+        "index binding)", json.dumps(task_findings(doc, 8) + task_findings(doc, 9))[:900]
+        if doc else r.stderr)
+
+plan, proj, env = inrepo_world("blob-flip-legacy")
+(proj / "calc.py").write_text(TWICE)
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+for rp in (proj / "proof" / plan.stem / "1.1").glob("*.json"):
+    d = json.loads(rp.read_text())
+    d.pop("touched_blobs", None)
+    d.pop("witness_blobs", None)
+    rp.write_text(json.dumps(d))
+plan.write_text(REC_PLAN)
+commit(proj, env, "Stage 1 Task 1.1: twice, records from before the blob binding")
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = task_findings(doc, 8) if doc else []
+if f8 and f8[0]["severity"] == "blocking" and "different tree" in f8[0]["rule"]:
+    ok("a record without touched_blobs is still judged by the whole tree, never accepted unbound")
+else:
+    bad("a record with no touched_blobs must keep the fingerprint rule (red if it is "
+        "accepted unbound)", str(f8)[:500])
+
+for local in (False, True):
+    mode = "local" if local else "committed"
+    plan, proj, env = (local_world if local else rec_world)(f"blob-rebase-{mode}")
+    g = ["git", "-C", str(proj)]
+    subprocess.run(g + ["checkout", "-q", "-b", "side"], check=True, env=env)
+    (proj / "notes.txt").write_text("other work\n")
+    commit(proj, env, "other work, on another file")
+    subprocess.run(g + ["checkout", "-q", "main"], check=True, env=env)
+    (proj / "calc.py").write_text(TWICE)
+    subprocess.run(g + ["add", "-A"], check=True, env=env)
+    prove_task(plan, proj)
+    commit(proj, env, "Stage 1 Task 1.1: twice")
+    rb = subprocess.run(g + ["rebase", "-q", "side"], capture_output=True, text=True, env=env)
+    r, doc = run_json(str(plan), "--repo", str(proj))
+    f8 = task_findings(doc, 8) if doc else []
+    if rb.returncode == 0 and (proj / "notes.txt").exists() and doc is not None and not f8:
+        ok(f"after a rebase onto a commit touching other files, a {mode} record verifies")
+    else:
+        bad(f"a rebase that leaves the touched files as they were must keep a {mode} record "
+            "valid (red under the whole-tree binding)", (rb.stderr, str(f8)[:600]))
+
+plan, proj, env = rec_world("blob-drift")
+(proj / "calc.py").write_text(TWICE)
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+(proj / "calc.py").write_text(TWICE + "# tidied after the proof\n")
+commit(proj, env, "tidy calc")
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = task_findings(doc, 8) if doc else []
+crel = f"proof/{plan.stem}/1.1/claim-1.json"
+drift = [f for f in f8 if "drift" in f["rule"] and "calc.py" in f["rule"] and crel in f["rule"]]
+if r.returncode == 1 and drift and drift[0]["severity"] == "blocking":
+    ok("a later commit changing a touched file is blocking drift, naming the file and the record")
+else:
+    bad("drift must be reported, blocking, with the file and the record (red if the touched "
+        "blobs at HEAD go uncompared)", f"rc={r.returncode} {str(f8)[:600]}")
+# Catches: a req covered by claim 1 reporting the drift of claim 1's own maps a second time.
+alld = [f for f in f8 if "drift" in f["rule"]]
+if len(alld) == 1:
+    ok("a covered req's drift is its claim's: the drift is reported once")
+else:
+    bad("a covered req must not repeat its claim's drift line (red if each record of the "
+        "same maps reports it)", json.dumps(alld, indent=2)[:900])
+# Catches: drift in a closed stage blocking a later stage. Stage 1's gate is fully ticked
+# and its `Stage 1 green` commit holds calc.py as proven: a later change to a file Stage 1
+# proved is expected of a later stage, and the drift is advisory. A stage whose gate is not
+# fully ticked is still open: its drift blocks, as at its gate.
+FULL_GATE = "\n### Stage 1 Gate\n- [x] the suite passes\n- [x] no regressions\n"
+plan, proj, env = rec_world("blob-drift-closed")
+(proj / "calc.py").write_text(TWICE)
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+subprocess.run(["git", "-C", str(proj), "commit", "-q", "--allow-empty", "-m", "Stage 1 green"],
+               check=True, env=env)
+(proj / "calc.py").write_text(TWICE + "# changed by a later stage\n")
+commit(proj, env, "Stage 2 Task 2.1: tidy calc")
+for gate_, sev_ in ((FULL_GATE, "advisory"),
+                    (FULL_GATE.replace("- [x] no", "- [ ] no"), "blocking")):
+    plan.write_text(REC_PLAN + gate_)
+    r, doc = run_json(str(plan), "--repo", str(proj))
+    f8 = task_findings(doc, 8) if doc else []
+    drift = [f for f in f8 if "drift" in f["rule"] and "calc.py" in f["rule"]]
+    if drift and all(f["severity"] == sev_ for f in drift) and r.returncode == (
+            4 if sev_ == "advisory" else 1):
+        ok(f"drift on a task of {'a closed' if sev_ == 'advisory' else 'an open'} stage is {sev_}")
+    else:
+        bad(f"drift on a task whose stage gate is {'fully' if sev_ == 'advisory' else 'not fully'} "
+            f"ticked must be {sev_} (red if every stage's drift blocks)",
+            f"rc={r.returncode} {str(f8)[:600]}")
+# Catches: ticked boxes read as a close the proof survived. Here calc.py changed BEFORE the
+# `Stage 1 green` commit, so the stage closed on a stale proof (a gate not installed, or
+# bypassed): the drift stays blocking however the boxes read.
+plan, proj, env = rec_world("blob-drift-stale-close")
+(proj / "calc.py").write_text(TWICE)
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+(proj / "calc.py").write_text(TWICE + "# changed before the stage closed\n")
+commit(proj, env, "tidy calc")
+subprocess.run(["git", "-C", str(proj), "commit", "-q", "--allow-empty", "-m", "Stage 1 green"],
+               check=True, env=env)
+plan.write_text(REC_PLAN + FULL_GATE)
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = task_findings(doc, 8) if doc else []
+drift = [f for f in f8 if "drift" in f["rule"] and "calc.py" in f["rule"]]
+if drift and all(f["severity"] == "blocking" for f in drift) and r.returncode == 1:
+    ok("drift a record already had at its stage's `Stage N green` commit stays blocking")
+else:
+    bad("a stage closed on a drifted proof must keep its drift blocking (red if ticked gate "
+        "boxes alone make it advisory)", f"rc={r.returncode} {str(f8)[:600]}")
+
+# The test the record was watched under is bound too (witness_blobs): weakening it
+# after the proof is drift, named like a changed touched file.
+plan, proj, env = rec_world("blob-witness")
+(proj / "calc.py").write_text(TWICE)
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+(proj / "tests" / "test_calc.py").write_text("pass  # the assertions are gone\n")
+commit(proj, env, "weaken the test")
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = task_findings(doc, 8) if doc else []
+crel = f"proof/{plan.stem}/1.1/claim-1.json"
+drift = [f for f in f8 if "drift" in f["rule"] and "tests/test_calc.py" in f["rule"]
+         and crel in f["rule"]]
+if r.returncode == 1 and drift and drift[0]["severity"] == "blocking":
+    ok("a test file edited after the proof is blocking drift, naming the test file and the record")
+else:
+    bad("a weakened test must be reported as drift (red if the files the test runs go unbound)",
+        f"rc={r.returncode} {str(f8)[:600]}")
+
+# After a repair, only the tasks whose touched files it changed are re-proved (review-cost
+# change 3): the audit names those, and every other task's records still verify. Two tasks
+# on two files; the repair edits Task 1.1's file only.
+TWO_PLAN = REC_PLAN + (
+    "\n### Task 1.2: mul\n- **Status:** [x]\n- `mul` returns the product.\n"
+    "- **Test:** `python3 tests/test_mul.py` — mul returns the product (red if mul adds)\n"
+)
+plan, proj, env = rec_world("blob-two-tasks")
+plan.write_text(TWO_PLAN)
+(proj / "mul.py").write_text("def mul(a, b):\n    return a * b\n")
+(proj / "tests" / "test_mul.py").write_text(
+    "import sys\nsys.path.insert(0, '.')\nfrom mul import mul\nassert mul(2, 3) == 6\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+mbrk = newdir("blob-two-tasks-mbrk") / "break.patch"
+mbrk.write_text("--- a/mul.py\n+++ b/mul.py\n@@ -1,2 +1,2 @@\n def mul(a, b):\n"
+                "-    return a * b\n+    return a + b\n")
+mb = ["--repo", str(proj), "--plan", str(plan), "--task", "1.2"]
+r1 = subprocess.run([sys.executable, str(PC), "claim", *mb, "--claim", "1", "--break", str(mbrk),
+                     "--test", "python3 tests/test_mul.py",
+                     "--build", "python3 -c 'import mul'"], capture_output=True, text=True)
+r2 = subprocess.run([sys.executable, str(PC), "req", *mb, "--req", "1", "--covered-by-claim", "1"],
+                    capture_output=True, text=True)
+commit(proj, env, "Stage 1 Task 1.1 and Task 1.2: add, mul")
+(proj / "calc.py").write_text(CALC + "# repaired at the gate\n")
+commit(proj, env, "Stage 1 gate round 1 (Task 1.1): repair calc")
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = findings_of(doc, 8) if doc else []
+d11 = [f for f in f8 if f.get("text") == "Task 1.1" and "drift" in f["rule"]
+       and "calc.py" in f["rule"]]
+d12 = [f for f in f8 if f.get("text") == "Task 1.2"]
+if r1.returncode == 0 and r2.returncode == 0 and len(d11) == 1 and not d12:
+    ok("a repair touching one task's file names that task's drifted record; the other verifies")
+else:
+    bad("after a repair, the audit must name only the task whose touched file changed (red if "
+        "it names neither, or both)", f"{r1.stderr[-300:]} {r2.stderr[-300:]} {str(f8)[:700]}")
+
 # Catches: a record that crashes the JSON parser crashing the whole audit (exit 2)
 # instead of being named: deep nesting raises RecursionError, not ValueError.
 plan, proj, env = rec_world("rec-nested2")
@@ -2590,6 +3012,236 @@ else:
     bad("the date bound is `on or after` the plan's date (red if the same day is dropped)",
         json.dumps(doc, indent=2)[:900] if doc else r.stderr)
 
+
+# ---- proof directory listings take any path; an orphaned proof directory is named
+# Catches: committed records listed with a bare `ls-tree --name-only` and split on
+# whitespace — a plan stem with a space becomes two paths and every record reads missing.
+plan, proj, env = rec_world("rec-space")
+splan, sproj = plan.with_name("2026-10-04-rec two-plan.md"), proj
+plan.rename(splan)
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(splan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+r, doc = run_json(str(splan), "--repo", str(proj))
+if doc is not None and not task_findings(doc, 8) and not task_findings(doc, 9):
+    ok("a plan stem with a space: its committed records are each read as one path")
+else:
+    bad("records under a stem with a space must be read whole (red with the bare ls-tree listing)",
+        json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+
+# Catches: a plan stem passed to git as a pathspec with its glob characters live. The stem
+# `rec[1]*` then also names a decoy `proof/...rec1x-plan/`: committed, the record is judged
+# on the decoy's commit; local, the staged decoy reads as a tracked record, nothing is local.
+for local_ in (False, True):
+    mode_ = "local" if local_ else "committed"
+    plan, proj, env = (local_world if local_ else rec_world)(f"rec-glob-{mode_}")
+    gplan = plan.with_name("2026-10-04-rec[1]*-plan.md")
+    plan.rename(gplan)
+    (proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+    subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+    prove_task(gplan, proj)
+    commit(proj, env, "Stage 1 Task 1.1: twice")
+    decoy = proj / "proof" / "2026-10-04-rec1x-plan" / "1.1"
+    decoy.mkdir(parents=True)
+    shutil.copy(proj / "proof" / gplan.stem / "1.1" / "claim-1.json", decoy / "claim-1.json")
+    if not local_:
+        (proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return a + a\n")
+    subprocess.run(["git", "-C", str(proj), "add", "-f", "-A", "--", "proof/2026-10-04-rec1x-plan",
+                    "calc.py"], check=True, env=env)
+    if not local_:
+        subprocess.run(["git", "-C", str(proj), "commit", "-q", "-m", "decoy"], check=True, env=env)
+    # Local, the decoy is only staged: the index alone (ls-files) reads it as tracked.
+    r, doc = run_json(str(gplan), "--repo", str(proj))
+    f8 = task_findings(doc, 8) if doc else []
+    want = (lambda fs: fs and all("proof drift" in f["rule"] for f in fs)) if not local_ else (
+        lambda fs: not fs)
+    if doc is not None and want(f8) and not task_findings(doc, 9):
+        ok(f"a plan stem with glob characters: its {mode_} records are read as literal paths")
+    else:
+        bad(f"a stem with `[`, `*` must be a literal pathspec ({mode_}) (red if git reads it "
+            "as a glob)", json.dumps(f8 + task_findings(doc or {}, 9), indent=2)[:900]
+            if doc else r.stderr)
+
+# Catches: a plan renamed without `git mv proof/<old> proof/<new>`. Its records stay
+# under the old stem, which no plan names any more: reported, advisory, with the step.
+plan, proj, env = rec_world("rec-orphan")
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+fresh = plan.with_name("2026-10-05-fresh-plan.md")
+fresh.write_text(REC_PLAN.replace("[x]", "[ ]"))
+plan.unlink()
+r, doc = run_json(str(fresh), "--repo", str(proj))
+orph = [f for f in (doc or {}).get("findings", []) if "ORPHAN-PROOF-DIR" in f.get("text", "")]
+if (len(orph) == 1 and orph[0].get("severity") == "advisory"
+        and "git mv proof/2026-10-04-rec-plan proof/2026-10-05-fresh-plan" in orph[0].get("rule", "")
+        and r.returncode == 4
+        and all(f.get("severity") == "advisory" for f in doc.get("findings", []))):
+    ok("an orphaned proof directory is one advisory ORPHAN-PROOF-DIR finding naming the git mv, exit 4")
+else:
+    bad(f"proof/<old>/ with no plan must be named, advisory, exit 4 (exit {r.returncode})",
+        json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+# Catches: the step telling the owner to delete records that may be unrecoverable (kept
+# local, or owned by a plan in another folder), instead of confirming no plan owns them.
+rule_ = orph[0].get("rule", "") if orph else ""
+if orph and "delete" not in rule_ and "another folder" in rule_:
+    ok("the orphan finding asks to confirm no plan in another folder owns the directory")
+else:
+    bad("the orphan finding must not advise deleting the directory (red if it says "
+        "\"otherwise delete\")", rule_)
+# Catches: the suggested command printed unquoted — a stem with a space splits in two.
+spaced = fresh.with_name("2026-10-05-fresh two-plan.md")
+fresh.rename(spaced)
+r, doc = run_json(str(spaced), "--repo", str(proj))
+orph = [f for f in (doc or {}).get("findings", []) if "ORPHAN-PROOF-DIR" in f.get("text", "")]
+cmd_ = orph[0]["rule"].split("`")[1] if orph and orph[0].get("rule", "").count("`") >= 2 else ""
+try:
+    words_ = shlex.split(cmd_)
+except ValueError:
+    words_ = []
+if words_ == ["git", "mv", "proof/2026-10-04-rec-plan", "proof/2026-10-05-fresh two-plan"]:
+    ok("the suggested git mv quotes a plan stem with a space, so it runs as printed")
+else:
+    bad("the git mv operands must be shell-quoted (red if a stem with a space splits)",
+        json.dumps(orph, indent=2)[:900] if orph else (doc or r.stderr))
+# Catches: `git mv proof/<old> proof/<new>` offered when proof/<new>/ already exists — it
+# would nest the old directory inside the new one.
+(proj / "proof" / spaced.stem / "1.1").mkdir(parents=True)
+shutil.copy(proj / "proof" / "2026-10-04-rec-plan" / "1.1" / "claim-1.json",
+            proj / "proof" / spaced.stem / "1.1" / "claim-1.json")
+r, doc = run_json(str(spaced), "--repo", str(proj))
+orph = [f for f in (doc or {}).get("findings", []) if "ORPHAN-PROOF-DIR" in f.get("text", "")]
+rule_ = orph[0].get("rule", "") if orph else ""
+if (len(orph) == 1 and orph[0].get("severity") == "advisory" and "merge" in rule_
+        and "`git mv " not in rule_):
+    ok("with proof/<new>/ already there, the orphan finding says to merge, not to git mv")
+else:
+    bad("an existing proof/<new>/ must get a merge step, not a nesting git mv",
+        json.dumps(orph, indent=2)[:900] if orph else (doc or r.stderr))
+# The same check over records kept local (proof/ ignored): the directory is on disk only.
+plan, proj, env = local_world("rec-orphan-local")
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+commit(proj, env, "Stage 1 Task 1.1: twice")
+fresh = plan.with_name("2026-10-05-fresh-plan.md")
+fresh.write_text(REC_PLAN.replace("[x]", "[ ]"))
+plan.unlink()
+r, doc = run_json(str(fresh), "--repo", str(proj))
+orph = [f for f in (doc or {}).get("findings", []) if "ORPHAN-PROOF-DIR" in f.get("text", "")]
+if len(orph) == 1 and "proof/2026-10-04-rec-plan" in orph[0].get("rule", ""):
+    ok("an orphaned local proof directory (proof/ ignored) is named too")
+else:
+    bad("a local proof/<old>/ with no plan must be named",
+        json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+# And a proof directory whose plan is there is never an orphan.
+r, doc = run_json(str(splan), "--repo", str(sproj))
+if doc is not None and not [f for f in doc.get("findings", []) if "ORPHAN-PROOF-DIR" in f.get("text", "")]:
+    ok("a proof directory whose plan exists is not reported")
+else:
+    bad("a proof directory with its plan present must not be an orphan",
+        json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+
+# ---- a sentence opening with a code span is its own clause; records match by text
+# Catches: the sentence split run on the masked text, whose lookahead sees a blank
+# where the backtick was — "`a` holds. `b` holds." was one requirement.
+spec_ = importlib.util.spec_from_file_location("pfa_clauses", SCRIPT)
+pfa_ = importlib.util.module_from_spec(spec_)
+spec_.loader.exec_module(pfa_)
+got_ = pfa_.requirement_clauses("- `a` holds. `b` holds.")
+if got_ == ["- `a` holds", "`b` holds."] or [g.lstrip("- ") for g in got_] == ["`a` holds", "`b` holds."]:
+    ok("a sentence opening with a code span starts its own requirement clause")
+else:
+    bad("\"`a` holds. `b` holds.\" must be two clauses (red with the masked-text lookahead)", got_)
+got_ = pfa_.requirement_clauses("- Use `a.b`. Then `c; d` runs.")
+if len(got_) == 2:
+    ok("a `.` or `;` inside a code span still never splits")
+else:
+    bad("separators inside code spans must not split", got_)
+# Catches: the code-span sentence start read after an abbreviation. "e.g. `x`" is one
+# sentence; cut there, a clause loses its subject and every later clause renumbers.
+for abbr_ in ("e.g.", "i.e.", "vs.", "etc.", "cf.", "No.", "E.g.", "Fig.", "eq.", "approx.",
+              "(e.g.", "a."):
+    got_ = pfa_.requirement_clauses(f"- Run the check, {abbr_} `x` holds.")
+    if len(got_) == 1:
+        ok(f"an abbreviation before a code span does not split: {abbr_!r}")
+    else:
+        bad(f"\"{abbr_} `x`\" must stay one clause (red if a known abbreviation or a single "
+            "letter ends a sentence)", got_)
+got_ = pfa_.requirement_clauses("- `a` holds. `b` holds. The rest holds too.")
+if len(got_) == 3:
+    ok("after the abbreviation rule, \"`a` holds. `b` holds.\" still splits")
+else:
+    bad("a sentence ending in a word before a code span must still split", got_)
+
+# Catches: a record made before the split, whose clause number shifted, read as
+# unproven — or matched to the clause now at its old number. It matches its clause by
+# its text; a clause whose text changed is unproven.
+SHIFT_PLAN = REC_PLAN.replace("- `add` returns the sum.\n",
+                              "- Adds numbers. `add` returns the sum. It stays pure.\n")
+plan, proj, env = rec_world("rec-shift")
+plan.write_text(SHIFT_PLAN)
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)   # claim 1 + req 1 (covered)
+base_ = ["--repo", str(proj), "--plan", str(plan), "--task", "1.1"]
+made_ = [subprocess.run([sys.executable, str(PC), "req", *base_, "--req", str(k_),
+                         "--covered-by-claim", "1"], capture_output=True, text=True)
+         for k_ in (2, 3)]
+rdir = proj / "proof" / plan.stem / "1.1"
+if all(m_.returncode == 0 for m_ in made_):
+    # The record of "It stays pure" as the old split numbered it: requirement 2 of 2.
+    old = json.loads((rdir / "req-3.json").read_text())
+    (rdir / "req-3.json").unlink()
+    (rdir / "req-2.json").unlink()
+    old["index"] = 2
+    (rdir / "req-2.json").write_text(json.dumps(old))
+    subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+    commit(proj, env, "Stage 1 Task 1.1: twice")
+    r, doc = run_json(str(plan), "--repo", str(proj))
+else:
+    r, doc = made_[-1], None
+f9 = " ".join(f.get("rule", "") for f in task_findings(doc or {}, 9))
+if doc is not None and "requirement 2:" in f9 and "requirement 3:" not in f9:
+    ok("a renumbered record matches its clause by text; the clause now at its old number stays open")
+else:
+    bad("a record whose clause number shifted must match by text", f9 or (r.stderr if doc is None else doc))
+plan.write_text(SHIFT_PLAN.replace("It stays pure.", "It stays pure and small."))
+r, doc = run_json(str(plan), "--repo", str(proj))
+f9 = " ".join(f.get("rule", "") for f in task_findings(doc or {}, 9))
+if doc is not None and "requirement 3:" in f9:
+    ok("a clause whose text changed since its record is reported unproven")
+else:
+    bad("a changed clause must be unproven", f9 or doc)
+
+# Catches: a renumbered record winning over the record under the clause's own number by
+# file order. req-2.json proves requirement 2 but is invalid; req-3.json carries
+# requirement 2's text too. The own-number record decides, as in the commit gate.
+plan, proj, env = rec_world("rec-dup")
+plan.write_text(SHIFT_PLAN)
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+base_ = ["--repo", str(proj), "--plan", str(plan), "--task", "1.1"]
+made_ = subprocess.run([sys.executable, str(PC), "req", *base_, "--req", "2",
+                        "--covered-by-claim", "1"], capture_output=True, text=True)
+rdir = proj / "proof" / plan.stem / "1.1"
+if made_.returncode == 0:
+    own = json.loads((rdir / "req-2.json").read_text())
+    (rdir / "req-3.json").write_text(json.dumps(dict(own, index=3)))
+    (rdir / "req-2.json").write_text(json.dumps(dict(own, fingerprint="zz")))
+    commit(proj, env, "Stage 1 Task 1.1: twice")
+    r, doc = run_json(str(plan), "--repo", str(proj))
+else:
+    r, doc = made_, None
+f9 = " ".join(f.get("rule", "") for f in task_findings(doc or {}, 9))
+if doc is not None and "requirement 2: no valid fingerprint" in f9:
+    ok("a record under its clause's own number wins over a renumbered one, whatever the file order")
+else:
+    bad("the own-number record must decide its clause (red if a later renumbered file "
+        "replaces it)", f9 or (r.stderr if doc is None else doc))
 
 for d_ in _tmpdirs:
     shutil.rmtree(d_, ignore_errors=True)

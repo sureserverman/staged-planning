@@ -1,6 +1,6 @@
 ---
 name: planning-projects
-description: "Plan a project of any size: triage to Direct, Light, Standard or Master first, then staged, tested tasks."
+description: "Use when asked for a plan or roadmap, to break this down, or how to build a project of any size."
 ---
 
 > On Codex, `<planning-plugin>` is this plugin's installed folder: the folder that holds `skills/` and `.codex-plugin/`, which is `../..` from this SKILL.md. In a shell command use its absolute path, quoted.

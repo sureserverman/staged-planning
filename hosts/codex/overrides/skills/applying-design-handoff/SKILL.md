@@ -154,6 +154,10 @@ Apply the design in code, standard-components-first within each platform.
    builds** — following the mocks is a tight render loop, not a final gate. Where step 1
    found a stack skill, brief it with that so standard-component idiom and spec fidelity
    land together; where it found none, say so and let the reproducer apply its own.
+   Every message this skill spawns an agent with, the Phase 7 evaluator's too, also says: wait on a background job
+   by its own completion (`../executing-plans/references/task-execution.md` § Waiting on background work),
+   and an agent returns only after its own background work has finished or been stopped,
+   and says which.
 4. **Assets.** Copy/convert referenced assets into the stack's asset pipeline.
 5. **Verify it builds** with the project's build/check command before grading.
 

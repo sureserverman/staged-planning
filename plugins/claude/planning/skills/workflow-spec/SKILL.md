@@ -131,7 +131,7 @@ What the skill never does on its own:
 
 - **planning-projects** — Phase 0 (Research) reads `docs/workflows/<scope>.md` files relevant to the plan's scope. New tasks that intentionally change a documented behavior reference the WF-ID: `Changes WF-AUTH-003`. New tasks that add behavior schedule a capture/extend step.
 - **executing-plans** — Phase Close-out invokes `audit` against the cumulative diff of the executed plan. Findings are surfaced in the close-out report. Any `Changes WF-NNN` task is expected to update or replace the named block (verify in close-out); any `Removed` finding without a `Changes`/`Removes` declaration in the plan is treated as a regression and escalated before merge.
-- **code-reviewer agent** — optional pre-merge invocation. Pass the audit triage table alongside the diff for an independent read.
+- **code-reviewer agent** — optional pre-merge invocation. Pass the audit triage table alongside the diff for an independent read. The brief also says: wait on a background job by its own completion (`../executing-plans/references/task-execution.md` § Waiting on background work), and an agent returns only after its own background work has finished or been stopped, and says which.
 - **backlog** — if `audit` surfaces drift the user defers, capture a `BL-NNN` entry naming the WF-IDs involved.
 
 ---

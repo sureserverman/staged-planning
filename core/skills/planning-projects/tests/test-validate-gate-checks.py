@@ -942,6 +942,65 @@ check(re.search(r"filtered-subset: measured 2026-10-08 over the same \d+ plans: 
       and re.search(r"sampled \d+ hits?: \d+ true positives?", " ".join(vgc.__doc__.split())),
       "the docstring states the measured rate and a sampled true-positive count")
 
+print("group 13 — TEST-COMMAND-AFTER-DASH: a Test: command written after the first ` — `")
+# prove-claim runs only the code spans before a Test: field's first ` — `. A claim that
+# names its own command after the prose has nothing it can run, so it becomes a deviation.
+# The rule (task-fields.md § `Test:`): one command, before the first ` — `, covering every
+# claim. ADVISORY: no trigger rate makes it blocking, so it never changes the exit code.
+_GATE = "`python3 scripts/verify.py` exits 0 — every route"
+
+
+def _test_line(text):
+    return next(i for i, line in enumerate(text.splitlines(), 1) if "**Test:**" in line)
+
+
+_after = plan_with_task("`python3 t.py` — it parses; the doc says so: "
+                        "`grep -q 'parses' docs/a.md`", _GATE)
+_before = plan_with_task("`python3 t.py && grep -q 'parses' docs/a.md` — it parses; "
+                         "the doc says so", _GATE)
+_hits = vgc.commands_after_dash(_after) if hasattr(vgc, "commands_after_dash") else None
+check(bool(_hits) and len(_hits) == 1 and _hits[0][0] == _test_line(_after)
+      and _hits[0][1] == ["grep -q 'parses' docs/a.md"],
+      "a backticked command after the first ` — ` is flagged, naming its line and the span")
+_cad = getattr(vgc, "commands_after_dash", lambda text: None)
+check(_cad(_before) == [],
+      "a Test: whose every command is before the dash gets nothing")
+check(_cad(plan_with_task("`python3 t.py`", _GATE)) == [],
+      "a Test: with no dash at all gets nothing")
+# Prose spans are not commands: a file path, a field name, a flag, a bare program name, a
+# subcommand's arguments. Flagging them would make the note noise on every plan.
+check(_cad(plan_with_task(
+        "`python3 t.py` — sets `Status:` in `docs/a.md` and `core/`, accepts `--status`, "
+        "mentions `grep` and `python3`, and `match --task 1.1` applies `OD-2`", _GATE)) == [],
+      "prose spans after the dash (path, field, flag, bare program, subcommand) are not commands")
+# The leading-syntax forms a shell command can start with, and a script path with arguments.
+for _span in ("! grep -q x a.md", "{ python3 x.py; }", "( bash t.sh )", "./run.sh --fast",
+              "test -f a.md", "scripts/check.py --all", "cd a && make check"):
+    check(len(_cad(plan_with_task(f"`python3 t.py` — and `{_span}`", _GATE)) or ()) == 1,
+          f"`{_span}` after the dash reads as a command")
+# The dash is the first ` — ` OUTSIDE a code span, as prove-claim reads it. Split inside the
+# span instead, the backticks pair wrongly and the later command is missed.
+check(len(_cad(plan_with_task(
+        "`python3 t.py --title 'a — b'` — it titles; `git diff --quiet`", _GATE)) or ()) == 1,
+      "a ` — ` inside a code span is not the field's dash")
+# The command written only after the dash is the purest case of the defect.
+check(len(_cad(plan_with_task("manual — run `bash x.sh --check`", _GATE)) or ()) == 1,
+      "a Test: whose only command is after the dash is flagged")
+rc, out = run(_after)
+check(rc == 0, f"the note is advisory: exit 0 (got {rc})")
+check("TEST-COMMAND-AFTER-DASH" in out and f"x-plan.md:{_test_line(_after)}" in out,
+      "the note carries its tag and names the plan line")
+check("task-fields.md" in out and "before the first" in out,
+      "the note cites the one-command rule in task-fields.md")
+check("test-command-after-dash 1 (advisory" in out,
+      "the note is counted on its own advisory summary line")
+rc, out = run(_before)
+check(rc == 0 and "TEST-COMMAND-AFTER-DASH" not in out,
+      "a plan with every command before the dash prints no such note")
+check(re.search(r"test-command-after-dash: measured \d{4}-\d\d-\d\d over .*?: \d+ hits?, \d+ true",
+                " ".join(vgc.__doc__.split())) is not None,
+      "the docstring states the measured trigger rate in the gate-authoring.md form")
+
 print()
 if FAILURES:
     print(f"FAILED — {len(FAILURES)} check(s):")

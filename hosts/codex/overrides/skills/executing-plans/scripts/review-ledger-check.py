@@ -41,6 +41,24 @@ GATE MODE (--plan --stage). Reads Stage N's `review:` and `evaluator:` lines —
   a redesign line    review: round K: redesign — reviewed by <agent> (a claim),
                      — battery <name> or — unread (scope, unless it states a verdict),
                      per gate-failure-procedure.md; read in any case, `round K` optional
+  a goal-command skip  evaluator: skipped — goal command `<cmd>` at <sha>
+                     (stage-gate.md § Skipped when a recorded command decides the goal):
+                     valid only when the plan does not declare `high`, Stage N's gate has
+                     a ticked `(goal)` box whose code span is <cmd> and no `(judgment)`
+                     line, <sha> is a commit HEAD holds, and no file but the plan and
+                     proof/ changed from <sha> to the commit the stage ends on (its
+                     `Stage N green`, else HEAD). Otherwise it fails (exit 1),
+                     named, like an unmatched claim. Any other evaluator line saying
+                     `skipped` fails the same way, whatever excuse it gives: a skip names
+                     its goal command or quotes the owner
+  an evaluator scope line where the evaluator is mandated (above `none`, a gate with a
+                     `(judgment)` line or a stage with Outcomes; always at `high`) fails
+                     unless it quotes the owner (`owner, <date>: "<words>"`): an excuse word
+                     does not excuse a mandated evaluator. There, so does an evaluator line
+                     stating neither an agent, a reason nor a verdict (`n/a`, `waived`), and a
+                     report with no evaluator line at all. A `(judgment)` line that is a
+                     decisions- or architecture-conformance check does not count: the executor
+                     reads it, so it mandates no evaluator (review-scope.md)
 
 The agent and SUBSTITUTED are read from the line's head — the text before the first
 ` — ` — so nothing written after the verdict can supply either. Prefixes are read in
@@ -84,8 +102,10 @@ EXIT CODES:
   1  a claimed dispatch has no match, or an agent is still running (each named)
   2  usage error (no Stage N section, no `Stage N-1 green` commit, unreadable input,
      no git)
-  3  NOT RUN — the dispatch log is missing — or NOT CHECKED — no review: or
-     evaluator: line for the stage; never 0
+  3  NOT RUN — the dispatch log is missing and a line claims a dispatch — or NOT
+     CHECKED — no review: or evaluator: line for the stage; never 0. The evaluator's
+     skip and mandate checks read the plan and git, so they run with no log, and
+     their failures exit 1
   4  gate mode only: every claim matched, and a line names no agent and gives no
      reason (ADVISORY, each named); --unstopped uses only 0, 1 and 3
 """
@@ -123,12 +143,34 @@ VERDICT_SEP = re.compile(r"\s+(?:—|--)\s+")
 # after an em dash, en dash or `--`: a claim in another spelling must not fall to advisory.
 REDESIGN = re.compile(rf"^review:\s+(?:round\s+\d+:?\s+)?redesign\s*:?\s+(?:—|–|--)\s+"
                       rf"(?:reviewed\s+by\s+`?{TYPE}`?|battery\s+\S|unread\b)", re.I)
+# stage-gate.md § Skipped when a recorded command decides the goal: the gate evaluator skipped
+# because the gate's ticked `(goal)` check is a command the executor ran green. GOAL_SKIP_ANY
+# catches the intent in any shape, so a malformed line fails rather than falling to advisory.
+GOAL_SKIP = re.compile(r"^evaluator:\s+skipped\s+(?:—|–|--)\s+goal\s+command\s+`(?P<cmd>[^`]+)`"
+                       r"\s+at\s+(?P<sha>[0-9a-f]{7,40})\b", re.I)
+GOAL_SKIP_ANY = re.compile(r"^evaluator:\s+skipped\b.*\bgoal\s+command\b", re.I)
+# The audit's own readings (plan-flip-audit.py GATE_HEAD, BULLET_BOX / LABELED_BOX,
+# DECLARED_TIER), so the two never disagree on which gate, which box, which tier.
+GATE_HEAD = re.compile(r"^\s*(?P<hashes>#{1,5})\s+Stage\s+(\d+)(?:[-\s][A-Za-z]+)?\s*[:.\-—–]?\s*Gate\b",
+                       re.I)
+HEADING = re.compile(r"^\s*(#{1,6})\s")
+BOX = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s*(?:\*\*[^*]+\*\*:?\s*)?\[(?P<mark>[ xX~])\]\s*(?P<text>.*)$")
+DECLARED_TIER = re.compile(r"review-scope:\s*`?\s*(none|light|standard|high)\b", re.I)
+ATTESTED = re.compile(r"\b(owner|user)\b[^\"“”\n]{0,30}:\s*[\"“][^\"”\n]{2,}[\"”]", re.I)
+OUTCOMES_FIELD = re.compile(r"^\s*\*\*Outcomes:\*\*", re.M)
+# review-scope.md § Conformance lines do not fund an evaluator: the executor reads these.
+CONFORMANCE = re.compile(r"contradicts?\s+a\s+decision|(?:decisions?|architecture)[- ]conformance|"
+                         r"contradicts?\s+(?:the\s+|an?\s+)?architecture", re.I)
+CODE_SPAN = re.compile(r"`([^`]+)`")
 # A skip verb in the head lets the reason follow the dash ("Tier-2 skipped — docs-only diff").
 SKIPPED = re.compile(r"\b(?:auto-)?skipped\b", re.I)
 # A line that states a verdict reports a review; it is never a scope line.
 VERDICT = re.compile(r"\bAPPROVE\b|\bLGTM\b|\bREQUEST CHANGES\b|\bBLOCK\b|"
                      r"\b\d+\s+Critical\b|\bclean\b|\bPASS\b|\bFAIL\b", re.I)
-LEDGER_PREFIX = re.compile(r"^(review|evaluator)\s*:", re.I)
+# `Gate evaluator:`, `Goal-evaluator:` and `evaluator skipped` are the same line: a label the
+# prefix misses is a line no check reads.
+LEDGER_PREFIX = re.compile(r"^(?:(review)\s*:|(?:(?:gate|goal)[- ]+)?(evaluator)(?:\s*:|\s+(?=skipped\b)))",
+                           re.I)
 # The task field `Review: required` / `Review: skip` (task-fields.md) shares the prefix and is
 # never a ledger line.
 TASK_FIELD = re.compile(r"^review:\s*(required|skip)\b", re.I)
@@ -214,7 +256,7 @@ def ledger_lines(text):
         line = LIST_MARKER.sub("", raw.strip()).replace("**", "").strip().strip("`").strip()
         m = LEDGER_PREFIX.match(line)
         if m and not TASK_FIELD.match(line):
-            out.append(m.group(1).lower() + ":" + line[m.end():])
+            out.append((m.group(1) or m.group(2)).lower() + ": " + line[m.end():].strip())
     return out
 
 
@@ -258,7 +300,110 @@ def previous_green(repo, stage):
                 "dispatches starts there, so nothing can be matched without it")
 
 
+def gate_region(plan_text, stage):
+    """Every line under the plan's `### Stage <stage> Gate` heading, up to the next heading
+    of the same or a higher level: a `#### Round 2` inside the gate stays in it."""
+    out, level = [], None
+    for line in plan_text.splitlines():
+        h = HEADING.match(line)
+        if h:
+            m = GATE_HEAD.match(line)
+            if m and int(m.group(2)) == stage:
+                level = len(m.group("hashes"))
+                continue
+            if level is not None and len(h.group(1)) <= level:
+                level = None
+        if level is not None:
+            out.append(line)
+    return out
+
+
+def gate_boxes(plan_text, stage):
+    """(mark, text) for every checklist box in the stage's gate region, bulleted, numbered
+    or labelled."""
+    return [(b.group("mark"), b.group("text"))
+            for b in map(BOX.match, gate_region(plan_text, stage)) if b]
+
+
+def gate_has_judgment(plan_text, stage):
+    """A `(judgment)` line that needs a reader other than the executor."""
+    return any("(judgment)" in line.lower() and not CONFORMANCE.search(line)
+               for line in gate_region(plan_text, stage))
+
+
+def declared_tier(plan_text):
+    m = DECLARED_TIER.search(plan_text)
+    return m.group(1).lower() if m else None
+
+
+def evaluator_mandated(plan_text, stage):
+    """review-scope.md's gate column: never at `none`, always at `high`, otherwise at a gate
+    with a `(judgment)` line or a stage with Outcomes. An undeclared plan is `standard`."""
+    tier = declared_tier(plan_text)
+    if tier == "none":
+        return False
+    if tier == "high" or gate_has_judgment(plan_text, stage):
+        return True
+    try:
+        return OUTCOMES_FIELD.search(stage_section(plan_text, stage)) is not None
+    except Usage:
+        return False
+
+
+def files_moved_since(sha, stage, repo, plan):
+    """The files the commit the stage ends on (its `Stage N green`, else HEAD) holds
+    differently from <sha>: a command green there says nothing about those. proof/ and
+    the plan are the gate's own record, written after the command ran."""
+    green = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%H", "-E",
+                            f"--grep=^Stage {stage} green$", "HEAD"],
+                           capture_output=True, text=True).stdout.strip()
+    spec = [":(top)", ":(top,exclude)proof"]
+    try:
+        spec.append(":(top,exclude)" + Path(plan).resolve().relative_to(
+            Path(repo).resolve()).as_posix())
+    except ValueError:
+        pass
+    r = subprocess.run(["git", "-C", str(repo), "diff", "--name-only", sha, green or "HEAD",
+                        "--", *spec], capture_output=True, text=True)
+    return r.stdout.split()
+
+
+def goal_skip_problems(line, plan_text, stage, repo, plan):
+    """Why an `evaluator: skipped — goal command` line does not stand, or [] when it does."""
+    m = GOAL_SKIP.match(line)
+    if not m:
+        return ["name the command and the commit: `evaluator: skipped — goal command "
+                "`<cmd>` at <sha>`, or quote the owner's opt-out"]
+    probs = []
+    if declared_tier(plan_text) == "high":
+        probs.append("the plan declares review-scope high, where the evaluator always runs")
+    boxes = gate_boxes(plan_text, stage)
+    if gate_has_judgment(plan_text, stage):
+        probs.append(f"the Stage {stage} gate has a (judgment) line: a reader decides it, so "
+                     "the evaluator runs")
+    cmd = " ".join(m.group("cmd").split())
+    if not any(mark in "xX" and "(goal)" in text.lower()
+               and cmd in (" ".join(c.split()) for c in CODE_SPAN.findall(text))
+               for mark, text in boxes):
+        probs.append(f"no ticked (goal) box of the Stage {stage} gate runs `{cmd}`")
+    sha = m.group("sha")
+    ok = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor",
+                         f"{sha}^{{commit}}", "HEAD"], capture_output=True).returncode == 0
+    if not ok:
+        probs.append(f"{sha} is not a commit HEAD holds")
+    else:
+        moved = files_moved_since(sha, stage, repo, plan)
+        if moved:
+            probs.append(f"{sha} is not the tree the stage ends on: {', '.join(moved[:5])} "
+                         "changed after it, so run the command on the last commit and name that")
+    return probs
+
+
 def gate(args):
+    try:
+        plan_text = Path(args.plan).read_text(errors="replace")
+    except OSError as e:
+        raise Usage(f"cannot read plan {args.plan}: {e}")
     if args.report:
         try:
             text = (sys.stdin.read() if args.report == "-"
@@ -266,20 +411,18 @@ def gate(args):
         except OSError as e:
             raise Usage(f"cannot read --report {args.report}: {e}")
     else:
-        try:
-            text = stage_section(Path(args.plan).read_text(errors="replace"), args.stage)
-        except OSError as e:
-            raise Usage(f"cannot read plan {args.plan}: {e}")
+        text = stage_section(plan_text, args.stage)
     lines = ledger_lines(text)
     since = previous_green(args.repo, args.stage)
     try:
         rows = read_log(args.repo)
     except OSError as e:
         raise Usage(f"cannot read the dispatch log: {e}")
-    if rows is None:
-        print(f"NOT RUN — no dispatch log at {Path(args.repo) / LOG}; no claimed review was "
+    no_log = (f"NOT RUN — no dispatch log at {Path(args.repo) / LOG}; no claimed review was "
               "checked. The hook (hooks/dispatch-log.sh) writes it only while "
               ".claude/plan-progress.json exists.")
+    if rows is None and not lines:
+        print(no_log)
         return 3
     if not lines:
         print(f"NOT CHECKED — no review: or evaluator: line for Stage {args.stage} "
@@ -287,7 +430,7 @@ def gate(args):
               "review, run or not; pass the draft report with --report.")
         return 3
     pool, ids = [], set()
-    for r in rows:
+    for r in rows or []:
         if r.get("event") != "start" or not isinstance(r.get("agent_id"), str) \
                 or r["agent_id"] in ids:
             continue
@@ -299,10 +442,34 @@ def gate(args):
             ids.add(r["agent_id"])
             pool.append((when, r))
     boundary = last_task_commit(args.repo, args.stage)
-    bad, advisory = [], []
+    bad, advisory, unread = [], [], []
     for line in lines:
+        head = VERDICT_SEP.split(line, maxsplit=1)[0]
+        if line.startswith("evaluator:") and "SUBSTITUTED" not in head and (
+                GOAL_SKIP_ANY.match(line) or SKIPPED.search(head)):
+            if ATTESTED.search(line) and not GOAL_SKIP.match(line):
+                print(f"  {'scope':<12} {line[:100]}")
+                continue
+            probs = goal_skip_problems(line, plan_text, args.stage, args.repo, args.plan)
+            if probs:
+                bad.append("; ".join(probs) + f": {line}")
+            else:
+                print(f"  {'goal-skip':<12} {line[:100]}")
+            continue
         kind, role, stype = classify(line)
-        if kind == "claim":
+        if (kind == "scope" and role == "evaluator" and not ATTESTED.search(line)
+                and evaluator_mandated(plan_text, args.stage)):
+            bad.append(f"the Stage {args.stage} evaluator is mandated here; only the owner's "
+                       f"quoted words or a goal-command skip excuse it: {line}")
+            continue
+        if (kind == "unnamed" and role == "evaluator" and not VERDICT.search(line)
+                and not ATTESTED.search(line) and evaluator_mandated(plan_text, args.stage)):
+            bad.append(f"the Stage {args.stage} evaluator is mandated here; name the agent, the "
+                       f"goal command or the owner's quoted words: {line}")
+            continue
+        if kind == "claim" and rows is None:
+            unread.append(line)
+        elif kind == "claim":
             # A claim whose head names `Task N.M` is that task's Tier-1 review.
             t = TASK_ID.search(VERDICT_SEP.split(line, maxsplit=1)[0])
             task = (int(t.group(1)), int(t.group(2))) if t else None
@@ -334,11 +501,17 @@ def gate(args):
                             f"or non-code diff) outside verdict prose: {line}")
         else:
             print(f"  {kind:<12} {line[:100]}")
+    if (evaluator_mandated(plan_text, args.stage)
+            and not any(line.startswith("evaluator:") for line in lines)):
+        bad.append(f"no evaluator line, and the Stage {args.stage} evaluator is mandated here")
     for b in bad:
         print(f"  UNMATCHED    {b}")
     for a in advisory:
         print(f"  ADVISORY     {a}")
-    return 1 if bad else 4 if advisory else 0
+    if unread and not bad:
+        print(no_log)
+        return 3
+    return 1 if bad else 3 if unread else 4 if advisory else 0
 
 
 def unstopped(args):

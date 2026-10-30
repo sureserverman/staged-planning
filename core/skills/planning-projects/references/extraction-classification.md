@@ -1,7 +1,7 @@
 # Extraction classification — `../SKILL.md`
 
 What each `../SKILL.md` section keeps in the trunk and where its elaboration lives.
-The trunk is **40598 B** across **38 headings**, of which 886 B is scaffolding
+The trunk is **40499 B** across **38 headings**, of which 787 B is scaffolding
 (frontmatter, title, and the preamble that precedes the first heading). Every `bytes`
 figure is re-taken by
 `python3 scripts/trunk-sections.py --all-levels core/skills/planning-projects/SKILL.md`;
@@ -105,8 +105,8 @@ this directory that holds what the trunk does not, or `—` where the section ha
 | 206 | `authoring-checklist.md` | Checklist — Light plans | read only when Phase -0.5 selected Light, and light-plan-format.md is its authority; the trunk keeps only the existence pointer |
 
 `conditional` rows carry no retention marker, by construction: their content lives
-elsewhere, and their retained pointer is checked by the DEAD-PATH half of
-`check-extraction-integrity.py` instead.
+elsewhere, and their retained pointer is checked by `check-extraction-integrity.py`
+instead: DEAD-PATH for the file it names, LOST-REFERENT for the section.
 
 ## Retention markers
 

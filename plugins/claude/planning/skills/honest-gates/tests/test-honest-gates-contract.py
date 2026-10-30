@@ -14,8 +14,9 @@ Two halves, and they answer different questions:
      by path from executing-plans' gate-remediation suite so this file does not
      hand-roll a sixth negation screen (the screening span is derived from
      the text — back to the clause boundary, forward to the sentence end). A rule
-     inverted in place ("you need not …") fails here, which is the half
-     `check-trunk-retention.py` cannot see (its markers pin presence only).
+     inverted in place ("you need not …") fails here; `check-trunk-retention.py`
+     screens only the few words before a marker, so a later withdrawal is this
+     suite's alone.
 
   2. **Mutation battery.** For every retention marker the classification table
      declares, delete that marker's line from a temp copy of the trunk and assert

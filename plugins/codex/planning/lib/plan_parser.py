@@ -5,9 +5,10 @@ Pure functions and compiled regexes, stdlib only, no I/O on import. Scripts load
 file path from the plugin root (`<root>/lib/plan_parser.py`) rather than restating any
 regex here, because a change to one of these patterns changes done/total math, gate
 state and backlog candidates in every consumer at once; one definition means one
-place to change and nothing to drift. The one function that reads files is
-`plan_blocked()`, and only when called with a path (it follows a master's sub-plan
-links).
+place to change and nothing to drift. Two functions read files: read_capped(), the
+capped, non-blocking reader callers may use for their own plan reads, and
+`plan_blocked()`, only when called with a path (it follows a master's sub-plan links,
+through read_capped()).
 
 What it answers:
   - the per-task Status contract: STATUS_RE, status_state(), and the markers it cannot
@@ -24,7 +25,11 @@ What it answers:
 The full rule set is documented in skills/planning-projects/references/plan-parser.md.
 """
 import datetime
+import errno
+import io
+import os
 import re
+import stat
 from pathlib import Path
 
 
@@ -170,6 +175,48 @@ LIGHT_HEADING_RE = re.compile(r"^#\s+Light Plan:", re.M)
 # `Master:`-prefixed line elsewhere would group a plan under the wrong master.
 MASTER_BACKLINK_RE = re.compile(r"^Master:\s*(.+?)\s*$", re.M)
 SUBPLAN_LINK_RE = re.compile(r"^\s*-\s*\*\*Plan:\*\*\s*(.+?)\s*$", re.M)
+
+
+# The most bytes read_capped() takes from one plan file by default. Plans measured
+# 2026-10-29 reach 128 KB; this bounds a planted or runaway file, never a real plan.
+PLAN_READ_CAP = 1 << 20
+
+
+def read_capped(path, cap, encoding=None, errors=None):
+    """The text of `path`, decoded exactly as `Path.read_text(encoding, errors)` decodes
+    it, if it is a regular file of at most `cap` bytes; OSError otherwise.
+
+    Not a regular file is refused BEFORE the open (a device's open can act) and again
+    after it, on the descriptor (the path may have been swapped in between). The open
+    is O_NONBLOCK because open(2) on a FIFO with no writer otherwise blocks forever --
+    a symlink to one is enough -- and a status line must never wait on another
+    process to write. A file that grows past the cap after the size check is caught
+    by reading one byte more than the cap.
+    """
+    if not stat.S_ISREG(os.stat(path).st_mode):
+        raise OSError(errno.EINVAL, "not a regular file", str(path))
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError(errno.EINVAL, "not a regular file", str(path))
+        if st.st_size > cap:
+            raise OSError(errno.EFBIG, f"over the {cap}-byte read cap", str(path))
+        chunks, left = [], cap + 1
+        while left > 0:
+            chunk = os.read(fd, left)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            left -= len(chunk)
+    finally:
+        os.close(fd)
+    data = b"".join(chunks)
+    if len(data) > cap:
+        raise OSError(errno.EFBIG, f"over the {cap}-byte read cap", str(path))
+    # TextIOWrapper is what read_text() opens: the same default encoding and the
+    # same universal-newline translation, so a capped read changes no output.
+    return io.TextIOWrapper(io.BytesIO(data), encoding=encoding, errors=errors).read()
 MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -395,8 +442,8 @@ def plan_blocked(text, path=None, _depth=0):
 
     PROPAGATION: a master carries no gate section of its own, so it is blocked when any
     sub-plan it links is. Acceptance propagates the same way: a master whose sub-plans
-    are all accepted is not blocked. This is the one function here that reads files,
-    and only when `path` is given.
+    are all accepted is not blocked. Besides read_capped(), this is the one function
+    here that reads files, and only when `path` is given.
 
     Degrades rather than raising: an unresolvable or unreadable sub-plan link is not
     evidence of blockage, and a status tool that throws on a broken link is worse than
@@ -418,8 +465,10 @@ def plan_blocked(text, path=None, _depth=0):
     for link in SUBPLAN_LINK_RE.findall(text):
         target = (base / link.strip()).resolve()
         try:
-            sub = target.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
+            # Capped and non-blocking: a link to a FIFO or a runaway file would
+            # otherwise hang or swamp every caller that asks whether a master is blocked.
+            sub = read_capped(target, PLAN_READ_CAP, encoding="utf-8", errors="ignore")
+        except (OSError, ValueError):
             continue                      # a link that resolves nowhere is not blockage
         if plan_blocked(sub, target, _depth + 1)[0]:
             hit.append(target.name)

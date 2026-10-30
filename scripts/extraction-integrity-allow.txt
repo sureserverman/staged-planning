@@ -7,6 +7,14 @@
 # collides with an allowlisted one and vanishes. Measured under set membership:
 # three dead pointers appended to allowlisted files are absorbed silently, exit 0.
 #
+# A line may be PINNED: `path:CODE:token -> referent`, where the referent is
+# `file § anchor` (where the section its finding names lives) or `(none)`. A
+# pinned line suppresses only while its finding's referent is still that one: a
+# key-only line goes on suppressing after the section its pointer meant is
+# extracted away, because the key does not change. `check-extraction-integrity.py
+# --reseed` pins every line to its referent now, drops lines no finding uses,
+# and never adds one.
+#
 # Consequence worth knowing: a STALE line is unused suppression capacity that
 # will absorb the next real finding with that key. Remove a line when its finding
 # is fixed rather than leaving it behind.

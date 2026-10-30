@@ -251,6 +251,9 @@ or "the user gets nothing" is Blocking, and so is a stage whose finished output 
 falls short of the plan goal with no later stage planned to change it. Other defects are
 Material or Minor; list
 them after the Outcomes. A FAIL with no Blocking finding is a PASS with residuals.
+Wait on any background job you start by its own completion (the harness notification,
+`wait <pid>`, or a sentinel file the job writes last), never by searching for its name.
+Return only after your background work has finished or been stopped, and say which.
 Return the same table and findings in your reply.""")
 
 

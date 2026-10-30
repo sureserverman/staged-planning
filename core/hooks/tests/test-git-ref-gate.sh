@@ -284,6 +284,34 @@ change
 try_commit 'git commit -q -m "Stage 1 Task 1.1: no plan in flight"'
 if [ $rc -eq 0 ]; then ok "with no plan in flight, a task commit is not this gate's to judge"
 else bad "no plan in flight must allow (rc=$rc)" "$err"; fi
+# Catches: a commit from a plain shell while prove-claim.py has a break applied. No
+# PreToolUse hook sees a terminal's `git commit -am`; the ref hook sees every route, plan
+# in flight or not. A live run holds its lock; an interrupted one leaves its journal.
+LP="$(git -C "$REPO" rev-parse --git-path prove-claim.lock)"; case "$LP" in /*) ;; *) LP="$REPO/$LP" ;; esac
+JP="$(git -C "$REPO" rev-parse --git-path prove-claim-journal.json)"; case "$JP" in /*) ;; *) JP="$REPO/$JP" ;; esac
+rm -f "$T/held"
+python3 -c 'import fcntl, sys, time
+f = open(sys.argv[1], "w"); fcntl.flock(f, fcntl.LOCK_EX)
+open(sys.argv[2], "w").close(); time.sleep(60)' "$LP" "$T/held" &
+holder=$!
+for _ in $(seq 50); do [ -f "$T/held" ] && break; sleep 0.1; done
+change; h=$(head_of)
+try_commit 'git commit -q -am "wip during a proof"'
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'prove-claim.lock' <<<"$err"; then
+    ok "a commit while prove-claim.py holds its lock is refused by the ref hook, naming the lock"
+else bad "a commit during a live proof must be refused (rc=$rc)" "$err"; fi
+printf '{}' > "$JP"
+change; h=$(head_of)
+try_commit 'git commit -q -am "wip after an interrupted proof"'
+rm -f "$JP"
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'prove-claim-journal.json' <<<"$err"; then
+    ok "a commit while an interrupted run's journal is present is refused, naming it"
+else bad "a commit over an interrupted proof must be refused (rc=$rc)" "$err"; fi
+change; h=$(head_of)
+try_commit 'git commit -q -am "wip with no proof running"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then ok "with the lock free and no journal the commit lands"
+else bad "with no proof running the commit must land (rc=$rc)" "$err"; fi
 # Catches: a session that never writes the execution state closing a stage ungated.
 change; h=$(head_of)
 try_commit 'git commit -q -m "Stage 1 green"'
@@ -467,6 +495,26 @@ python3 "$INSTALL" --install --repo "$HP" >/dev/null 2>&1
 if [ -x "$HP/.githooks/reference-transaction" ]; then ok "the shim honours core.hooksPath"
 else bad "the shim must go where git runs hooks" "$(find "$HP" -name reference-transaction)"; fi
 
+# Catches: --status saying "installed" while git-ref-gate.sh fails open on a missing file it
+# loads from beside itself. Run from a copy of the plugin, so the real tree is never touched.
+CP="$T/plugin"; cp -r "$HERE/../.." "$CP"
+CPI="$CP/skills/executing-plans/scripts/proof-hooks-install.py"
+SR="$T/status-req"; mkrepo "$SR"
+python3 "$CPI" --install --repo "$SR" >/dev/null 2>&1
+python3 "$CPI" --status --repo "$SR" >"$T/s.out" 2>&1; rc=$?
+if [ $rc -eq 0 ] && grep -q '^installed' "$T/s.out" && ! grep -q 'does not exist' "$T/s.out"; then
+    ok "--status from a plugin copy with every file the hook loads: installed (exit 0)"
+else bad "--status with every required file present must exit 0 (rc=$rc)" "$(cat "$T/s.out")"; fi
+for req in hooks/plan_continue_classify.py skills/executing-plans/scripts/plan-flip-audit.py \
+           skills/executing-plans/scripts/prove-claim.py skills/executing-plans/scripts/plan_state.py; do
+    mv "$CP/$req" "$CP/$req.away"
+    python3 "$CPI" --status --repo "$SR" >"$T/s.out" 2>&1; rc=$?
+    mv "$CP/$req.away" "$CP/$req"
+    if [ $rc -eq 1 ] && grep -qF "! $CP/$req does not exist" "$T/s.out"; then
+        ok "--status with $(basename "$req") missing names it and exits 1"
+    else bad "--status must name a missing $(basename "$req") and exit 1 (rc=$rc)" "$(cat "$T/s.out")"; fi
+done
+
 # Catches: the embedded checker importing a module from the worktree, where git runs the
 # hook: a repo file named like a stdlib module (here one that exits 0) must not allow.
 printf 'import os\nos._exit(0)\n' > "$REPO/json.py"
@@ -566,6 +614,56 @@ if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && [ -z "$(git -C "$REPO" ls-files 
     ok "with proof/ local, filled reports on disk let the green commit land untracked"
 else bad "local reports must be read from disk (rc=$rc)" "$err"; fi
 
+# A stage is closed by ticking its gate, whatever the subject says: a commit that ticks a
+# `### Stage N Gate` box in the plan it commits is judged as `Stage N green` is.
+echo
+echo "a stage closed under another subject (the plan in the repo)"
+REPO="$T/tickgate"; mkrepo "$REPO"; mkdir -p "$REPO/plans"
+TSTEM=2026-10-06-tick-plan
+cat > "$REPO/plans/$TSTEM.md" <<'EOF'
+# Plan
+
+## Stage 2: share
+
+**Goal:** A user can share a cleaned copy.
+**Outcomes:** the user, via another app's share sheet
+- Works: the chooser opens with a cleaned copy another app can read.
+**Risk:** LOW — nothing outside the code.
+
+### Task 2.1: calc
+- **Status:** [x]
+- **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts)
+
+### Stage 2 Gate
+- [ ] the share works: `python3 tests/test_calc.py`
+EOF
+git -C "$REPO" add plans && git -C "$REPO" commit -q -m "plan"
+printf '{"plan": "plans/%s.md", "phase": "gate", "stage": 2, "updated": "2026-10-06T10:00:00Z"}\n' \
+    "$TSTEM" > "$REPO/.claude/plan-progress.json"
+python3 "$INSTALL" --install --repo "$REPO" >/dev/null 2>&1
+tick_gate() { sed -i 's/^- \[ \] the share works/- [x] the share works/' "$REPO/plans/$TSTEM.md"
+              git -C "$REPO" add plans; }
+# Catches: a stage close keyed on the subject alone.
+tick_gate; h=$(head_of)
+try_commit 'git commit -q -m "Stage 2 done"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'Stage 2 premise: no' <<<"$err"; then
+    ok "a commit 'Stage 2 done' that ticks the Stage 2 Gate without its reports is refused"
+else bad "a commit ticking a stage gate must be judged as that stage's close (rc=$rc)" "$err"; fi
+d="$REPO/proof/$TSTEM/stage-2"; mkdir -p "$d"
+o='Works: the chooser opens with a cleaned copy another app can read.'
+printf 'Outcomes:\n- %s\n\n## Premise 1\nAssumption: other apps grant read access\nChecked: probe share --no-grant\nResult: refused cleanly\nVerdict: holds\n' "$o" > "$d/premise.md"
+printf '## Outcome 1\n> %s\nVerdict: holds\nEvidence:\n$ probe share image/png -> readable copy, 0 location tags\n' "$o" > "$d/demo.md"
+git -C "$REPO" add proof
+try_commit 'git commit -q -m "Stage 2 done"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "the same commit with Stage 2's reports lands"
+else bad "a gate-ticking commit with its reports must land (rc=$rc)" "$err"; fi
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 2 done"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "a commit 'Stage 2 done' that ticks no gate box is not a stage close"
+else bad "a commit ticking no gate box must not be judged as a stage close (rc=$rc)" "$err"; fi
+
 # Every route by which a stage's Outcomes stop being seen must refuse, not skip the gate.
 plan_variant() {  # $1 = file, $2 = the stage-1 Outcomes block; the plan otherwise as OPLAN
     python3 - "$OPLAN" "$1" "$2" <<'PY'
@@ -661,6 +759,51 @@ try_commit 'git commit -q -m "Stage 1 green"'
 if [ $rc -eq 0 ]; then ok "an owner's quoted opt-out replaces the demo"
 else bad "an evidenced owner opt-out must let the green commit land (rc=$rc)" "$err"; fi
 
+# Below `high`, a gate whose ticked (goal) command decides the goal, with no (judgment)
+# line, skips the evaluator (stage-gate.md § Skipped when a recorded command decides the
+# goal): demo.md records the skip, each Outcome naming the command that decides it. The
+# hook refuses that form at a gate with a (judgment) line, an unticked (goal) box, or an
+# Outcome with no `Decided by:`.
+skip_plan() {  # $1 = file, $2 = the Stage 1 gate lines
+    awk -v gate="$2" '/^## Stage 2:/ { print "### Stage 1 Gate\n" gate "\n" } { print }' "$OPLAN" > "$1"
+}
+skip_demo() {  # $1 = demo.md, $2 = the Outcome's `Decided by:` line (empty for none)
+    { printf 'Evaluator: skipped — goal command `python3 tests/test_calc.py` at %s\n\n' "${SKIP_AT:-$(head_of)}"
+      printf '## Outcome 1\n> %s\nVerdict: holds\n' "$outcome"
+      [ -n "$2" ] && printf '%s\n' "$2"
+      printf 'Evidence:\n$ python3 tests/test_calc.py -> exit 0, the copy read back clean\n'; } > "$1"
+}
+SKIPGOAL='- [x] **(goal)** a cleaned copy is shared: `python3 tests/test_calc.py`'
+DECIDED='Decided by: `python3 tests/test_calc.py` at 0123abcd'
+skip_case() {  # $1 = name, $2 = gate lines, $3 = `Decided by:` line, $4 = refusal text ('' = lands)
+    local sp="$T/plans/2026-10-05-skip-$1-plan.md"; skip_plan "$sp" "$2"
+    fresh "skip$1" "$sp"
+    OSTEM_SAVED=$OSTEM; OSTEM=2026-10-05-skip-$1-plan; write_reports "$REPO" "holds"
+    skip_demo "$REPO/proof/$OSTEM/stage-1/demo.md" "${3//0123abcd/${SKIP_AT:-$(head_of)}}"; OSTEM=$OSTEM_SAVED
+    git -C "$REPO" add proof
+    if [ -z "$4" ]; then
+        h=$(head_of)
+        try_commit 'git commit -q -m "Stage 1 green"'
+        if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then ok "a demo recording the goal-command skip lets the green commit land"
+        else bad "a valid goal-command skip must let the green commit land (rc=$rc)" "$err"; fi
+    else
+        refused "Stage 1 green" "$4" "a goal-command skip is refused: $1"
+    fi
+}
+skip_case ok "$SKIPGOAL" "$DECIDED" ""
+skip_case judgment "$SKIPGOAL
+- [x] **(judgment)** the message reads well" "$DECIDED" "(judgment)"
+skip_case unticked "${SKIPGOAL/\[x\]/[ ]}" "$DECIDED" "(goal)"
+skip_case nodecided "$SKIPGOAL" "" "Decided by"
+skip_case conformance "$SKIPGOAL
+- [x] **(judgment)** No change contradicts a decision in force (DEC-1)" "$DECIDED" ""
+skip_case decidedother "$SKIPGOAL" 'Decided by: `true` at 0123abcd' "Decided by"
+# The sha must be the tree the stage ends on: `refused` lands a calc.py change in this commit.
+skip_case stale "$SKIPGOAL" "$DECIDED" "not the tree"
+SKIP_AT=0123abcd skip_case unknownsha "$SKIPGOAL" "$DECIDED" "no commit"
+skip_case numjudgment "$SKIPGOAL
+1. [x] **(judgment)** the message reads well" "$DECIDED" "(judgment)"
+
 fresh padded "$OPLAN"
 refused "Stage 01 green" "Stage 1 demo: no" "a zero-padded stage number is the same stage"
 
@@ -720,6 +863,197 @@ try_commit 'git commit -q -m "Stage 1 Task 1.1: unproven local"'
 if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ]; then
     ok "a local record from an earlier tree does not prove a new commit"
 else bad "a stale local record must be refused (rc=$rc)" "$err"; fi
+REPO="$SAVED_REPO"
+
+# A record binds the blobs of the files its break touched (touched_blobs), not the whole
+# tree: the task's own Status flip in a plan kept in the repo, and a rebase onto a commit
+# that touches other files, leave it valid. A later commit that changes a touched file is
+# drift: the `Stage N green` commit is refused, naming the file and the record, until the
+# record is re-proven. A record with no touched_blobs keeps the whole-tree rule.
+echo
+echo "records bound to their touched files' blobs"
+SAVED_REPO="$REPO"; SAVED_PLAN="$PLAN"; REPO="$T/blobs"; mkrepo "$REPO"
+mkdir -p "$REPO/docs"; PLAN="$REPO/docs/$STEM.md"; cp "$SAVED_PLAN" "$PLAN"
+git -C "$REPO" add docs && git -C "$REPO" commit -q -m "the plan lives in the repo"
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1", "updated": "2026-10-04T10:00:00Z"}\n' "$PLAN" > "$REPO/.claude/plan-progress.json"
+python3 "$INSTALL" --install --repo "$REPO" >/dev/null 2>&1
+git -C "$REPO" checkout -q -b side; printf 'other work\n' > "$REPO/other.txt"
+git -C "$REPO" add other.txt && git -C "$REPO" commit -q -m "other work, on another file"
+git -C "$REPO" checkout -q main
+flip() { sed -i '0,/\*\*Status:\*\* \[ \]/s//**Status:** [x]/' "$PLAN"; git -C "$REPO" add docs; }
+unflip() { sed -i '0,/\*\*Status:\*\* \[x\]/s//**Status:** [ ]/' "$PLAN"; git -C "$REPO" add docs; }
+CREC="proof/$STEM/1.1/claim-1.json"
+change; prove
+python3 - "$REPO/$CREC" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1])); r.pop("touched_blobs", None); r.pop("witness_blobs", None)
+open(sys.argv[1], "w").write(json.dumps(r))
+PY
+flip; git -C "$REPO" add proof; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 Task 1.1: a record from before the blob binding"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'claim 1: proven on a different tree' <<<"$err"; then
+    ok "a record with no touched_blobs keeps the whole-tree rule: a flip after its proof refuses it"
+else bad "a record without touched_blobs must be judged by its fingerprint (rc=$rc)" "$err"; fi
+unflip; prove && git -C "$REPO" add proof; flip
+try_commit 'git commit -q -m "Stage 1 Task 1.1: proven, then its Status flipped"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "a record proven before its task's Status flip in an in-repo plan lets the commit land"
+else bad "prove-then-flip must land (red under the index binding) (rc=$rc)" "$err"; fi
+h=$(head_of)
+try_commit 'git rebase -q side'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && [ -f "$REPO/other.txt" ]; then
+    ok "a rebase onto a commit touching only other files lands: every record still verifies"
+else bad "a rebase that leaves the touched files as they were must land (red under the whole-tree binding) (rc=$rc)" "$err"
+     git -C "$REPO" rebase --abort >/dev/null 2>&1; fi
+printf 'def add(a, b):\n    return a + b\n# tidied after the proof\n' > "$REPO/calc.py"; git -C "$REPO" add calc.py
+try_commit 'git commit -q -m "chore: tidy calc"'
+[ $rc -eq 0 ] || bad "fixture: a commit naming no task must land (rc=$rc)" "$err"
+h=$(head_of)
+try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'proof drift' <<<"$err" \
+        && grep -q 'calc.py' <<<"$err" && grep -qF "$CREC" <<<"$err"; then
+    ok "a Stage 1 green commit after a change to a touched file is refused as drift, naming file and record"
+else bad "drift must refuse Stage N green, naming the file and the record (rc=$rc)" "$err"; fi
+prove && git -C "$REPO" add proof
+try_commit 'git commit -q -m "Stage 1 Task 1.1: re-proven on the tidied code"'
+[ $rc -eq 0 ] || bad "fixture: the re-proven task commit must land (rc=$rc)" "$err"
+try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
+if [ $rc -eq 0 ]; then ok "re-proven, the Stage 1 green commit lands"
+else bad "a re-proven record must clear the drift (rc=$rc)" "$err"; fi
+printf 'import sys\nsys.exit(0)  # the assertions are gone\n' > "$REPO/tests/test_calc.py"
+git -C "$REPO" add tests/test_calc.py
+try_commit 'git commit -q -m "chore: weaken the test"'
+[ $rc -eq 0 ] || bad "fixture: a commit naming no task must land (rc=$rc)" "$err"
+h=$(head_of)
+try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'proof drift' <<<"$err" \
+        && grep -q 'tests/test_calc.py' <<<"$err" && grep -qF "$CREC" <<<"$err"; then
+    ok "a Stage 1 green commit after the test was weakened is refused as drift, naming the test file"
+else bad "a weakened test must refuse Stage N green as drift (rc=$rc)" "$err"; fi
+# Catches: a req covered by a claim carrying blob maps of its own choosing. The copy must be
+# the cited claim's; here it binds another file, at the blob that file really has.
+git -C "$REPO" checkout -q -- tests/test_calc.py 2>/dev/null
+printf "import sys\nsys.path.insert(0, '.')\nfrom calc import add\nassert add(2, 3) == 5\n" > "$REPO/tests/test_calc.py"
+git -C "$REPO" add tests/test_calc.py; prove
+python3 "$PC" req --repo "$REPO" --plan "$PLAN" --task 1.1 --req 1 --covered-by-claim 1 >/dev/null 2>"$T/pc.err" \
+    || bad "fixture: req --covered-by-claim failed" "$(cat "$T/pc.err")"
+python3 - "$REPO/proof/$STEM/1.1/req-1.json" "$(git -C "$REPO" rev-parse HEAD:other.txt)" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1])); r["touched_blobs"] = {"other.txt": sys.argv[2]}
+open(sys.argv[1], "w").write(json.dumps(r))
+PY
+git -C "$REPO" add proof; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 Task 1.1: a covered req binding another file"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'requirement 1: binds other files than claim 1' <<<"$err"; then
+    ok "a covered req whose blob maps are not its cited claim's is refused"
+else bad "a covered req must carry its claim's blob maps (rc=$rc)" "$err"; fi
+REPO="$SAVED_REPO"; PLAN="$SAVED_PLAN"
+
+# Catches: a req record made before the clause split renumbered its clause. "It stays
+# pure." was requirement 2 when a sentence opening with a code span merged into the one
+# before; it is requirement 3 now. The record matches its clause by text, not by number.
+SAVED_REPO="$REPO"; SAVED_PLAN="$PLAN"
+PLAN="$T/plans/2026-10-04-shift-plan.md"; mkdir -p "$T/plans"
+printf '# Plan\n\n### Task 1.1: calc\n- **Status:** [ ]\n- Adds numbers. `add` returns the sum. It stays pure.\n- **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts)\n' > "$PLAN"
+REPO="$T/shift"; mkrepo "$REPO"
+python3 "$INSTALL" --install --repo "$REPO" >/dev/null 2>&1
+change; prove
+for k in 1 2 3; do
+    python3 "$PC" req --repo "$REPO" --plan "$PLAN" --task 1.1 --req $k --covered-by-claim 1 >/dev/null 2>"$T/pc.err" \
+        || bad "fixture: req --req $k --covered-by-claim 1 failed" "$(cat "$T/pc.err")"
+done
+SD="$REPO/proof/$(basename "$PLAN" .md)/1.1"
+[ -f "$SD/req-3.json" ] || bad "fixture: req-3.json was not written" "$(ls "$SD" 2>&1)"
+python3 - "$SD" <<'PY'
+import json, os, sys
+d = sys.argv[1]; r = json.load(open(f"{d}/req-3.json"))
+os.remove(f"{d}/req-3.json"); os.remove(f"{d}/req-2.json")
+r["index"] = 2; open(f"{d}/req-2.json", "w").write(json.dumps(r))
+# The same record, invalid: a renumbered record is judged, not only counted.
+r["touched_blobs"] = {"calc.py": "0" * 40}; open(f"{d}/req-2.bad", "w").write(json.dumps(r))
+PY
+# Catches: the renumbered record not looked up for its clause. Invalid, it must refuse the
+# task commit; unread, requirement 3 would only be advisory and the commit would land.
+cp "$SD/req-2.json" "$T/req-2.good"; mv "$SD/req-2.bad" "$SD/req-2.json"
+git -C "$REPO" add -A; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 Task 1.1: calc"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'Task 1.1 requirement 3' <<<"$err"; then
+    ok "an invalid renumbered req record is judged for its clause and refuses the task commit"
+else bad "a renumbered req record must be looked up and judged for its clause (rc=$rc)" "$err"; fi
+cp "$T/req-2.good" "$SD/req-2.json"
+git -C "$REPO" add -A
+try_commit 'git commit -q -m "Stage 1 Task 1.1: calc"'
+trc=$rc; terr="$err"
+try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
+if [ $trc -eq 0 ] && [ $rc -eq 0 ] && [ -f "$SD/req-2.json" ]; then
+    ok "a req record whose clause number shifted matches its clause by text at Stage N green"
+else bad "a renumbered req record must match its clause by text (task rc=$trc, green rc=$rc)" "$terr $err"; fi
+REPO="$SAVED_REPO"; PLAN="$SAVED_PLAN"
+
+# .claude/plan-progress.json is git-ignored, so each worktree has its own. A commit from a
+# linked worktree while the run lives in the main one must still meet the plan: the hook
+# reads its own worktree first, and the main worktree's run when its own has none.
+echo
+echo "a linked worktree and the run in the main worktree"
+SAVED_REPO="$REPO"
+wt_pair() {  # $1 = name: a main repo with the hook and no state, and a linked worktree; REPO = the linked one
+    WMAIN="$T/$1-main"; mkrepo "$WMAIN"; rm -f "$WMAIN/.claude/plan-progress.json"
+    python3 "$INSTALL" --install --repo "$WMAIN" >/dev/null 2>&1
+    git -C "$WMAIN" worktree add -q -b "$1-side" "$T/$1-linked" 2>/dev/null
+    REPO="$T/$1-linked"
+}
+# Catches: the gate silently off in a linked worktree while the main worktree has a plan in flight.
+wt_pair wtl
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$PLAN" > "$WMAIN/.claude/plan-progress.json"
+refused "Stage 1 Task 1.1: from a linked worktree" "Task 1.1 claim 1" \
+    "an unproven task commit from a linked worktree is refused by the main worktree's run"
+in_flight "$WMAIN" 1
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 green"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'Stage 1 premise: no' <<<"$err" \
+   && ! grep -q 'plan-state.py init' <<<"$err"; then
+    ok "an unproven Stage 1 green commit from a linked worktree is judged against the main worktree's plan"
+else bad "a linked worktree's Stage 1 green must be judged by the main worktree's run (rc=$rc)" "$err"; fi
+# Catches: the owned (v2) snapshot of the main worktree unread from a linked worktree's
+# hook, where git sets GIT_DIR to the linked worktree's own git directory.
+wt_pair wtv
+v2_init() {  # $1 = repo, $2 = plan: an owned snapshot naming the plan, in flight
+    printf '{"plan": "%s", "scope": "fixture", "source": "owner: run the fixture"}' "$2" \
+        | python3 "$PS" init --repo "$1" --expected-revision 0 --operation-id op-1 >/dev/null
+}
+v2_init "$WMAIN" "$PLAN" || bad "fixture: v2 init in the main worktree failed"
+refused "Stage 1 Task 1.1: from a linked worktree, v2" "Task 1.1 claim 1" \
+    "an owned snapshot in the main worktree gates a linked worktree's task commit"
+# Catches: a main-worktree lookup that strays into gating where no plan is in flight.
+wt_pair wtn
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 Task 1.1: no state anywhere"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "with no state in either worktree, a linked worktree's task commit lands"
+else bad "no plan in flight anywhere must allow (rc=$rc)" "$err"; fi
+# Catches: a main-only lookup. The executor's own run in the linked worktree must gate even
+# while the main worktree holds a finished one.
+wt_pair wto
+v2_finish "$WMAIN" "$DONE" || bad "fixture: init/finish in the main worktree failed"
+mkdir -p "$REPO/.claude"
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$PLAN" > "$REPO/.claude/plan-progress.json"
+refused "Stage 1 Task 1.1: own run, main finished" "Task 1.1 claim 1" \
+    "the linked worktree's own run gates first, over a finished run in the main worktree"
+# Catches: the main worktree's untrusted state read as "no plan" in silence.
+wt_pair wtu
+printf 'not json\n' > "$WMAIN/.claude/plan-progress.json"
+refused "Stage 1 green" "$WMAIN/.claude/plan-progress.json" \
+    "an unreadable state file in the main worktree refuses a Stage N green commit, naming it"
+# Catches: with proof/ local, the records read from the main worktree, where the run's state
+# lives, rather than from the worktree being committed, where prove-claim.py wrote them.
+wt_pair wtp
+printf 'proof/\n' >> "$REPO/.gitignore"; git -C "$REPO" add .gitignore && git -C "$REPO" commit -q -m ignore
+in_flight "$WMAIN" 1; write_reports "$REPO" "holds"
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 green"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && [ ! -e "$WMAIN/proof" ]; then
+    ok "with proof/ local, a linked worktree's Stage 1 green is judged on the reports it holds"
+else bad "local reports must be read from the committing worktree (rc=$rc)" "$err"; fi
 REPO="$SAVED_REPO"
 
 # A shim whose plugin is gone fails open — and says so, so the gate is never off

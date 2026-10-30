@@ -89,6 +89,9 @@ then wait for all of them. Each spawn's message carries: the candidate (name + l
 sketch), the stack (with pinned versions where known), the constraints from Phase 1, and
 the codebase path or an explicit greenfield flag. Spawned agents run at depth 1 and
 cannot spawn agents of their own, so each researcher works its candidate alone.
+Each message also says: wait on a background job by its own completion
+(`../executing-plans/references/task-execution.md` § Waiting on background work), and an agent returns
+only after its own background work has finished or been stopped, and says which.
 
 On return, **discard uncited claims** — a finding with no doc URL, named real project,
 or codebase file behind it does not enter the matrix. Then:

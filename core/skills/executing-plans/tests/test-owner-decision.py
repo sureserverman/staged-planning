@@ -14,6 +14,7 @@ place; whatever `check` flags, `match` refuses at every case. Each case runs the
 way the executor does and reads its exit code and output.
 """
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -63,10 +64,40 @@ def plan(name, stages, entries, head="# Light Plan: calc", extra=""):
     return p
 
 
-def run(*args):
+PLAN_STATE = HERE.parent / "scripts" / "plan-state.py"
+# No GIT_* variable from a caller (a hook, a rebase) may point a case at another repo.
+ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def run(*args, cwd=None):
+    # Outside any git repo by default: the script reads the run state of the repo it runs
+    # in, and these cases must not read whichever repo the suite was started from.
     r = subprocess.run([sys.executable, str(SCRIPT), *map(str, args)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, cwd=cwd or TMP, env=ENV)
     return r.returncode, r.stdout + r.stderr
+
+
+def repo(name):
+    d = TMP / name
+    d.mkdir()
+    # --template=: a global git template may install hooks; the fixture repo carries none.
+    subprocess.run(["git", "init", "-q", "-b", "main", "--template=", str(d)], check=True, env=ENV)
+    return d
+
+
+def state_op(root, op, payload, rev, n):
+    r = subprocess.run([sys.executable, str(PLAN_STATE), op, "--repo", str(root),
+                        "--expected-revision", str(rev), "--operation-id", f"op-{n}"],
+                       input=json.dumps(payload), capture_output=True, text=True, env=ENV)
+    if r.returncode != 0:
+        raise RuntimeError(f"plan-state.py {op}: {r.stdout}{r.stderr}")
+
+
+def run_at(root, plan_rel, *steps):
+    """init a run of `plan_rel` in `root`, then apply each (operation, payload) step."""
+    state_op(root, "init", {"plan": plan_rel, "source": "test", "scope": "plan"}, 0, 0)
+    for n, (op, payload) in enumerate(steps, 1):
+        state_op(root, op, payload, n, n)
 
 
 def listed(out):
@@ -376,6 +407,156 @@ try:
     expect(rc == 0 and listed(out) == ["OD-2"], "a master entry for Sub-plan 2 Preflight applies to it", out)
     rc, out = run("match", "--plan", master, "--at", "closeout")
     expect(rc == 1 and listed(out) == [], "run on the master itself, its entries bind sub-plans, not the master", out)
+
+    # --- match: the case comes from the run state ----------------------------------
+
+    # Catches the what-if match: an executor at Task 1.2 ran `match --task 1.1` and got
+    # `applies OD-2`. While a run of this plan is in flight, the case is where the run is.
+    T12 = [f"- **OD-1** — run it — {Q} — applies to: Task 1.2"]
+    T12_ARGS = ("--at", "stage", "--stage", "1")
+    live = repo("live-repo")
+    lplan = plan("live-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(live, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.2"}))
+    rc, out = run("match", "--plan", lplan, *T12_ARGS, "--task", "1.1", cwd=live)
+    expect(rc == 1 and listed(out) == [] and "1.1" in out and "1.2" in out and "disagrees" in out,
+           "at Task 1.2, a --task 1.1 what-if is refused, naming both tasks", out)
+    rc, out = run("match", "--plan", lplan, *T12_ARGS, "--task", "1.2", cwd=live)
+    expect(rc == 0 and listed(out) == ["OD-1"], "at Task 1.2, --task 1.2 lists the entry", out)
+    rc, out = run("match", "--plan", "run-plan.md", "--at", "stage", cwd=live)
+    expect(rc == 0 and listed(out) == ["OD-1"], "the state supplies the stage and task the arguments omit", out)
+    rc, out = run("match", "--plan", lplan, "--at", "closeout", cwd=live)
+    expect(rc == 1 and "closeout" in out and "disagrees" in out, "an --at the state disagrees with is refused", out)
+    rc, out = run("match", "--plan", lplan, "--at", "stage", "--stage", "2", "--task", "1.2", cwd=live)
+    expect(rc == 1 and "--stage 2" in out and "stage 1" in out, "a --stage the state disagrees with is refused", out)
+    sub = live / "sub"
+    sub.mkdir()
+    rc, out = run("match", "--plan", lplan, *T12_ARGS, "--task", "1.1", cwd=sub)
+    expect(rc == 1 and "disagrees" in out, "a subdirectory of the repo reads the same run state", out)
+
+    gate = repo("gate-repo")
+    gplan = plan("gate-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(gate, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.2"}),
+           ("transition", {"phase": "gate", "stage": 1}))
+    rc, out = run("match", "--plan", gplan, *T12_ARGS, "--task", "1.2", cwd=gate)
+    expect(rc == 1 and listed(out) == [] and "disagrees" in out,
+           "at a stage gate, the last task the state names is no task", out)
+
+    blocked = repo("blocked-repo")
+    bplan = plan("blocked-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(blocked, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.2"}),
+           ("set-blocker", {"disposition": "waiting_external", "prevented_operation": "x",
+                            "evidence": "e", "dependency": "d", "remaining_work": []}))
+    rc, out = run("match", "--plan", bplan, *T12_ARGS, "--task", "1.2", cwd=blocked)
+    expect(rc == 1 and listed(out) == [] and "phase 'blocked'" in out,
+           "a blocked run is at no case match can judge, and says its phase", out)
+
+    # Catches: an ask as a stage opens refused because the state still sat at the last
+    # gate. The run opens a stage with a transition that names no task.
+    T2 = [f"- **OD-1** — run it — {Q} — applies to: Stage 2"]
+    sopen = repo("stage-open-repo")
+    soplan = plan("stage-open-repo/run-plan.md", {1: ["1.1"], 2: ["2.1"]}, T2)
+    run_at(sopen, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.1"}),
+           ("transition", {"phase": "gate", "stage": 1}))
+    rc, out = run("match", "--plan", soplan, "--at", "stage", "--stage", "2", cwd=sopen)
+    expect(rc == 1 and "disagrees" in out, "at Stage 1's gate, a Stage 2 ask waits for the run to open Stage 2", out)
+    state_op(sopen, "transition", {"phase": "task", "stage": 2}, 3, 3)
+    rc, out = run("match", "--plan", soplan, "--at", "stage", "--stage", "2", cwd=sopen)
+    expect(rc == 0 and listed(out) == ["OD-1"], "once the run opens Stage 2, a Stage 2 entry applies", out)
+    # Catches: the opening transition keeps the last stage's task, read as the task the run is at.
+    rc, out = run("match", "--plan", soplan, "--at", "stage", "--stage", "2", "--task", "2.1", cwd=sopen)
+    expect(rc == 1 and "no task: stage 2" in out and "1.1" not in out.split("disagrees")[-1],
+           "a stage just opened is at no task, not at the last stage's task", out)
+
+    # Catches: a what-if from another worktree of the repo, which does not hold the run
+    # state, falling back to the arguments. The run of this plan decides, wherever it is.
+    def worktree_pair(name):
+        main = repo(name)
+        subprocess.run(["git", "-C", str(main), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "commit", "-q", "--allow-empty", "-m", "base"], check=True, env=ENV)
+        linked = TMP / f"{name}-linked"
+        subprocess.run(["git", "-C", str(main), "worktree", "add", "-q", "-b", f"{name}-side",
+                        str(linked)], check=True, env=ENV)
+        return main, linked
+
+    wmain, wlinked = worktree_pair("wt-main-run")
+    wplan = plan("wt-main-run/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(wmain, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.2"}))
+    rc, out = run("match", "--plan", wplan, *T12_ARGS, "--task", "1.1", cwd=wlinked)
+    expect(rc == 1 and "disagrees" in out,
+           "from a linked worktree, the main worktree's run of this plan decides the case", out)
+    wmain, wlinked = worktree_pair("wt-linked-run")
+    wplan = plan("wt-linked-run/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(wlinked, str(wplan), ("transition", {"phase": "task", "stage": 1, "task": "1.2"}))
+    rc, out = run("match", "--plan", wplan, *T12_ARGS, "--task", "1.1", cwd=wmain)
+    expect(rc == 1 and "disagrees" in out,
+           "from the main worktree, a linked worktree's run of this plan decides the case", out)
+    wmain, wlinked = worktree_pair("wt-two-runs")
+    wplan = plan("wt-two-runs/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    third = TMP / "wt-two-runs-third"
+    subprocess.run(["git", "-C", str(wmain), "worktree", "add", "-q", "-b", "third", str(third)],
+                   check=True, env=ENV)
+    run_at(wmain, str(wplan), ("transition", {"phase": "task", "stage": 1, "task": "1.2"}))
+    run_at(wlinked, str(wplan), ("transition", {"phase": "task", "stage": 1, "task": "1.1"}))
+    rc, out = run("match", "--plan", wplan, *T12_ARGS, "--task", "1.2", cwd=third)
+    expect(rc == 2 and listed(out) == [] and "2 worktrees" in out,
+           "two runs of this plan in other worktrees: no case, ask the owner", out)
+    rc, out = run("match", "--plan", wplan, *T12_ARGS, "--task", "1.2", cwd=wmain)
+    expect(rc == 0 and listed(out) == ["OD-1"], "a worktree's own run of the plan decides first", out)
+
+    # Catches: another worktree's run found only by that worktree's absolute plan path. Each
+    # worktree holds its own copy of a tracked plan, named relative to the worktree.
+    rmain = repo("wt-rel")
+    plan("wt-rel/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    subprocess.run(["git", "-C", str(rmain), "add", "run-plan.md"], check=True, env=ENV)
+    subprocess.run(["git", "-C", str(rmain), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-q", "-m", "plan"], check=True, env=ENV)
+    rlinked = TMP / "wt-rel-linked"
+    subprocess.run(["git", "-C", str(rmain), "worktree", "add", "-q", "-b", "wt-rel-side",
+                    str(rlinked)], check=True, env=ENV)
+    run_at(rmain, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.2"}))
+    rc, out = run("match", "--plan", "run-plan.md", *T12_ARGS, "--task", "1.1", cwd=rlinked)
+    expect(rc == 1 and "disagrees" in out,
+           "from a linked worktree, its own copy of the plan finds the main worktree's run", out)
+    rc, out = run("match", "--plan", "run-plan.md", "--at", "closeout", cwd=rlinked)
+    expect(rc == 1 and "disagrees" in out, "a close-out ask from the linked copy is judged at the run's task", out)
+
+    bare = repo("bare-repo")
+    nplan = plan("bare-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    rc, out = run("match", "--plan", nplan, *T12_ARGS, "--task", "1.1", cwd=bare)
+    expect(rc == 1 and listed(out) == [] and "disagrees" not in out, "with no run state, --task 1.1 is judged as given", out)
+    rc, out = run("match", "--plan", nplan, *T12_ARGS, "--task", "1.2", cwd=bare)
+    expect(rc == 0 and listed(out) == ["OD-1"], "with no run state, the arguments decide", out)
+
+    other = repo("other-repo")
+    oplan = plan("other-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    plan("other-repo/other-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(other, "other-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.1"}))
+    rc, out = run("match", "--plan", oplan, *T12_ARGS, "--task", "1.2", cwd=other)
+    expect(rc == 0 and listed(out) == ["OD-1"], "a run state for another plan leaves the arguments to decide", out)
+
+    done = repo("done-repo")
+    dplan = plan("done-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    dplan.write_text(dplan.read_text().replace("**Status:** [ ]", "**Status:** [x]"))
+    run_at(done, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.1"}),
+           ("finish", {"evidence": "Completed"}))
+    rc, out = run("match", "--plan", dplan, *T12_ARGS, "--task", "1.2", cwd=done)
+    expect(rc == 0 and listed(out) == ["OD-1"], "a finished run leaves the arguments to decide", out)
+
+    junk = repo("junk-repo")
+    jplan = plan("junk-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    (junk / ".claude").mkdir()
+    (junk / ".claude" / "plan-progress.json").write_text("{not json")
+    rc, out = run("match", "--plan", jplan, *T12_ARGS, "--task", "1.2", cwd=junk)
+    expect(rc == 2 and listed(out) == [] and "plan-progress.json" in out,
+           "an unreadable state file refuses (exit 2), naming it", out)
+    bent = repo("bent-repo")
+    tplan = plan("bent-repo/run-plan.md", {1: ["1.1", "1.2"]}, T12)
+    run_at(bent, "run-plan.md", ("transition", {"phase": "task", "stage": 1, "task": "1.1"}))
+    sf = bent / ".claude" / "plan-progress.json"
+    sf.write_text(sf.read_text().replace('"task": "1.1"', '"task": "1.2"'))
+    rc, out = run("match", "--plan", tplan, *T12_ARGS, "--task", "1.2", cwd=bent)
+    expect(rc == 2 and listed(out) == [] and "plan-progress.json" in out,
+           "a snapshot that fails its integrity check refuses (exit 2), naming it", out)
 
     # --- check ----------------------------------------------------------------------
 

@@ -136,6 +136,14 @@ The tool is `<planning-plugin>/skills/executing-plans/scripts/prove-claim.py`, b
    make a break patch, and you never commit. When a claim cannot be proven — the test
    stays green under its break, or fails before it — that is your finding; report it.
 
+## Background work
+
+Wait on a background job you start by its own completion: `wait <pid>` for a job this
+shell started, or a sentinel file it writes last. A Codex shell call keeps no jobs for
+the next call, so a job meant to outlive one writes its pid and sentinel to files. A
+`pgrep -f` loop matches its own shell and waits for ever. An agent returns only after its
+own background work has finished or been stopped, and says which.
+
 ## Output
 
 A table, one row per claim and per requirement:

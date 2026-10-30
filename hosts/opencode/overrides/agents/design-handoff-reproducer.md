@@ -154,6 +154,12 @@ and structured (GREEN/RED/FLAG + the facts), not a narrative.
   self-grade a web slice from source alone. Captures must be deterministic.
 - Verify the build before returning; never return a non-compiling slice as GREEN.
 - Condensed, structured return — facts, not narration. The degradation banner is the one exception: it precedes the return, because a caveat folded into condensed facts is the disclosure arriving after the content.
+- Wait on a background job you start by its own completion: the harness notification,
+  `wait <pid>`, or a sentinel file it writes last. A `pgrep -f` loop matches its own shell
+  and waits for ever (`<planning-plugin>/skills/executing-plans/references/task-execution.md` § Waiting on background work).
+  The dev server Step 3 started is background work: stop it.
+  An agent returns only after its own background work has finished or been stopped,
+  and says which.
 
 ## Host note (OpenCode)
 

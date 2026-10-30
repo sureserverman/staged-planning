@@ -101,7 +101,7 @@
       "requires_enablement": true
     },
     {
-      "description": "Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Dispatches one agent per task, running concurrently. Triggers on \"dispatch these tasks in parallel\", \"run these Dispatch YES tasks\", \"fan out these independent fixes\".",
+      "description": "Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Triggers on \"dispatch these tasks in parallel\", \"run these Dispatch YES tasks\", \"fan out these independent fixes\".",
       "disable_model_invocation": false,
       "kind": "skill",
       "model": null,
@@ -131,7 +131,7 @@
       "requires_enablement": true
     },
     {
-      "description": "Use when the user wants a plan for a project of any size \u2014 triages to a format first (Direct/Light/Standard/Master) and may decline to plan a trivial job. Triggers on \"roadmap\", \"break this down\", \"create a plan\", \"plan this\", \"how should I build\".",
+      "description": "Use when the user wants a plan for a project of any size. Triggers on \"roadmap\", \"break this down\", \"create a plan\", \"plan this\", \"how should I build\".",
       "disable_model_invocation": false,
       "kind": "skill",
       "model": null,
@@ -159,6 +159,14 @@
       "path": "core/skills/workflow-spec/SKILL.md",
       "plugin": "planning",
       "requires_enablement": true
+    }
+  ],
+  "registered_commands": [
+    {
+      "description": "Show the executing plan, its stages and tasks, and dispatched agents in a pane",
+      "name": "plan-view",
+      "path": "hosts/claude/add/hooks/mod/registered-commands.json",
+      "plugin": "planning"
     }
   ],
   "schema": 1

@@ -1,17 +1,17 @@
 README.md:
-  base_sha256: bb9f64db4c0c4ec9d4ab8ee79bfbfb3719c1f44cff8ac2dbacac74c0a6983565
+  base_sha256: 26ec04f1941659085d9dd99364b42df83aafb19e9c476c62b531885ee1723fde
 hooks/dispatch-log.sh:
-  base_sha256: e993234fa47b5068d10f8fa27376ab54aacc9e0a181b449b83f87ed048723454
+  base_sha256: cad2fc046172932a548b2e475cc9a647fad3be8bb2db8f9c52d2577c405c3ca9
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
   depends_on:
-    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
 hooks/plan-continue.sh:
   base_sha256: 43113fb2ba0eaa385c941e242696bf64b86118fce0d408bb774c0a35d8aa6fe2
   host_fact: A final message ends a Codex turn and nothing resumes it (there is no task notification), so the Stop fork, opt-in per session with CODEX_PLAN_CONTINUE=1, continues every final stop of a plan in flight that the state does not record as a stop, reading Codex's last_assistant_message.
   depends_on:
-    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
 skills/applying-design-handoff/SKILL.md:
-  base_sha256: 2e93acd0a99ce1ded84747632fd5c25c3f01a979ceea51a9747789060855478e
+  base_sha256: 28a0e74ad72a982e1ed4753a56b0d13d64fa9c39bc8da73671583eb7088dd84c
 skills/applying-design-handoff/references/handoff-pack-format.md:
   base_sha256: f7b0a89982bed0c7859956b6e9ebb2157d4747825420a4a304b1cfd002e463c1
 skills/applying-design-handoff/references/playwright-capture.md:
@@ -20,22 +20,22 @@ skills/applying-design-handoff/scripts/validate-handoff-pack.py:
   base_sha256: 55ff3a73d82e0a126460e5bca1f6569a36c8e4a9b2993243ddf455d11ad2c374
   host_fact: Codex has no design tool to read a handoff pack from, so the docstring's live read path names a tool the Codex model cannot call; only the docstring differs.
 skills/architecting-projects/SKILL.md:
-  base_sha256: c8af46cfc685b131b8dbdc83b363db4873fb79c81989cfe83a7bff109ead4bef
+  base_sha256: f0c19bb8157098f3fb902aed4784d7e1daf5b757892387dc9203cbd14436ac05
 skills/dispatching-parallel-agents/SKILL.md:
-  base_sha256: 9a2669d897638150ec89c5a6db7f15cfe6e141cb47df8a94a8bdad3a2c46dd36
+  base_sha256: 4d712fba06806607d855cd2243ca29dede60ad40dd1d9621de45a298b20ae493
 skills/dispatching-parallel-agents/references/stack-routing.md:
   base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
 skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: A Codex plugin's agents are TOML role files (name = "<plugin>:<role>") that its installer copies under $CODEX_HOME/agents, and Claude's Markdown agents do not ship, so the validator reads the shipped roles from agents/*.toml.
 skills/executing-plans/SKILL.md:
-  base_sha256: 3af4ce0de3c75d212c9520a0f23608747bea0f118462e8ed659421313bc0141d
+  base_sha256: 30c1dc8c98c04fec7c91f9ff55fe702639da3c062be47b2189c5de8ab000e956
 skills/executing-plans/references/close-out.md:
-  base_sha256: a672a8653367a8c62a5017e15e54f72b86ffb39361830e90654da2718a2372d7
+  base_sha256: 32f67592719da394f433cc790cbfd71a55de8e6ee686bf114ff2a0afa5b04926
 skills/executing-plans/references/dispatch-fidelity.md:
   base_sha256: 35fe47e1ca68e9beba6baf7f3e1a5300db21b70b07dc822f4c99a62a9ff61ecd
 skills/executing-plans/references/extraction-classification.md:
-  base_sha256: aa2eb47b877c9a0fd1b53f3db4a6e122d93bdcd1681ee28526d7e85cb1827d29
+  base_sha256: ad4ac495c2b2b86e692342087413c3a96e622208014920ca4ccc124bf34e1418
 skills/executing-plans/references/gate-failure-procedure.md:
   base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
 skills/executing-plans/references/integration.md:
@@ -43,27 +43,27 @@ skills/executing-plans/references/integration.md:
 skills/executing-plans/references/plan-continue-hook.md:
   base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
 skills/executing-plans/references/progress-state-file.md:
-  base_sha256: ae82cd6fa6807f279808ddfe95ac1a377f5bd029de2ffcd66ade6b1f5ba517c3
+  base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
 skills/executing-plans/references/session-handoff.md:
   base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
 skills/executing-plans/references/stage-gate.md:
-  base_sha256: 8d95d68340828623ba3182539e4f7bb848c9a71e048a365d3751c7f75a840c96
+  base_sha256: e191d6c94a13b15b8b1483f6df4b5388157f91dfb6cb1634b541776d57f98d25
 skills/executing-plans/references/task-execution.md:
-  base_sha256: 95d907fc71bf73851bfd095979f5abe67162709f42866f954676561087a94d00
+  base_sha256: 55a766681eacf67e4416a06ce8216c13900497f86962529a213836110b72ea9e
 skills/executing-plans/scripts/context-usage.py:
   base_sha256: b943d841b54c25234b04272935bb317c439647a9a24b8cb32a49e4e60504e05a
   host_fact: Codex records each turn's token use and the context window in its session rollout under $CODEX_HOME/sessions, not in a Claude Code transcript, so the fork reads the rollout.
   depends_on:
     skills/executing-plans/scripts/handoff-envelope.py: 9bdd86f3bb885bd7d114e294ff96741d9f57294c56145a14a4910e319b2be541
 skills/executing-plans/scripts/plan-progress.py:
-  base_sha256: 86694d30f1d8f0d9520b431261e1499c0f990f11c6fdaab600a4af128140a79d
+  base_sha256: 729dd773531953328579f7241cc8316c42bad39bb2062b7c3f8d25d910784387
   host_fact: Codex's status line takes only predefined items and runs no command, so the status-line renderer can never run; the fork keeps the budget, stage-order and dispatch checks byte-identical.
   depends_on:
-    lib/plan_parser.py: b23f1cd6f2db540a2a6ae8dac2322ce023d3ade59e103be68f64c32a46f47d01
+    lib/plan_parser.py: 657fd27d6289af4d507616a9ba24c57041db547e5350a1438ee0478db6eed73b
     skills/executing-plans/scripts/plan_state.py: f4055568483b3a6fd5da9498593dbb5a07c6f05ce9c9849a505018e58c7e3c18
     skills/planning-projects/scripts/validate-dispatch.py: c30f005300c83639de0d5a3df3462870a6e6cba4012689c1789c66e6cc582404
 skills/executing-plans/scripts/review-ledger-check.py:
-  base_sha256: bfdd4ae2b245c923feb4bbb34a2b723fb3be698e1c2cd71c43fd78fa2b744c6a
+  base_sha256: c2c1d63374d0a95378fc2b50d4bc9d3abe4e0f7ce6e38d6e940e7a2307166dcd
   host_fact: Codex hooks see a spawned agent only at SubagentStart and SubagentStop, with its role and id but no description, so gate mode matches each claimed review against a start row of the claimed role.
   depends_on:
     lib/staleness.py: fb4e58f7e56fd36e0b1c63d097cd7837bd938263da6db6e1d5268a43a83a486c

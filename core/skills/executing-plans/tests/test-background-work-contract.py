@@ -21,6 +21,15 @@ executor and a dispatched agent read them, using the shared negation screening
      agent is briefed: the dispatch template's `## Return` block, and stage-gate.md's
      evaluator and Tier-2 sections.
 
+  4. Every file that dispatches an agent carries both rules — wait on a background job
+     by its own completion, and the return-clean clause — in the brief it gives that
+     agent (an agent definition: told to the agent itself). The set is computed here,
+     not listed: `git grep -l -E 'subagent_type|Agent tool|dispatch' -- core/agents
+     'core/skills/*/SKILL.md'`, plus brainstorming, plus every host override of those
+     names. A file the grep catches that only names dispatch is exempted in EXEMPT, by
+     name, with its reason; an exemption the grep no longer catches fails, so the list
+     cannot outlive its reason.
+
 The failures it guards against: a gate that waits on `until ! pgrep -f run-tests.sh`
 matches its own shell and waits for ever, and a background reviewer left running after
 its verdict is used keeps writing into the tree.
@@ -28,6 +37,7 @@ its verdict is used keeps writing into the tree.
 import importlib.util
 import os
 import re
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +49,24 @@ HANDOFF = os.path.join(REFS, "session-handoff.md")
 STAGEGATE = os.path.join(REFS, "stage-gate.md")
 DISPATCH = os.path.join(SKILLS, "dispatching-parallel-agents", "SKILL.md")
 HELPER = os.path.join(HERE, "test-gate-remediation-contract.py")
+REPO = os.path.dirname(os.path.dirname(SKILLS))
+
+# Section 4's population: the grep below, plus files it misses that dispatch anyway.
+DISPATCH_GREP = ["git", "grep", "-l", "-E", "subagent_type|Agent tool|dispatch", "--",
+                 "core/agents", "core/skills/*/SKILL.md"]
+DISPATCH_EXTRA = (
+    # Phase 1 grounding is often handed to a research agent; the grep does not see it.
+    "core/skills/brainstorming/SKILL.md",
+)
+# Caught by the grep, yet dispatches no agent. Keyed by the path below core/, so a host
+# override of the same name is exempt for the same reason.
+EXEMPT = {
+    "skills/honest-gates/SKILL.md":
+        "names dispatch only to say its rules cost a command and no agent dispatch",
+    "skills/planning-projects/SKILL.md":
+        "writes the plan's Dispatch fields and its Preflight probe line; executing-plans and "
+        "dispatching-parallel-agents dispatch and brief the agents",
+}
 
 spec = importlib.util.spec_from_file_location("_gate_contract", HELPER)
 _helper = importlib.util.module_from_spec(spec)
@@ -74,6 +102,39 @@ def section(text, start_pat, end_pat):
 
 
 RETURN_CLEAN = ws(r"returns only after its own background work has finished or been stopped")
+WAIT_BY_COMPLETION = ws(r"background job") + r"[^.]{0,60}?" + ws(r"by its own completion")
+
+
+def blocks_end_sentences(text):
+    """A list item, heading, quote or code fence starts a new sentence.
+
+    Section 4 screens whole files, where a bullet carries no full stop: read raw, the
+    template's `- An agent returns only after …` bullet runs on into the next paragraph's
+    "(no refactoring creep)" and screens as negated.
+    """
+    return re.sub(r"\n(?=[ \t]*(?:[-*+] |\d+\. |#|```|>))", ".\n", text)
+
+
+def dispatching_files():
+    """(core set, overrides, error): section 4's population, computed from the tree.
+
+    `overrides` also holds every agent definition a host adds under `add/agents/`
+    (Codex ships its roles that way, beside no core counterpart for some): an agent
+    definition is what a dispatched agent reads, whatever its name or format."""
+    try:
+        out = subprocess.run(DISPATCH_GREP, cwd=REPO, capture_output=True, text=True,
+                             check=True).stdout
+        tracked = subprocess.run(
+            ["git", "ls-files", "hosts/*/overrides/agents/*",
+             "hosts/*/overrides/skills/*/SKILL.md", "hosts/*/add/agents/*"],
+            cwd=REPO, capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return [], [], str(exc)
+    core = sorted(set(out.split()) | set(DISPATCH_EXTRA))
+    names = {p[len("core/"):] for p in core}
+    overrides = sorted(p for p in tracked.split()
+                       if "/add/agents/" in p or p.split("/overrides/", 1)[1] in names)
+    return core, overrides, ""
 
 
 def main():
@@ -137,6 +198,32 @@ def main():
               bool(text) and re.search(RETURN_CLEAN + r"[^.]{0,40}" + ws(r"and says which"),
                                        text) is not None,
               "'and says which' absent")
+
+    # --- 4. every dispatching file carries both rules ------------------------------------
+    core, overrides, err = dispatching_files()
+    check("dispatching files: the set is computed from the tree", bool(core) and not err,
+          err or "the grep found no file")
+    caught = {p[len("core/"):] for p in core}
+    for name, reason in sorted(EXEMPT.items()):
+        check(f"exemption {name}: the grep still catches it", name in caught,
+              f"stale exemption ({reason}) — drop it")
+    for path in core + overrides:
+        name = (path.split("/overrides/", 1)[1] if "/overrides/" in path
+                else path if "/add/" in path else path[len("core/"):])
+        if name in EXEMPT:
+            continue
+        text = blocks_end_sentences(read(os.path.join(REPO, path)))
+        check(f"{path}: wait on a background job by its own completion",
+              affirms_claim(text, WAIT_BY_COMPLETION),
+              "no non-negated 'background job … by its own completion'")
+        check(f"{path}: returns only after its own background work finished or stopped, "
+              f"and says which",
+              affirms_claim(text, RETURN_CLEAN)
+              and re.search(RETURN_CLEAN + r"[^.]{0,40}" + ws(r"and says which"), text)
+              is not None,
+              "return-clean clause absent, negated, or without 'and says which'")
+    print(f"dispatching files checked: {len(core)} core + {len(overrides)} overrides, "
+          f"{len(EXEMPT)} name(s) exempt")
 
     print()
     if FAILED:

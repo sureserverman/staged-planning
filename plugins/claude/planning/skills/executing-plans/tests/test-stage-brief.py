@@ -101,6 +101,12 @@ if r.returncode == 0 and report:
 else:
     bad("demo must write the skeleton", r.stderr)
 
+# Catches: an evaluator told to dispatch "exactly as printed" that gets no background-work rules.
+if ("by its own completion" in r.stdout and "finished or been stopped" in r.stdout):
+    ok("the printed brief carries both background-work rules")
+else:
+    bad("the printed brief must carry both background-work rules", r.stdout[-300:])
+
 # Catches: a skeleton the hook rejects even when filled in exactly as told.
 probs = PFA.demo_problems(fill(report), outcomes)
 if not probs:

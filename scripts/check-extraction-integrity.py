@@ -10,6 +10,9 @@ things that were correct in the single file:
                      referent is not present in this file.
   DEIXIS-SECTION     an unqualified `§ Some Heading` naming no heading in this
                      file and no file the reader could open.
+  LOST-REFERENT      a `§ Some Heading` qualified by a file (a path, a bare
+                     filename, or "trunk") whose file no longer holds it: the
+                     section was extracted away and the pointer left behind.
 
 Both deixis checks run over trunks AND reference files. Exempting trunks from
 the positional check on the reasoning that "inside a single trunk, 'above'
@@ -25,7 +28,8 @@ findings allowlisted wholesale and then guards nothing:
     comparisons and rankings, not positions. The distinguishing feature is what
     FOLLOWS the word: a backticked token, a number, or a tier name.
   - `\x60../SKILL.md\x60 § Stage structure` — a § qualified by a path or by the word
-    "trunk" tells the reader where to look, which is the whole point.
+    "trunk" tells the reader where to look, which is the whole point. Whether
+    the section is still there is LOST-REFERENT's question, not this one.
   - A positional word whose referent IS resolvable in the same file (a heading,
     bold run, or table caption matching the noun phrase).
 
@@ -38,10 +42,13 @@ A finding is suppressed only by an exact `path:CODE:token` entry in
 read as a MULTISET: one line suppresses exactly one finding, so N instances need
 N lines and the N+1th surfaces. Set membership would make this paragraph false,
 because the tokens are low-entropy enough that a new dead pointer routinely
-collides with an allowlisted one.
+collides with an allowlisted one. An entry may be pinned, `path:CODE:token ->
+referent`, to where the section its finding names lives; it then suppresses
+only while that holds. `--reseed` pins every entry to its referent now.
 
-Read-only: never writes to the repo. Exit 0 when clean, 1 when any finding, and
-2 when the scan itself is invalid: fewer than `--min-files` files discovered
+Read-only, except `--reseed`, which rewrites the allowlist and nothing else.
+Exit 0 when clean, 1 when any finding, and
+2 when the run is invalid — `--reseed` with `--scope`, or fewer than `--min-files` files discovered
 (default 1). Without that floor a typo'd `--scope` degrades to a silent clean
 pass — `Scanned 0 file(s); 0 finding(s)` and exit 0 — which is the failure
 `scripts/run-tests.sh` already refuses for the identical shape, in its own
@@ -93,7 +100,9 @@ POSITIONAL_RE = re.compile(
 )
 SEE_RE = re.compile(r"\(?\bsee\s+(?P<word>above|below)\b\)?", re.IGNORECASE)
 
-SECTION_RE = re.compile(r"§\s*(?P<name>[^.,;)\n]+)")
+# A dot ends the name unless a digit follows it: `§ Step 3.5` is one name, so a
+# surviving `Step 3.0` cannot stand in for it.
+SECTION_RE = re.compile(r"§\s*(?P<name>(?:[^.,;)\n]|\.(?=\d))+)")
 BARE_FILENAME_RE = re.compile(r"[\w./-]+\.(?:md|py|sh|json|ya?ml)[\s,)]*$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$", re.M)
 
@@ -118,8 +127,25 @@ def load_allowlist(path=ALLOWLIST_PATH):
 
     Counting closes that without a new file format, because the file holds one line
     per finding: N occurrences need N lines, and the N+1th surfaces.
+
+    Counted by `(key, referent)`. An entry `key -> referent` is PINNED: it
+    suppresses only a finding whose referent (where the section it names lives
+    now) is still that one. A key-only entry is blind to the opposite of a
+    move: extract the section an allowlisted pointer means and the key stays
+    byte-identical, so the entry keeps suppressing a pointer that now resolves
+    nowhere. A bare key (referent None) still suppresses as before; `--reseed`
+    pins it.
     """
-    return collections.Counter(load_lines(path))
+    return collections.Counter(parse_entry(e) for e in load_lines(path))
+
+
+REFERENT_SEP = " -> "
+
+
+def parse_entry(entry):
+    """`key -> referent` as `(key, referent)`; a bare key as `(key, None)`."""
+    key, sep, referent = entry.partition(REFERENT_SEP)
+    return key.strip(), (referent.strip() if sep else None)
 
 
 def list_allowlisted(path=ALLOWLIST_PATH):
@@ -339,6 +365,175 @@ def citation_forms(cand):
     return [cand, cand[len(prefix):]] if cand.startswith(prefix) else [cand]
 
 
+# --- LOST-REFERENT helpers ------------------------------------------------
+NO_REFERENT = "(none)"
+SENTENCE_BREAK_RE = re.compile(r"[.;!?]\s")
+EMPHASIS_RE = re.compile(r"^\s*([*_]{1,2})(.+?)\1")
+# Where a heading's leading clause ends: `Step 3.0 — Test the premise`,
+# `Adopting a handoff (--adopt-handoff <id>)`, `Rule: ...`.
+HEADING_CLAUSE_RE = re.compile(r"\s+[—–]\s|\s*\(|:\s")
+# What a § names: a heading, or a bold run opening a line or a list item.
+# Measured on this tree: of the 5 distinct pointers a headings-only rule could
+# not resolve, 4 name a bold-run label (`4. **Version bumps are deferred to the
+# master close-out.**`, `**Exit criterion — what "the gate passed" means.**`),
+# which is how these files title a rule inside a section.
+ANCHOR_RE = re.compile(r"^(?:#{1,6}\s+(.*)|\s*(?:[-*+]\s+|\d+\.\s+)?\*\*([^*\n]+))", re.M)
+
+
+def anchors(text):
+    """Every heading and bold-run label in `text`, raw."""
+    return [h or b for h, b in ANCHOR_RE.findall(text)]
+
+
+def section_name(raw):
+    """The heading a § pointer names: its emphasized run when it has one
+    (`§ *Exit criterion* and ...`), else the whole match."""
+    e = EMPHASIS_RE.match(raw)
+    return (e.group(2) if e else raw).strip()
+
+
+def _title_clause(text):
+    """The normalized clause before `text`'s first clause break when that break
+    is a dash or a colon (a title's own separator, unlike a parenthetical aside),
+    else None."""
+    m = HEADING_CLAUSE_RE.search(text)
+    if m is None or m.group().strip() not in ("—", "–", ":"):
+        return None
+    return normalize(text[:m.start()]) or None
+
+
+def names_heading(name, headings):
+    """The first of `headings` (raw anchor texts) that a § name points at, or None.
+
+    Pointers are written short and run on: `§ Step 3.0` for `Step 3.0 — Test the
+    stage's premise first`, `§ Adopting a handoff verifies it` for `Adopting a
+    handoff (...)`, `§ Auto-registration (warn, ...)` for `Auto-registration on
+    first plan`, a name cut by a line wrap. So a name points at a heading when
+    one is a whole-word prefix of the other, each taken whole or only up to its
+    first dash, parenthesis or colon. Containment is not enough: a short heading
+    inside a long unrelated name is the masking DEIXIS-SECTION refuses. For the
+    same reason a heading of one word never prefixes a longer name: `## What`
+    is not the referent of a lost `§ What belongs here`. And when the name and the
+    heading both open with the same clause and then a dash or colon, it is part
+    of both titles, so only their whole forms are compared: `## Checklist — Standard
+    plans` is not the referent of a lost `§ Checklist — Light plans`.
+    """
+    names = {normalize(name), normalize(HEADING_CLAUSE_RE.split(name, 1)[0])} - {""}
+    name_clause = _title_clause(name)
+    for h in headings:
+        if name_clause is not None and name_clause == _title_clause(h):
+            n, form = normalize(name), normalize(h)
+            if n == form or form.startswith(n + " ") or n.startswith(form + " "):
+                return h
+            continue
+        for form in (normalize(h), normalize(HEADING_CLAUSE_RE.split(h, 1)[0])):
+            if form and any(n == form or form.startswith(n + " ")
+                            or (" " in form and n.startswith(form + " "))
+                            for n in names):
+                return h
+    return None
+
+
+def resolve_file(cand, relpath, root):
+    """The file `cand` names from `relpath`, under the conventions DEAD-PATH
+    accepts (file-relative, built twin, plugin-rooted, repo-rooted), or None."""
+    filedir = os.path.dirname(os.path.join(root, relpath))
+    for base in [filedir, *_layout.built_twins(root, relpath),
+                 *plugin_roots(relpath, root), root]:
+        for form in citation_forms(cand):
+            p = os.path.normpath(os.path.join(base, form))
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def pointer_target(before, relpath, root):
+    """`(qualifier, file)` for a § pointer that names the file its section is in.
+
+    Only the pointer's own clause qualifies it — in `` `task-fields.md`. (It is §
+    Stage sizing, in this trunk.) `` the path belongs to the previous sentence.
+    The qualifier is the clause's last backticked path, else a bare filename
+    ending the clause, else the word "trunk" (this file if it is a SKILL.md, the
+    skill's SKILL.md from its references/). None for an unqualified § — that is
+    DEIXIS-SECTION's — and for a file that does not resolve — DEAD-PATH's.
+    """
+    clause = SENTENCE_BREAK_RE.split(before)[-1]
+    paths = [p for p in (t.split("#", 1)[0].strip() for t in BACKTICK_RE.findall(clause))
+             if is_pathish(p)]
+    bare = BARE_FILENAME_RE.search(clause)
+    if paths:
+        qual = paths[-1]
+    elif bare:
+        qual = bare.group(0).strip(" ,)")
+    elif re.search(r"\btrunk\b", clause, re.IGNORECASE):
+        if os.path.basename(relpath) == "SKILL.md":
+            return "trunk", os.path.normpath(os.path.join(root, relpath))
+        if "/references/" not in f"/{relpath}":
+            return None
+        path = resolve_file("../SKILL.md", relpath, root)
+        return ("trunk", path) if path else None
+    else:
+        return None
+    path = resolve_file(qual, relpath, root)
+    return (qual, path) if path and path.endswith(".md") else None
+
+
+def find_heading(name, relpath, root):
+    """`<file> § <anchor>` for the first anchor `name` points at, searching the
+    pointer's own skill directory first and then its plugin's source roots;
+    NO_REFERENT when it points at nothing there."""
+    parts = relpath.split("/")
+    dirs = []
+    if "skills" in parts[:-1]:
+        i = len(parts) - 1 - parts[::-1].index("skills")
+        dirs.append(os.path.join(root, *parts[:i + 2]))
+    dirs += plugin_roots(relpath, root)
+    for d in dirs:
+        for dirpath, dirnames, filenames in os.walk(d):
+            dirnames.sort()
+            for fn in sorted(filenames):
+                full = os.path.join(dirpath, fn)
+                rel = os.path.relpath(full, root)
+                if not fn.endswith(".md") or any(p in f"/{rel}" for p in EXCLUDE_PARTS):
+                    continue
+                with open(full, encoding="utf-8") as fh:
+                    h = names_heading(name, anchors(fh.read()))
+                if h is not None:
+                    return f"{rel} § {h.strip()}"
+    return NO_REFERENT
+
+
+def lost_referent(relpath, text, line, i, m, root, cache):
+    """A LOST-REFERENT finding for the § pointer `m`, or None while it holds.
+
+    `cache` maps a file to its anchors for the length of one scan_file call; the
+    pointer's own file is read from `text`, which is what is being scanned. A §
+    inside a backtick span is quoted -- `*(amended per review-scope.md § <rule>)*`
+    illustrates an annotation's shape -- and names nothing, as for link targets.
+    """
+    if in_code_span(line, m.start()):
+        return None
+    target = pointer_target(line[:m.start()], relpath, root)
+    if target is None:
+        return None
+    qual, path = target
+    if path not in cache:
+        if path == os.path.normpath(os.path.join(root, relpath)):
+            cache[path] = anchors(text)
+        else:
+            with open(path, encoding="utf-8") as fh:
+                cache[path] = anchors(fh.read())
+    name = section_name(m.group("name"))
+    if not normalize(name) or names_heading(name, cache[path]) is not None:
+        return None
+    return {
+        "path": relpath, "line": i, "code": "LOST-REFERENT",
+        "token": f"{qual} § {name}"[:120], "text": line.strip()[:120],
+        "lost": f"{os.path.relpath(path, root)} § {name}",
+        "referent": find_heading(name, relpath, root),
+    }
+
+
 def scan_file(relpath, text, root):
     """Findings for one file. `relpath` is repo-relative; `root` resolves paths."""
     findings = []
@@ -346,6 +541,7 @@ def scan_file(relpath, text, root):
     lines = text.split("\n")
 
     headings = [normalize(h) for h in HEADING_RE.findall(text)]
+    target_headings = {}
 
     in_fence = False
     for i, line in enumerate(lines, 1):
@@ -429,6 +625,32 @@ def scan_file(relpath, text, root):
 
         # --- DEIXIS-SECTION (everywhere) -------------------------------
         for m in SECTION_RE.finditer(line):
+            # --- LOST-REFERENT (prose only, trunks included) -----------
+            # A § qualified by a path or by "trunk" names its referent, and
+            # DEIXIS-SECTION stops there: the reader can follow it. That held
+            # only until an extraction. Move the section the pointer names to
+            # another file and leave the pointer, and every key here is
+            # byte-identical -- path, code, pointer text -- so a key-only guard
+            # reports 0 findings over a dead pointer. This checks the referent
+            # where the pointer names it. Not in a fence: a § there is quoted.
+            #
+            # Severity: blocking. measured 2026-10-29 over this repo's tree (113
+            # files) plus every committed tree in its git history (`git rev-list
+            # --all`, 1061 commits, 63292 scanned file versions): 4 hits, 4 true.
+            # The tree now: 0. The 4 are distinct pointers, in 13 committed trees,
+            # each naming a section its file did not hold in that commit, every
+            # one confirmed by the later commit that wrote the section (a pointer
+            # authored a task ahead of its referent: `§ Master plans`, `§ "Light
+            # plans"`, and `§ Ask execution's questions now` twice). None was an
+            # extraction; history holds no extraction that left a dead pointer,
+            # so the fixture is the only case of that shape. The anchor rules
+            # (bold-run labels, a pointer's own parenthetical, the code-span
+            # screen) were tuned on this same corpus, against 6 false pointers
+            # they now resolve, so the rate is in-sample.
+            if not in_fence:
+                lost = lost_referent(relpath, text, line, i, m, root, target_headings)
+                if lost:
+                    findings.append(lost)
             before = line[:m.start()]
             # Qualified by a path or by the word "trunk" -> the reader can follow it.
             tail = before[-70:]
@@ -463,8 +685,13 @@ def scan_file(relpath, text, root):
                 "path": relpath, "line": i, "code": "DEIXIS-SECTION",
                 "token": m.group("name").strip()[:60],
                 "text": line.strip()[:120],
+                "referent": find_heading(section_name(m.group("name")), relpath, root),
             })
 
+    # Every finding carries the referent an allowlist entry pins it to: where
+    # the section it names lives now. A path or a position word names none.
+    for f in findings:
+        f.setdefault("referent", NO_REFERENT)
     return findings
 
 
@@ -491,6 +718,49 @@ def discover(root, scope):
     return sorted(out)
 
 
+def reseed(root, files, allow_path):
+    """Pin every allowlist entry to its finding's referent now; write the file.
+
+    Entries are matched to the current findings by key, one line per finding.
+    An entry no finding uses is dropped: it is suppression capacity that would
+    absorb the next real finding with its key. A finding with no entry is NOT
+    added -- reseeding moves the pins of debt already accepted; accepting new
+    debt is an edit a person makes. Comments and blank lines are kept verbatim.
+    """
+    pool = collections.defaultdict(list)
+    for rel in files:
+        with open(os.path.join(root, rel), encoding="utf-8") as fh:
+            text = fh.read()
+        for f in scan_file(rel, text, root):
+            pool[f"{f['path']}:{f['code']}:{f['token']}"].append(f["referent"])
+    lines = []
+    if os.path.exists(allow_path):
+        with open(allow_path, encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+    out, pinned, dropped = [], 0, []
+    for line in lines:
+        body, hash_, comment = line.partition("#")
+        if not body.strip():
+            out.append(line)
+            continue
+        key, _ = parse_entry(body.strip())
+        if not pool.get(key):
+            dropped.append(body.strip())
+            continue
+        gap = body[len(body.rstrip()):]
+        out.append(f"{key}{REFERENT_SEP}{pool[key].pop(0)}{gap}{hash_}{comment}")
+        pinned += 1
+    with open(allow_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out))
+    unlisted = sum(len(v) for v in pool.values())
+    print(f"Reseeded {allow_path}: {pinned} entr(ies) pinned, {len(dropped)} dropped "
+          f"(no finding uses them), {unlisted} finding(s) not allowlisted "
+          f"(a reseed never adds one).")
+    for d in dropped:
+        print(f"  dropped: {d}")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="check-extraction-integrity")
     ap.add_argument("--root", default=REPO_ROOT)
@@ -501,6 +771,9 @@ def main(argv=None):
                     help="fail with exit 2 if fewer than N files are discovered "
                          "(default 1; pass 0 to allow a legitimately empty scope)")
     ap.add_argument("--list-allowlisted", action="store_true")
+    ap.add_argument("--reseed", action="store_true",
+                    help="rewrite the allowlist, pinning each entry to its "
+                         "finding's referent now (writes the allowlist only)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -511,6 +784,12 @@ def main(argv=None):
         for entry in list_allowlisted(allow_path):
             print(entry)
         return 0
+
+    if args.reseed and args.scope:
+        print("FAIL: --reseed rewrites the whole allowlist, so it refuses --scope: "
+              "entries outside the scope would read as unused and be dropped.",
+              file=sys.stderr)
+        return 2
 
     allowed = load_allowlist(allow_path)
     files = discover(args.root, args.scope)
@@ -534,6 +813,9 @@ def main(argv=None):
               "Pass --min-files 0 if the empty scope is intended.", file=sys.stderr)
         return 2
 
+    if args.reseed:
+        return reseed(args.root, files, allow_path)
+
     findings, suppressed = [], []
     remaining = collections.Counter(allowed)
     for rel in files:
@@ -541,10 +823,19 @@ def main(argv=None):
             text = fh.read()
         for f in scan_file(rel, text, args.root):
             key = f"{f['path']}:{f['code']}:{f['token']}"
-            if remaining[key] > 0:
-                remaining[key] -= 1
-                suppressed.append(f)
+            # Pinned to this referent first, then a key-only entry. An entry
+            # pinned to another referent does not suppress: the section the
+            # pointer meant when it was allowlisted is gone from there.
+            for entry in ((key, f["referent"]), (key, None)):
+                if remaining[entry] > 0:
+                    remaining[entry] -= 1
+                    suppressed.append(f)
+                    break
             else:
+                lapsed = [r for (k, r), n in remaining.items()
+                          if k == key and r is not None and n > 0]
+                if lapsed:
+                    f["pinned"] = lapsed[0]
                 findings.append(f)
 
     if args.json:
@@ -559,6 +850,13 @@ def main(argv=None):
         for f in findings:
             print(f"  {f['path']}:{f['line']}  {f['code']}  [{f['token']}]")
             print(f"      {f['text']}")
+            if "lost" in f:
+                now = ("found nowhere" if f["referent"] == NO_REFERENT
+                       else f"now at {f['referent']}")
+                print(f"      lost referent: {f['lost']} ({now})")
+            if "pinned" in f:
+                print(f"      allowlisted against referent {f['pinned']}, "
+                      f"which it no longer resolves to (now: {f['referent']})")
     return 1 if findings else 0
 
 

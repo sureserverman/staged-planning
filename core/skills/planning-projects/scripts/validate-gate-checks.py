@@ -160,9 +160,24 @@ plan's TASK fields:
                         counting stages (wc head sort uniq). `--invert-match` is not read as
                         `-v`. Each list member missing is a false negative.
 
+    TEST-COMMAND-AFTER-DASH  a task `Test:` field with a backticked command after its first
+                        ` — ` (found outside code spans, as prove-claim finds it). prove-claim
+                        runs only the commands before that dash, so a claim naming its own
+                        command after the prose has nothing to run and becomes a deviation.
+                        The rule (task-fields.md § `Test:`): one command, before the first
+                        ` — `, covering every claim. A span counts as a command when it holds
+                        a shell operator (`&&`, `||`, ` | `, `; `, `$(`), starts with `./`, or
+                        its first word (after a leading `!`, `{` or `(`) is a listed program
+                        or a script path with an argument. A bare program name, a path, a
+                        field name and a flag are prose. The note names each field's line.
+                        ADVISORY: test-command-after-dash: measured 2026-10-29 over the 10
+                        plans in one project's plans folder (54 Test fields): 9 hits, 6 true.
+                        The other 3 quote commands as prose — syntax forms a task handles, a
+                        command a hook refuses — which syntax cannot tell from a claim.
+
 Exit 0 when no INSTANCE-SHAPED, no SELECTOR-UNMATCHED and no TASK-TEST-UNSCOPED finding
 is present, 1 otherwise, 2 on bad usage. PROSE-BLIND-SWEEP, STAGE-SCOPE-WIDE,
-GOAL-CHECK-MISSING and FILTERED-SUBSET never change the exit code. Always prints a per-class count and the total
+GOAL-CHECK-MISSING, FILTERED-SUBSET and TEST-COMMAND-AFTER-DASH never change the exit code. Always prints a per-class count and the total
 examined: an empty sweep must not read as a pass (honest-gates).
 
 Known limits, stated rather than implied (honest-gates). CALIBRATION is measured over a
@@ -1345,6 +1360,62 @@ def unscoped_task_tests(text, path=None):
     return out
 
 
+# The same span pattern prove-claim reads a Test: field with (plan-flip-audit.py's
+# QUOTED_SPAN), so the two agree on where the field's first ` — ` is: outside every span.
+DASH_SPAN = re.compile(r"`[^`]*`|~~[^~]*~~")
+FIELD_DASH = " — "
+# A span after the dash is a command when its first word is a program a Test: runs, with at
+# least one argument. A bare `grep` or `python3` names a program in prose; `Status:`,
+# `docs/a.md` and `--status` name a field, a path and a flag. The list is fixed, so a program
+# missing from it is a false negative.
+DASH_PROGRAMS = frozenset((
+    "python3", "python", "bash", "sh", "zsh", "grep", "egrep", "rg", "git", "test", "make",
+    "npm", "npx", "pnpm", "yarn", "node", "pytest", "cargo", "go", "gradle", "uv", "poetry",
+    "diff", "find", "ls", "jq", "sed", "awk", "cat", "head", "tail", "wc", "timeout", "env",
+    "time", "cd", "docker", "podman", "curl", "shellcheck", "ruff", "mypy", "tox",
+))
+DASH_SHELL_OPS = ("&&", "||", " | ", "; ", "$(")
+
+
+def _dash_command(span):
+    """Whether a code span written after a Test: field's dash is a shell command."""
+    s = span.strip()
+    if any(op in s for op in DASH_SHELL_OPS):
+        return True
+    s = s.lstrip("!{( ").strip()          # the leading-syntax forms: `! grep`, `{ …; }`, `( … )`
+    words = s.split()
+    if not words:
+        return False
+    if words[0].startswith("./"):
+        return True                       # `./gradlew`, `./run.sh`: a path run as a program
+    if len(words) < 2:
+        return False
+    return words[0] in DASH_PROGRAMS or bool(SCRIPT_ONLY.match(words[0]))
+
+
+def commands_after_dash(text):
+    """-> [(line, [span, …])] Test: fields with a backticked command after their first ` — `.
+
+    prove-claim runs only the code spans before a Test: field's first ` — `, so a claim that
+    names its own command after the prose has nothing it can run. The rule
+    (task-fields.md § `Test:`): one command, before the first ` — `, covering every claim.
+    One entry per field, naming the plan line. Read one line at a time, like every axis here,
+    so a command on a wrapped continuation line is not seen."""
+    out = []
+    for m in TEST_FIELD.finditer(text):
+        field = m.group(1)
+        masked = DASH_SPAN.sub(lambda s: " " * len(s.group(0)), field)
+        if FIELD_DASH not in masked:
+            continue
+        tail = field[masked.index(FIELD_DASH) + len(FIELD_DASH):]
+        spans = [s.group(0)[1:-1].strip() for s in DASH_SPAN.finditer(tail)
+                 if s.group(0).startswith("`")]
+        hits = [s for s in spans if _dash_command(s)]
+        if hits:
+            out.append((text.count("\n", 0, m.start(1)) + 1, hits))
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="validate-gate-checks")
     ap.add_argument("plans", nargs="+", type=pathlib.Path)
@@ -1361,6 +1432,7 @@ def main(argv=None):
     wide_stage_notes = []
     goal_notes = []
     filtered_notes = []
+    dash_notes = []
     examined_files = 0
     empty_files = []
     scope_notes = []
@@ -1388,6 +1460,8 @@ def main(argv=None):
             filtered_notes.append((path, c, cmd, filt))
         for where in goal_check_missing(raw, path):
             goal_notes.append((path, where))
+        for line, spans in commands_after_dash(raw):
+            dash_notes.append((path, line, spans))
         examined_files += 1
         if not checks:
             empty_files.append(path.name)
@@ -1493,6 +1567,15 @@ def main(argv=None):
               f"whose artifact exists (gate-authoring.md § The plan's goal is a check from "
               f"the first gate)")
 
+    # Advisory, never a failure: no measured rate makes it blocking (see the docstring).
+    for path, line, spans in dash_notes:
+        print(f"\nnote: {path.name}:{line}: TEST-COMMAND-AFTER-DASH — the Test: field has "
+              + ", ".join(f"`{s[:72]}`" for s in spans)
+              + " after its first ` — `, and prove-claim runs only the commands before the "
+              f"first ` — `, so that claim has nothing to run. Write one command before the "
+              f"first ` — ` that covers every claim, chaining a claim's own command into it "
+              f"with `&&` (task-fields.md § `Test:`)")
+
     print(f"\n{total} gate check(s) across {examined_files} file(s): "
           + ", ".join(f"{k.lower()} {v}" for k, v in totals.items()))
     if selector_failures:
@@ -1510,6 +1593,8 @@ def main(argv=None):
         print(f"filtered-subset {len(filtered_notes)} (advisory — see notes above)")
     if goal_notes:
         print(f"goal-check-missing {len(goal_notes)} (advisory — see notes above)")
+    if dash_notes:
+        print(f"test-command-after-dash {len(dash_notes)} (advisory — see notes above)")
     return 1 if (failures or selector_failures or task_test_failures) else 0
 
 

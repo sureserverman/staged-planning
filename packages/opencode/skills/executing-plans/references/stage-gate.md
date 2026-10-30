@@ -152,7 +152,8 @@ not marked (judgment)`. What you may not do is dispatch the loop and let the exe
 
 **Whether it runs comes from `../references/review-scope.md` — do not re-derive it**: never at
 `none`, at `light` and `standard` when the gate carries a `(judgment)` check or its stage has
-`**Outcomes:**`, always at `high`. Run command checks yourself. When the tier mandates an
+`**Outcomes:**` — unless a recorded goal command decides it
+(§ Skipped when a recorded command decides the goal) — always at `high`. Run command checks yourself. When the tier mandates an
 evaluator, dispatch a fresh one for the judgment checks, briefed ONLY with the plan goal, the
 stage goal and the gate's pass criteria — never the implementation transcript or your own
 summary. The session that wrote the
@@ -160,7 +161,8 @@ code grades its own work too generously. A sub-plan's gate evaluator is also bri
 master register Goal. The plan goal is there so a stage gate can see a gap in the plan's end
 goal. A gate briefed on the stage goal alone lets that gap survive every round, to be found
 first by the close-out evaluator, the first reader given the plan goal. Whether an evaluator runs is the
-tier's call alone (`../references/review-scope.md`).
+tier's call (`../references/review-scope.md`). Its one exception is `stage-gate.md`
+§ Skipped when a recorded command decides the goal.
 
 **At a stage with `**Outcomes:**`, the evaluator is a demo, not a reader.** It does not read
 the code or the diff. It uses the built product the way the goal's user does, by the route
@@ -196,11 +198,18 @@ toward the notes a dropped Outcome needs whenever it was written; and the eviden
 says nothing of its truth. The evaluator's honesty and the Tier-2 reader carry these. To demo again after a fix,
 delete `demo.md` first — `stage-brief.py` never overwrites a report.
 
+**`proof/<plan>/` is named by the plan file's stem**, so a plan renamed takes its records
+with it in the same change: `git mv proof/<old-stem> proof/<new-stem>` (a plain `mv` where
+`proof/` is kept local). Left behind, they are read for no plan — the record audit
+(`plan-flip-audit.py`) reports each such directory as an advisory `ORPHAN-PROOF-DIR`
+finding naming that command.
+
 The demo is this gate's evaluator, so it follows the tier: a plan declaring
 `review-scope: none` runs none, and its green commit needs the premise worksheet only. Where
-the tier mandates it, the one stand-in is the owner's evidenced opt-out: a `## Not demoed`
+the tier mandates it, two forms stand in. One is the owner's evidenced opt-out: a `## Not demoed`
 section in `demo.md` quoting their words (`owner, <date>: "<words>"`). A reason in the
-executor's own words is not one, and the hook refuses it.
+executor's own words is not one, and the hook refuses it. The other, below `high`, is the skip
+form of § Skipped when a recorded command decides the goal.
 
 With no device or environment to drive, the evaluator cannot demo, and that is a Stop
 condition at a tier that mandates it — not a fallback to reading the code. A reader
@@ -209,17 +218,16 @@ written by hand paraphrases an Outcome away or lets a test stand in for the demo
 templates bend; a generated brief and a report the commit hook reads do not.
 
 **Once the tier mandates it, the list of excuses is closed at two** — an **evidenced** user
-opt-out, or, **below `high` only**, a gate whose every check is a command and whose stage has
-no `**Outcomes:**`. There is no third
+opt-out, or, **below `high` only**, a gate a recorded command decides
+(§ Skipped when a recorded command decides the goal). There is no third
 reason: an evaluator that cannot be dispatched is a Stop condition, not a skip. A tier that
 does not mandate one is not an excuse at all but the machinery scaling as designed, and it is
 reported as scope (`evaluator: not run — tier is light, no (judgment) check or Outcomes at this gate`)
 rather than as an opt-out.
 
-**Why the command-only excuse stops at `high`.** Below `high` it is not really an excuse: the
-tier already says "only at a gate carrying a `(judgment)` check or Outcomes", and an
-all-command gate with no Outcomes has neither, so the two conditions name the same gates and
-the excuse is a restatement. At `high`
+**Why the command-only excuse stops at `high`.** Below `high` the tier buys an evaluator
+for a `(judgment)` check or for Outcomes, and the excuse takes back only the gates where a
+recorded command already decided the goal and every Outcome. At `high`
 the tier says **always**, and there the excuse would contradict it — collapsing `high` into
 `standard` for the one column where they were meant to differ. The evaluator grades whether
 the *goal* was met, which a green command check does not establish; at `high` that question
@@ -257,7 +265,9 @@ arrives.
 **One dispatch per role per gate unless something Blocking was fixed.** A Material finding
 is fixed and its fix proven at fix-scope by the executor; it does **not** re-dispatch the
 evaluator, and an Important finding does not re-dispatch the reviewer. Re-dispatch is owed
-only to a Blocking / Critical fix, because only there is the verdict itself in question. One
+only to a Blocking / Critical fix, because only there is the verdict itself in question. The
+re-review after a Critical fix covers the fix diff only: the commits since the verdict,
+briefed with the finding they answer. One
 review is owed beyond that: a redesign no review has read when the gate closes
 (`gate-failure-procedure.md` § A redesign the gate closes on).
 Measured over 13 gate evaluators (one owner's master plan of three sub-plans, 2026-09-10/11):
@@ -270,13 +280,50 @@ suite itself. Measured (one owner's runs, undated): an evaluator handed an 11-mi
 took 16.6 minutes; one handed `tests/unit` took 20. Brief it with the plan goal, the stage
 goal and the `(judgment)` lines only.
 
+### Skipped when a recorded command decides the goal
+
+Below `high`, the gate evaluator is skipped at a gate whose `(goal)` check is a command the
+executor ran green and recorded. Two more things must hold. The gate carries no
+`(judgment)` line beyond the conformance lines, which the executor reads (`review-scope.md`). And a gate command that ran green decides every Outcome the stage has.
+A demo of a goal a command has already decided re-runs that command by hand, at the cost of
+an agent. Measured on one owner's run (2026-10-26): a two-task stage whose
+`(goal)` check was an integration test still drew a goal-evaluator demo, which stalled
+twice on approvals and once on its own fixture.
+
+The gate report says so in one line: ``evaluator: skipped — goal command `<cmd>` at <sha>``,
+naming the `(goal)` command and the commit it ran green on. `review-ledger-check.py` fails
+that line when the gate carries a `(judgment)` line, when no ticked `(goal)` box runs
+`<cmd>`, when HEAD does not hold `<sha>`, or when a file other than the plan or one under
+`proof/` changed from `<sha>` to the commit the stage ends on. The skip names the last commit
+the command ran green on, so a fix after that run means running it again. Nothing proves the
+command ran: the line is the executor's word for that.
+Any other evaluator line saying `skipped` fails too. So does a scope line where the evaluator
+is mandated, unless it quotes the owner: an excuse word does not excuse a mandated evaluator.
+A mandated gate reporting no evaluator line fails as well.
+
+At a stage with Outcomes, `demo.md` records the skip in place of a demo, and the git hook
+holds it to that form. It carries the same ``Evaluator: skipped — goal command
+`<cmd>` at <sha>`` line. Under each `## Outcome K` come the quoted Outcome,
+`Verdict: holds`, ``Decided by: `<command>` at <sha>`` naming a ticked gate box's command, and
+`Evidence:` with what the command printed, on its own lines after that label. The hook refuses the form at a plan declaring `high`, at a gate with a
+`(judgment)` line, without a ticked `(goal)` box running the named command, at a `<sha>` that is not the tree the
+stage ends on, or with an Outcome whose `Decided by:` is missing or names a command no ticked
+gate box runs.
+
+The evaluator still runs wherever a reader or a user is needed: at a gate with a
+`(judgment)` line other than a conformance line, and for an Outcome no command decides — one a person meets, a device
+shows, or a flow no test drives. Whether a command decides an Outcome is the executor's
+reading. It is written into `demo.md`, where the Tier-2 reviewer reads it; that reading is
+the rule's residual risk.
+
 ## Deep code review (Tier 2)
 
 Whether it runs, and at what shape, comes from `../references/review-scope.md`. The evaluator
 verifies *goals* black-box; this is the complementary *white-box* pass: dispatch
 `code-reviewer` (read-only) over the **full stage diff** plus the stage's collected
 `**Review notes (Task N.M):**` lines. Describe the dispatch as `Stage N Tier-2 review`; the
-ledger check counts it only when its description names the stage and the review role. It is a gate criterion, not advisory — a **Critical**
+ledger check counts it only when its description names the stage and the review role. Tier-1's Important findings are carried to the gate as advisory, in those
+notes, and this pass decides each. It is a gate criterion, not advisory — a **Critical**
 here is a **gate failure**. Important findings are **not free either**: each leaves the gate
 **fixed**, per the exit criterion, which governs every gate pass and not only one reached
 through the failure branch. Suggestions are recorded. This is the only point where findings
@@ -450,8 +497,14 @@ like fresh news.
 3. **Add a test covering the set**, not the one file that failed, and fix **every member the
    sweep returns in this round**.
 4. **Re-run the task's Red-Green loop**, then re-verify narrowly plus the sweep.
+   Then re-prove the drifted records only: run the record audit (`plan-flip-audit.py`),
+   which names each task whose touched or witness files the repair changed (`proof drift`),
+   and re-run `prove-claim.py` for those tasks. A record the audit does not name still holds
+   on this tree, so re-proving it buys nothing. With `proof/` kept local, a re-proved record
+   binds once a commit names its task: commit `Stage N Task N.M: re-prove …` (empty if
+   nothing else changed).
 
-**Required verification belongs to the active round.** A re-dispatched review or
+**Required verification belongs to the active round.** A re-dispatched review (over the fix diff only) or
 evaluator owed to a Critical / Blocking fix verifies that reserved repair; it
 must return before complete-round and does not consume a second admission.
 A separately initiated critique starts new work through begin-round and is
@@ -513,6 +566,33 @@ Measured on one owner's plan (undated): a 100 KB plan whose largest sections wer
 report (8.8 KB), a plan-scope re-run record (6.8 KB), the Preflight record (4.9 KB) and an
 `ACTION NEEDED:` block (4.9 KB) opened every session at 37–66k tokens of context before the
 first tool call. The note is a briefing; the log is git's.
+
+## A gate line is a claim about this gate
+
+The record audit (`plan-flip-audit.py`) reads each checkbox line as a claim about its own
+gate, and reads only that line. `- [x] check BLOCKED` voids the tick. A finding quoted from
+another tool (`BLOCKED`, `residual work is still open`) goes on the line after the box,
+indented:
+
+```
+- [x] `make check` passes
+  the linter printed BLOCKED for the vendored tree, which this gate does not cover
+```
+
+An indented line under the box is data, not a confession; an unindented one runs into the
+box's own text, and the audit reads it as the box. Do not reword the box line until the audit
+goes quiet; move the quotation off it. The box line says what this gate proved, and nothing
+else.
+
+The indented line is for another tool's output, never for this gate's own open status. The
+audit does not read it, so it cannot catch a confession moved there: a check that did not
+pass is `- [~]` or `- [ ]`, and the gate report names every open finding, whatever line it
+sits on.
+
+The same holds for what the audit could not read. It lists each check it could not run as
+NOT RUN, on stderr and in `--json`'s `checks_not_run`: an unreadable snapshot, say, leaves
+findings 1, 3, 5 and 11 unrun. The gate report names each one with its reason. A check that
+did not run is never reported as passed.
 
 ## The dispatched-vs-inline review ledger
 
@@ -605,10 +685,10 @@ skipped — docs-only diff`). A reason inside verdict prose does not count: a li
 verdict (APPROVE, LGTM, clean, `0 Critical`) reports a review, never a skip. Name an
 advisory line in the gate report; it does not fail the gate, because the same pattern also
 matches honest lines. The script's exit 3 is reported as NOT RUN, never green: either no
-log exists, so nothing was compared (the hook is not loaded, or no state file existed when
+log exists and a line claims a dispatch, so that claim was not compared (the hook is not loaded, or no state file existed when
 the review was dispatched), or the report has no `review:` or `evaluator:` line at all, which
 a gate report always has. A line with `SUBSTITUTED` before its first ` — ` needs no
-dispatch — it is a disclosed substitution. The check is a command, so it
+dispatch — it is a disclosed substitution. The evaluator's skip and mandate checks read the plan and git, so they run with no log and fail with exit 1. The check is a command, so it
 runs at every tier; its position is once per gate entry.
 
 **What it cannot see.** It proves a dispatch of the claimed type and role happened in the

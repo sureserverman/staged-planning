@@ -18,7 +18,7 @@ record for each claim, so this audit counts the same set.
                        [--repo DIR]
     plan-flip-audit.py <plan.md> --snapshot [--repo DIR]
 
-Reports ten patterns, each a way an executor can ship a green gate over work
+Reports eleven patterns, each a way an executor can ship a green gate over work
 that had not happened, or burn turns on one (10):
 
   1. more than N (default 6) boxes becoming `[x]` in one commit, with fewer than
@@ -47,6 +47,12 @@ that had not happened, or burn turns on one (10):
      to its stage's `Stage N green` commit or a commit naming the task) — `blocking`; a claim
      recorded as a claim deviation, or only self-reported `mutation:` lines —
      `advisory`. Needs --repo; without it, reported NOT RUN.
+     A valid record whose bound file HEAD holds at another blob (it binds the
+     blobs of the files its break touched and the test files its command names,
+     `touched_blobs` and `witness_blobs`) is proof drift — `blocking` while the
+     task's stage is open, as at its `Stage N green`; `advisory` once that
+     stage's gate boxes are all ticked and a `Stage N green` commit holds the
+     files as proven, since a later stage may edit the file.
   9. a ticked task with a requirement clause that has neither a valid
      req-K.json nor a deviation-K.json record — `advisory`, always: requirement
      accounting carries no blocking mandate until it is measured. Needs --repo.
@@ -55,10 +61,16 @@ that had not happened, or burn turns on one (10):
      and whose message has no `fixture-sweep:` trailer — `advisory`, always (see
      LIVE_CHECK for the measured rate, why, and the same-date attribution limit).
      Needs --repo.
+ 11. STRUCTURE-SHRANK: a `## Stage N` heading, `### Task N.M` heading, `### Stage N
+     Gate` block or task `- **Status:**` line that the --snapshot baseline holds and
+     the plan on disk does not — one `advisory` finding per item, matched by
+     identity, never by count. Baseline mode only (a plan with no git history; see
+     THE BASELINE): in history mode it is neither run nor reported not run.
 
 Exit 0 = no findings, 1 = a blocking finding, 4 = advisory findings only, 2 =
 usage/IO error (never clean), 3 = no findings but some checks could not run (only
-with --require-all-checks). A crash must never be
+with --require-all-checks; an unreadable baseline is one of these, not a 2 — see
+THE BASELINE). A crash must never be
 readable as "clean", which is why 2 is reserved rather than reusing 1, and why
 main() is wrapped so an unexpected exception exits 2 rather than letting
 Python's default exit 1 masquerade as "findings". (That handler prints to
@@ -91,6 +103,10 @@ the range counts for every flip in it. A second `--snapshot` is refused — a
 re-snapshot after ticking would launder every flip since — and a baseline whose
 text no longer matches its recorded hash exits 2, never clean. Hand-editing
 both is still possible; this raises the cost of a fake, it does not stop one.
+The same copy is what finding 11 reads: a task or gate deleted since the snapshot
+leaves nothing for the other checks to see. A baseline that cannot be read or parsed
+at all is not a tamper but an absence: findings 1, 3, 5 and 11 are reported NOT RUN
+with that reason, and the rest run.
 
 HOW A TICK IS DETECTED, and why it is not a diff. Pairing removed `[ ]` lines
 against added `[x]` lines in the commit diff, keyed on exact text, misses the
@@ -110,6 +126,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from collections import Counter
@@ -243,13 +260,22 @@ REVIEW_PATH = re.compile(
 COMPLETED = re.compile(r"^\s*\*\*Completed:\*\*", re.I)
 JUDGMENT = re.compile(r"\(judgment\)", re.I)
 STAGE_GREEN = re.compile(r"^Stage\s+(\d+)\s+green\b", re.I)
-# A stage's gate checklist as planning-projects writes it: `### Stage N Gate`.
-GATE_HEAD = re.compile(r"^\s*#{1,5}\s+Stage\s+(\d+)\b[^\n]*\bGate\b", re.I)
+# A stage's gate checklist as planning-projects writes it: `### Stage N Gate`, with at
+# most one word between (`Stage 7-light gate`, `Stage 3 addendum gate`). Not "gate"
+# anywhere on the line: measured over 1111 plans from one owner's records homes
+# (2026-10-29), that read 31 stage titles ("## Stage 3: The opt-in commit gate") as
+# gate blocks, so their task boxes counted as gate boxes.
+GATE_HEAD = re.compile(r"^\s*#{1,5}\s+Stage\s+(\d+)(?:[-\s][A-Za-z]+)?\s*[:.\-—–]?\s*Gate\b", re.I)
 MD_LINK = re.compile(r"\(([^()]+?\.md)\)")
 BARE_MD = re.compile(r"([A-Za-z0-9._\-/]+\.md)")
 
 HISTORY_CHECKS = (1, 3, 5)
 STATIC_CHECKS = [2, 4, 6, 7]
+# Finding 11 compares the plan with its snapshot, so it exists only in baseline mode:
+# a plan outside git that cannot reach its baseline has it not run with 1, 3 and 5.
+BASELINE_CHECKS = (*HISTORY_CHECKS, 11)
+STRUCTURE = "STRUCTURE-SHRANK"
+STATUS_LINE = re.compile(r"^\s*[-*+]\s*\*\*Status:\*\*")
 
 # Finding 6: a box whose claim IS an owner decision — the box OPENS with it.
 # Measured over 775 plans, all those one owner's records homes then held (undated), matching the phrase
@@ -343,7 +369,7 @@ FIELD_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
 CONTINUATION = re.compile(r"^\s+\S")
 # A report's own labels. A value runs until the next of these, so an evidence line that
 # merely looks like a label (`Error: …`) stays part of the evidence.
-REPORT_LABELS = ("Assumption", "Checked", "Result", "Verdict", "Evidence")
+REPORT_LABELS = ("Assumption", "Checked", "Result", "Verdict", "Decided by", "Evidence")
 REPORT_LABEL = re.compile(rf"^\s*(?:{'|'.join(REPORT_LABELS)})\s*:", re.I)
 # `holds`, alone or with a note set off by a dash or brackets ("holds — on both devices",
 # "holds (both devices)"); never "holds only on …" or "holds, but …", which qualify it.
@@ -482,14 +508,116 @@ def _quote(body):
     return " ".join(" ".join(got).split())
 
 
-def demo_problems(report, outcomes):
+# stage-gate.md § Skipped when a recorded command decides the goal: below `high`, a demo
+# report may record that the gate evaluator was skipped because the gate's ticked `(goal)`
+# command decides the goal. DEMO_SKIP_ANY catches the intent in any shape, so a malformed
+# skip line is refused rather than read as a demo.
+DEMO_SKIP = re.compile(r"^\s*Evaluator:\s*skipped\s+(?:—|–|--)\s+goal\s+command\s+`(?P<cmd>[^`]+)`"
+                       r"\s+at\s+(?P<sha>[0-9a-f]{7,40})\b", re.I | re.M)
+DEMO_SKIP_ANY = re.compile(r"^\s*Evaluator:\s*skipped\b", re.I | re.M)
+DECIDED_BY = re.compile(r"^`(?P<cmd>[^`]+)`\s+at\s+(?P<sha>[0-9a-f]{7,40})\b")
+CODE_SPAN = re.compile(r"`([^`]+)`")
+# review-scope.md § Conformance lines do not fund an evaluator: the executor reads these.
+CONFORMANCE = re.compile(r"contradicts?\s+a\s+decision|(?:decisions?|architecture)[- ]conformance|"
+                         r"contradicts?\s+(?:the\s+|an?\s+)?architecture", re.I)
+
+
+def gate_region(text, stage):
+    """Every line under the plan's `### Stage <stage> Gate` heading, up to the next heading
+    of the same or a higher level: a `#### Round 2` inside the gate stays in it."""
+    out, level = [], None
+    for line in (text or "").splitlines():
+        h = re.match(r"^\s*(#{1,6})\s", line)
+        if h:
+            m = GATE_HEAD.match(line)
+            if m and int(m.group(1)) == int(stage):
+                level = len(h.group(1))
+                continue
+            if level is not None and len(h.group(1)) <= level:
+                level = None
+        if level is not None:
+            out.append(line)
+    return out
+
+
+def gate_boxes(text, stage):
+    """(ticked, text) for every box in the stage's gate region, bulleted, numbered or
+    labelled."""
+    out = []
+    for line in gate_region(text, stage):
+        b, lb = BULLET_BOX.match(line), LABELED_BOX.match(line)
+        if b:
+            out.append((b.group(1) in "xX", b.group(2)))
+        elif lb:
+            out.append((lb.group(2) in "xX", lb.group(1) + " " + lb.group(3)))
+    return out
+
+
+def demo_skip_problems(report, outcomes, plan_text, stage):
+    """Why a demo report that records a skipped evaluator does not stand, or [] when it does.
+
+    The skip line names the command and the commit; the stage's gate has a ticked
+    `(goal)` box running that command and no `(judgment)` line; the plan does not
+    declare `high`; and every Outcome's section names the command that decides it in
+    `Decided by: `<command>` at <sha>`."""
+    if plan_text is None or stage is None:
+        return ["a skipped evaluator is judged against the plan's gate, and none was given"]
+    m = DEMO_SKIP.search(report or "")
+    if not m:
+        return ["the skip line names no command and commit: "
+                "`Evaluator: skipped — goal command `<cmd>` at <sha>`"]
+    probs = []
+    if declared_tier(plan_text) == "high":
+        probs.append("the plan declares review-scope high, where the evaluator always runs")
+    boxes = gate_boxes(plan_text, stage)
+    if any(JUDGMENT.search(line) and not CONFORMANCE.search(line)
+           for line in gate_region(plan_text, stage)):
+        probs.append(f"the Stage {stage} gate has a (judgment) line: a reader decides it, so "
+                     "the evaluator runs")
+    cmd = " ".join(m.group("cmd").split())
+    if not any(ticked and "(goal)" in t.lower()
+               and cmd in (" ".join(c.split()) for c in CODE_SPAN.findall(t))
+               for ticked, t in boxes):
+        probs.append(f"no ticked (goal) box of the Stage {stage} gate runs `{cmd}`")
+    ticked = {" ".join(c.split()) for t_, t in boxes if t_ for c in CODE_SPAN.findall(t)}
+    secs = _sections(report or "", "Outcome")
+    for k in range(1, len(outcomes) + 1):
+        if k not in secs:
+            continue
+        d = DECIDED_BY.match(_label(secs[k], "Decided by"))
+        if not d:
+            probs.append(f"Outcome {k}: the skip names no `Decided by: `<command>` at <sha>` — "
+                         "an Outcome no command decides needs the evaluator")
+        elif " ".join(d.group("cmd").split()) not in ticked:
+            probs.append(f"Outcome {k}: `Decided by:` names `{d.group('cmd')}`, which no ticked "
+                         f"box of the Stage {stage} gate runs")
+    return probs
+
+
+def demo_skip_shas(report):
+    """Each commit a demo report's skip names: its skip line's and every `Decided by:`.
+    The hook, which holds the repo, checks them against the commit being landed."""
+    m = DEMO_SKIP.search(report or "")
+    shas = [m.group("sha")] if m else []
+    for body in _sections(report or "", "Outcome").values():
+        d = DECIDED_BY.match(_label(body, "Decided by"))
+        if d:
+            shas.append(d.group("sha"))
+    return list(dict.fromkeys(shas))
+
+
+def demo_problems(report, outcomes, plan_text=None, stage=None):
     """Why a stage's demo report does not cover its Outcomes, or [] when it does.
 
     One `## Outcome K` per plan Outcome, its `> ` quote equal to the plan's text
     (whitespace aside), a first `Verdict:` of `holds`, and non-empty `Evidence:`. The
     quote is what stops a brief or a report from paraphrasing an Outcome away: a
-    written brief drops Outcomes and lets a test suite stand in for the demo."""
+    written brief drops Outcomes and lets a test suite stand in for the demo. A report
+    recording a skipped evaluator is also held to demo_skip_problems, against the plan's
+    gate (`plan_text`, `stage`)."""
     probs = []
+    if DEMO_SKIP_ANY.search(report or ""):
+        probs += demo_skip_problems(report, outcomes, plan_text, stage)
     secs = _sections(report or "", "Outcome")
     for k, want in enumerate(outcomes, 1):
         body = secs.get(k)
@@ -615,7 +743,15 @@ MUTATION_LINE = re.compile(r"^\s*mutation\s*:\s*\S", re.I | re.M)
 REQ_LINE = re.compile(r"^\s*(req|deviation)\s*:\s*\S", re.I | re.M)
 FIELD_BULLET = re.compile(r"^\s*[-*+]\s*\*\*[^*]+:\*\*")
 PLAIN_BULLET = re.compile(r"^\s*[-*+]\s+(\S.*)$")
-CLAUSE_SPLIT = re.compile(r";|\.\s+(?=[A-Z`(*])")
+# A `;`, or a `. ` before a sentence start. Matched on the masked text (a separator
+# inside a code span never splits) but the sentence start is read in the ORIGINAL text:
+# masked, a code span opening a sentence is blanks, and the sentence would merge.
+CLAUSE_SPLIT = re.compile(r";|\.\s+")
+SENTENCE_START = re.compile(r"[A-Z`(*]")
+# A `.` that ends an abbreviation or a single letter ("e.g. `x`", "No. `3`") ends no
+# sentence before a code span. Only that start is read this way: a capital after "e.g."
+# split before code spans could start a sentence, and keeps its old numbering.
+ABBREVIATIONS = {"e.g", "i.e", "vs", "etc", "cf", "no", "fig", "eq", "approx"}
 
 # Finding 10: a remediation round that re-runs a live or device-bound check is
 # proven on the host first, against every capture of that kind, and the sweep is
@@ -713,19 +849,39 @@ def norm_key(body):
     return b[:80]
 
 
+# A line markdown runs into the box above it: not blank, not indented, and not the
+# start of another block. An indented line under the box is where a finding quoted
+# from another tool goes (stage-gate.md § A gate line is a claim about this gate); an
+# unindented one reads as the box's own text, so it is scanned with the box. Measured
+# over 1111 plans (2026-10-29): 5 such lines after a ticked box, none voiding one.
+LAZY_STOP = re.compile(r"^(?:\s|$|[-*+]\s|\d+[.)]\s|#|```|~~~|\||>)")
+
+
+def lazy_tail(lines, i):
+    """The lines markdown runs into the box on line `i` (1-based), joined."""
+    tail = []
+    for line in lines[i:]:
+        if LAZY_STOP.match(line):
+            break
+        tail.append(line)
+    return "".join(" " + ln for ln in tail)
+
+
 def boxes(text):
-    """Every checkbox in a file's text: (ticked, key, body, line_no, raw)."""
+    """Every checkbox in a file's text: (ticked, key, body, line_no, raw). `raw` is the
+    box's line with its lazy continuation (lazy_tail), which is what void_hit reads."""
     out = []
-    for i, line in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+    for i, line in enumerate(lines, 1):
         m = LABELED_BOX.match(line)
         if m:
             ticked, body = m.group(2).lower() == "x", f"{m.group(1)} {m.group(3)}"
-            out.append((ticked, norm_key(body), body.strip(), i, line))
+            out.append((ticked, norm_key(body), body.strip(), i, line + lazy_tail(lines, i)))
             continue
         m = BULLET_BOX.match(line)
         if m:
             ticked, body = m.group(1).lower() == "x", m.group(2)
-            out.append((ticked, norm_key(body), body.strip(), i, line))
+            out.append((ticked, norm_key(body), body.strip(), i, line + lazy_tail(lines, i)))
             continue
     return out
 
@@ -960,10 +1116,38 @@ def requirement_clauses(desc):
         return []
     masked, parts, last = _masked(desc), [], 0
     for m in CLAUSE_SPLIT.finditer(masked):
+        end = m.end()
+        if m.group(0) != ";":
+            # The whitespace after the `.`, measured on the original: masked, the blanks
+            # of a following code span would count as whitespace too.
+            end = m.start() + 1
+            while end < len(desc) and desc[end].isspace():
+                end += 1
+            if end == m.start() + 1 or not SENTENCE_START.match(desc, end):
+                continue
+            word = (desc[:m.start()].split() or [""])[-1].lstrip("(\"'*_").lower()
+            if desc.startswith("`", end) and (word in ABBREVIATIONS or (
+                    len(word) == 1 and word.isalpha())):
+                continue
         parts.append(desc[last:m.start()])
-        last = m.end()
+        last = end
     parts.append(desc[last:])
     return [p.strip() for p in parts if len(QUOTED_SPAN.sub("", p).strip()) > 2]
+
+
+def clause_key(text):
+    """A clause's text compared whitespace-blind: what a record matches it by."""
+    return " ".join(str(text).split()) if isinstance(text, str) else None
+
+
+def renumbered(rec, clauses):
+    """The 1-based number of the clause in `clauses` whose text is the record's own, or
+    None. A record carries the clause it proved; when the split renumbers clauses (a
+    sentence that opened with a code span used to merge into the one before), its file
+    number is stale and its text still names its clause."""
+    key = clause_key(rec.get("text")) if isinstance(rec, dict) else None
+    hits = [j for j, c in enumerate(clauses, 1) if key and clause_key(c) == key]
+    return hits[0] if len(hits) == 1 else None
 
 
 def count_requirements(desc):
@@ -1069,16 +1253,20 @@ def proof_kept_local(repo, stem):
     """
     pc = _prove_claim()
     where = f"{pc.PROOF_DIR}/{stem}/"
-    for tracked in (gout(repo, "ls-files", "--", where),
-                    gout(repo, "ls-tree", "-r", "--name-only", "HEAD", "--", where)):
+    for tracked in (gout(repo, "--literal-pathspecs", "ls-files", "--", where),
+                    gout(repo, "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", where)):
         if tracked is None or tracked.strip():
             return False
     base = Path(repo) / pc.PROOF_DIR / stem
     records = sorted(base.glob("*/*.json")) if base.is_dir() else []
     if not records:
         return False
-    # One call per record: check-ignore's batch output quotes unusual paths.
-    return all(gout(repo, "check-ignore", "-q", "--", r.relative_to(Path(repo)).as_posix())
+    # One call per record: check-ignore's batch output quotes unusual paths. --no-index:
+    # none is tracked (checked above, with literal pathspecs), and check-ignore takes no
+    # literal pathspec, so read against the index a stem's `[` or `*` would match a tracked
+    # file of another directory and report the record not ignored.
+    return all(gout(repo, "check-ignore", "-q", "--no-index", "--",
+                    r.relative_to(Path(repo)).as_posix())
                is not None for r in records)
 
 
@@ -1095,6 +1283,15 @@ def proof_records(repo, plan):
     in HEAD's history binds, an earlier plan's included, as any commit naming the task
     does): a record matching none of them was proven on a tree that was never committed. `problems` is [] for a
     valid record.
+
+    A record carrying `touched_blobs` and `witness_blobs` is judged by the blobs of the
+    files its break touched and the test files its command names, not the whole tree (prove-claim.py
+    validate()), so the task's own Status flip in a plan kept in the repo, or a rebase that
+    leaves those files as they were, keeps it valid; one without both, by its whole-tree
+    fingerprint as before. A valid record whose bound file HEAD holds at another blob has
+    drifted: `("drift", kind, k)` maps to
+    (record path, [paths], whether a `Stage N green` commit held them as proven), and
+    finding 8 reports it.
     """
     pc = _prove_claim()
     stem = Path(plan).stem
@@ -1113,15 +1310,33 @@ def proof_records(repo, plan):
 
     pat = re.compile(rf"{pc.PROOF_DIR}/{re.escape(stem)}/(\d+\.\d+)/"
                      r"(claim|req|deviation)-(\d+)\.json$")
-    fps = {}
+    trees = {}
 
-    def fingerprint(sha):
-        if sha and sha not in fps:
+    def tree(sha):
+        """(fingerprint, {path: blob id}) of a commit's tree, or None when unreadable."""
+        if sha and sha not in trees:
             try:
-                fps[sha] = pc.commit_fingerprint(repo, sha)
+                trees[sha] = pc.commit_tree(repo, sha)
             except Exception:  # noqa: BLE001 — an unreadable commit is a problem, not a crash
-                fps[sha] = None
-        return fps.get(sha)
+                trees[sha] = None
+        return trees.get(sha)
+
+    greens = None
+
+    def held_at_green(rec, task):
+        """True when a `Stage N green` commit of the task's stage, in HEAD's history, holds
+        every file the record binds as it was proven: the stage closed on this proof, and a
+        change since came after the close."""
+        nonlocal greens
+        if greens is None:
+            greens = {}
+            for line in (gout(repo, "log", "--format=%H%x00%s", "HEAD") or "").splitlines():
+                sha, _, subj = line.partition("\x00")
+                g = STAGE_GREEN.match(subj.strip())
+                if g:
+                    greens.setdefault(g.group(1), []).append(sha)
+        return any(tr is not None and not pc.blob_drift(rec, tr[1])
+                   for tr in map(tree, greens.get(task.split(".")[0], [])))
 
     local = proof_kept_local(repo, stem)
     if local:
@@ -1147,17 +1362,20 @@ def proof_records(repo, plan):
             if green:
                 green_shas.setdefault(green.group(1), []).append(sha)
     else:
-        listing = gout(repo, "ls-tree", "-r", "--name-only", "HEAD", "--",
+        # -z: a path with a space (a plan stem, a record) is one entry, never two.
+        listing = gout(repo, "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--",
                        f"{pc.PROOF_DIR}/{stem}/")
         if listing is None:
             return None
-        entries = [(rel, gout(repo, "show", f"HEAD:{rel}")) for rel in listing.split()]
+        entries = [(rel, gout(repo, "show", f"HEAD:{rel}"))
+                   for rel in listing.split("\0") if rel]
 
-    def judge(rec, fp, kind, task, k, text, rel):
-        """(problems, notes) for one record against one fingerprint."""
+    def judge(rec, tr, kind, task, k, text, rel):
+        """(problems, notes) for one record against one commit's tree."""
         notes = {}
-        if not fp:
+        if not tr:
             return ["its commit is unreadable"], notes
+        fp, blobs = tr
         if text is None:
             return [f"the plan has no {kind} {k} in Task {task}"], notes
         if kind == "claim" and isinstance(rec, dict) and rec.get("kind") == "claim-deviation":
@@ -1168,7 +1386,8 @@ def proof_records(repo, plan):
                 problems = ["recorded as a claim deviation"]
             return problems, notes
         try:
-            problems = pc.validate(rec, fp, (kind, task, k, text), allow_legacy=True)
+            problems = pc.validate(rec, fp, (kind, task, k, text), allow_legacy=True,
+                                   blobs=blobs)
         except Exception as e:  # noqa: BLE001 — a record that crashes is not valid
             problems = [f"malformed record ({e.__class__.__name__})"]
         if not problems and pc.is_legacy(rec) and local:
@@ -1188,7 +1407,7 @@ def proof_records(repo, plan):
             notes[("legacy", k)] = True
         return problems, notes
 
-    out = {}
+    items = []
     for rel, raw in entries:
         m = pat.match(rel)
         if not m:
@@ -1198,7 +1417,23 @@ def proof_records(repo, plan):
         except (ValueError, RecursionError):  # RecursionError: deep nesting
             rec = {"_unreadable": "not JSON"}
         kind, task, k = m.group(2), m.group(1), int(m.group(3))
-        text = clause(task, kind, k)
+        text, at = clause(task, kind, k), k
+        if kind != "claim" and task in blocks and clause_key(text) != clause_key(
+                rec.get("text") if isinstance(rec, dict) else None):
+            j = renumbered(rec, requirement_clauses(blocks[task]["desc"]))
+            if j is not None:
+                # Proven for clause j's text under its old number: judged against its
+                # own number and text, counted for clause j.
+                text, at = rec["text"], j
+        items.append((rel, rec, kind, task, k, text, at))
+    # A record under a clause's own number that carries the clause's text decides that
+    # clause, valid or not, whatever the file order (as the commit gate reads it); a
+    # renumbered record counts for a clause only without one. Own-number records go first.
+    own = {(task, kind, k) for _rel, rec, kind, task, k, text, at in items
+           if at == k and text is not None and isinstance(rec, dict)
+           and clause_key(rec.get("text")) == clause_key(text)}
+    out = {}
+    for rel, rec, kind, task, k, text, at in sorted(items, key=lambda it: it[6] != it[4]):
         if local:
             shas = green_shas.get(task.split(".")[0], []) + task_shas.get(task, [])
             if not shas:
@@ -1208,19 +1443,31 @@ def proof_records(repo, plan):
                 # A valid claim deviation matches too: it carries a marker problem, not a fault.
                 def matched(p, n, k=k):
                     return not p or ("claim-deviation", k) in n
-                problems, notes = judge(rec, fingerprint(shas[0]), kind, task, k, text, rel)
+                problems, notes = judge(rec, tree(shas[0]), kind, task, k, text, rel)
                 for sha in shas[1:]:
                     if matched(problems, notes):
                         break
-                    p2, n2 = judge(rec, fingerprint(sha), kind, task, k, text, rel)
+                    p2, n2 = judge(rec, tree(sha), kind, task, k, text, rel)
                     if matched(p2, n2):
                         problems, notes = p2, n2
         else:
-            sha = (gout(repo, "log", "-1", "--format=%H", "--", rel) or "").strip()
-            problems, notes = judge(rec, fingerprint(sha), kind, task, k, text, rel)
+            sha = (gout(repo, "--literal-pathspecs", "log", "-1", "--format=%H", "--", rel) or "").strip()
+            problems, notes = judge(rec, tree(sha), kind, task, k, text, rel)
+        if at != k and (task, kind, at) in own:
+            continue  # clause `at` has its own record, under its own number
+        if at != k:
+            # Replacing a stale own-number record of this kind: its notes go with it.
+            stale = [("drift", kind, at)] + ([("cites", at), ("legacy", at)] if kind == "req" else [])
+            for key_ in stale:
+                out.get(task, {}).pop(key_, None)
         for key_, val in notes.items():
-            out.setdefault(task, {})[key_] = val
-        out.setdefault(task, {})[(kind, k)] = problems
+            out.setdefault(task, {})[(key_[0], at) if key_[1:] == (k,) else key_] = val
+        out.setdefault(task, {})[(kind, at)] = problems
+        head = tree("HEAD") if not problems else None
+        moved = pc.blob_drift(rec, head[1]) if head else []
+        if moved:
+            # Valid where it was proven, but HEAD holds another blob for a file it proved.
+            out[task][("drift", kind, at)] = (rel, moved, held_at_green(rec, task))
     return out
 
 
@@ -1239,7 +1486,7 @@ LEGACY_CUTOFF = "2026-10-04T10:07:25+00:00"
 
 def first_added(repo, rel):
     """Commit date (aware datetime) of the commit that first added `rel`, or None."""
-    out = gout(repo, "log", "--diff-filter=A", "--format=%cI", "--", rel)
+    out = gout(repo, "--literal-pathspecs", "log", "--diff-filter=A", "--format=%cI", "--", rel)
     lines = (out or "").split()
     try:
         return datetime.datetime.fromisoformat(lines[-1]) if lines else None
@@ -1378,6 +1625,23 @@ def open_stage(repo, plan):
     return str(stage)
 
 
+def orphan_proof_dirs(repo, plan):
+    """proof/<stem>/ directories, committed or on disk, whose stem names no plan beside
+    `plan`: a plan renamed without its records. Plans kept in another folder read as
+    orphans too, which is why the finding is advisory."""
+    pc = _prove_claim()
+    stems = set()
+    listing = gout(repo, "ls-tree", "-d", "-z", "--name-only", "HEAD", "--", pc.PROOF_DIR + "/")
+    for rel in (listing or "").split("\0"):
+        if rel:
+            stems.add(Path(rel).name)
+    base = Path(repo) / pc.PROOF_DIR
+    if base.is_dir():
+        stems |= {d.name for d in base.iterdir() if d.is_dir()}
+    plans = {p.stem for p in Path(plan).parent.glob("*.md")}
+    return sorted(stems - plans)
+
+
 def scan_task_mutations(path, text, repo):
     """Finding 8 — a ticked task whose required Test claims are not proven.
 
@@ -1399,7 +1663,22 @@ def scan_task_mutations(path, text, repo):
                     "rule": f"{len(stray)} file(s) under proof/ are not proof records — proof/ is "
                             f"outside every fingerprint, so nothing else may live there: "
                             f"{', '.join(stray[:5])}"})
-    stem = Path(path).stem
+    stem, closed = Path(path).stem, closed_stages(text)
+    for old in orphan_proof_dirs(repo, path):
+        src, dst = f"{_prove_claim().PROOF_DIR}/{old}", f"{_prove_claim().PROOF_DIR}/{stem}"
+        if (Path(repo) / dst).is_dir():
+            # `git mv src dst` onto an existing directory moves src INSIDE it.
+            move = (f"{dst}/ already exists, so merge {src}/ into it one task directory at a "
+                    "time (moving the whole directory would nest it inside)")
+        else:
+            move = (f"`git mv {shlex.quote(src)} {shlex.quote(dst)}` (plain `mv` when proof/ "
+                    "is kept local)")
+        out.append({"finding": 8, "severity": "advisory", "file": str(path), "line": None,
+                    "text": f"ORPHAN-PROOF-DIR {src}/",
+                    "rule": f"no plan beside this one is named {old}.md, so its proof records "
+                            f"are read for no plan. If this plan was renamed from it, {move}. "
+                            "Otherwise first confirm no plan in another folder owns it: "
+                            "records kept local may exist nowhere else"})
     if proof_kept_local(repo, stem):
         out.append({"finding": 8, "severity": "advisory", "file": str(path), "line": None,
                     "text": f"{_prove_claim().PROOF_DIR}/{stem}/",
@@ -1418,6 +1697,27 @@ def scan_task_mutations(path, text, repo):
         devs = [k for k in unproven if ("claim-deviation", k) in got]
         unproven = [k for k in unproven if k not in devs]
         base = {"finding": 8, "file": str(path), "line": line, "text": f"Task {tid}"}
+        for key_ in sorted(k_ for k_ in got if k_[0] == "drift"):
+            rel, moved, held = got[key_]
+            cites = got.get(("cites", key_[2])) if key_[1] == "req" else None
+            if cites is not None and got.get(("drift", "claim", cites), (None, None))[1] == moved:
+                continue  # a covered req binds its claim's maps: that claim's line reports it
+            drift = (f"Task {tid}: proof drift — {', '.join(moved[:5])} changed since {rel} was "
+                     f"proven (HEAD holds another blob); re-prove {key_[1]} {key_[2]}")
+            if tid.split(".")[0] in closed and held:
+                # The stage closed on these records — its gate is ticked and its `Stage N
+                # green` commit holds the files as proven — and a later change, which a later
+                # stage may make, moved one. Named, not blocking: the commit gate judges drift
+                # only at the `Stage N green` of the task's own stage.
+                out.append({**base, "severity": "advisory",
+                            "rule": f"{drift} — Stage {tid.split('.')[0]} closed on this proof "
+                                    "(its gate is ticked and its green commit holds the files "
+                                    "as proven), so a later change is advisory; re-proving "
+                                    "rebinds the record"})
+            else:
+                # Blocking: a proof of code that has since changed proves nothing about it, and
+                # the stage gate must not pass on it. Re-proving rebinds the record.
+                out.append({**base, "severity": "blocking", "rule": drift})
         if devs:
             out.append({**base, "severity": "advisory",
                         "rule": f"Task {tid}: claim(s) {devs} recorded as deviations, not proven — "
@@ -1710,6 +2010,15 @@ def gate_box_stages(text):
     return out
 
 
+def closed_stages(text):
+    """Stage numbers whose `### Stage N Gate` has boxes and every one is ticked."""
+    gates, ticks = gate_box_stages(text), {}
+    for ticked, _k, _b, ln, _r in boxes(text):
+        if ln in gates:
+            ticks.setdefault(gates[ln], []).append(ticked)
+    return {stage for stage, got in ticks.items() if got and all(got)}
+
+
 def green_stages(subjects):
     """Stage numbers that have a `Stage N green` commit among `subjects`."""
     return {m.group(1) for s in subjects for m in [STAGE_GREEN.match(s.strip())] if m}
@@ -1765,7 +2074,7 @@ def preflight_keys(text):
 def history_findings(repo, rel, path, text, since, threshold):
     """Findings 1, 3, 5. Returns (findings, errors)."""
     # --follow so a renamed plan keeps its history rather than looking new.
-    shas_out = gout(repo, "log", "--format=%H", "--reverse", "--follow",
+    shas_out = gout(repo, "--literal-pathspecs", "log", "--format=%H", "--reverse", "--follow",
                     f"{since}..HEAD", "--", rel)
     if shas_out is None:
         return [], ["could not list commits touching the plan"], 0
@@ -1924,14 +2233,29 @@ def take_snapshot(args):
     return 0
 
 
+class Unreadable(Exception):
+    """A baseline file that exists but cannot be read or parsed as JSON."""
+
+
 def load_baseline(bp, path):
-    """The baseline doc. A baseline that exists but cannot be trusted is exit 2."""
+    """The baseline doc. A baseline that exists but cannot be trusted is exit 2.
+
+    One that cannot be read at all raises Unreadable instead: there is no recorded
+    text or hash to distrust, only nothing to compare against, the same position as
+    no baseline; so does JSON that is not an object. A JSON object without its text
+    or hash still exits 2 — one stripped of its hash cannot be told from one stripped
+    to dodge the check.
+    """
     try:
         doc = json.loads(bp.read_text(errors="replace"))
-        text = doc["text"]
-        recorded = doc["sha256"]
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        die(f"baseline {bp} is unreadable: {e}")
+    except (OSError, ValueError) as e:
+        raise Unreadable(f"baseline {bp} is unreadable: {e}")
+    if not isinstance(doc, dict):
+        raise Unreadable(f"baseline {bp} is unreadable: not a JSON object")
+    text, recorded = doc.get("text"), doc.get("sha256")
+    if not isinstance(text, str) or not isinstance(recorded, str):
+        die(f"baseline {bp} records no plan text or hash, so it is not evidence of "
+            "anything")
     if hashlib.sha256(text.encode()).hexdigest() != recorded:
         die(f"baseline {bp} does not match its own hash — it was edited after "
             "capture, so it is not evidence of anything")
@@ -2012,6 +2336,67 @@ def baseline_findings(root, path, text, base, threshold):
     return out, [], len(shas)
 
 
+def plan_structure(text):
+    """Counter of the plan's structural items by identity: (kind, id) for each
+    `## Stage N` heading, `### Task N.M` heading, `### Stage N Gate` heading and
+    task `- **Status:**` line, in the order the plan holds them. A fenced block is an
+    example, not structure: nothing inside one is counted or ends a task."""
+    out, task, fence = Counter(), None, False
+    for line in text.splitlines():
+        if re.match(r"^\s*(```|~~~)", line):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        # The gate first: `## Stage 2 Gate` would read as a stage heading too.
+        g, t, s = GATE_HEAD.match(line), TASK_HEAD.match(line), STAGE_SECTION.match(line)
+        if g:
+            out[("gate", str(int(g.group(1))))] += 1
+        elif t:
+            out[("task", t.group(1))] += 1
+        elif s:
+            out[("stage", str(int(s.group(1))))] += 1
+        elif task and STATUS_LINE.match(line):
+            out[("status", task)] += 1
+        if t:
+            task = t.group(1)
+        elif ANY_HEAD.match(line):
+            task = None
+    return out
+
+
+def structure_findings(path, text, base):
+    """Finding 11: each stage, task, gate block or Status line the snapshot had and the
+    plan on disk lost. Advisory, always.
+
+    Every other check reads what the plan still holds, so a task deleted after the
+    snapshot leaves nothing to read: its box, its claims and its proof obligation go
+    with it. Items are matched by identity, not counted, so a task added while another
+    is deleted does not hide the deletion. A task's Status line is not reported apart
+    from the task when the whole task is gone.
+    """
+    before, after = plan_structure(base["text"]), plan_structure(text)
+    gone = {k: n - after[k] for k, n in before.items() if n > after[k]}
+    label = {"stage": "## Stage {}", "task": "### Task {}", "gate": "### Stage {} Gate",
+             "status": "- **Status:** of Task {}"}
+    out = []
+    for (kind, ident), n in gone.items():
+        if kind == "status" and ("task", ident) in gone:
+            continue
+        item = label[kind].format(ident)
+        out.append({
+            "finding": 11, "severity": "advisory",
+            "rule": (f"{item} is in the snapshot taken {base.get('captured_at')}"
+                     + (f" ({n} more of them than now)" if n > 1 else "")
+                     + " and not in the plan on disk — restore it, or name the "
+                     "deletion and its reason in the gate report (a rename shows as "
+                     "the old id gone)"),
+            "file": str(path), "line": None, "commit": "baseline",
+            "text": f"{STRUCTURE} {item}",
+        })
+    return out
+
+
 def resolve_since(repo, rel, explicit):
     if explicit:
         if gout(repo, "rev-parse", "--verify", "--quiet",
@@ -2029,7 +2414,7 @@ def resolve_since(repo, rel, explicit):
             sha, subj = row.split("\x00", 1)
             if STAGE_GREEN.match(subj.strip()):
                 return sha, f"default: previous stage boundary {sha[:8]} ({subj.strip()})"
-    first = (gout(repo, "log", "--format=%H", "--reverse", "--", rel) or "").split()
+    first = (gout(repo, "--literal-pathspecs", "log", "--format=%H", "--reverse", "--", rel) or "").split()
     if first:
         return first[0], f"default: first commit touching the plan ({first[0][:8]})"
     return None, "no commit in this repository touches the plan file"
@@ -2060,8 +2445,8 @@ def build(args):
     findings += scan_stale_was_values(path, text)
     checks_run, not_run = list(STATIC_CHECKS), []
 
-    def skip(reason):
-        return [{"finding": n, "reason": reason} for n in HISTORY_CHECKS]
+    def skip(reason, checks=HISTORY_CHECKS):
+        return [{"finding": n, "reason": reason} for n in checks]
 
     def from_baseline(no_history):
         """No git history for the plan: fall back to its --snapshot baseline."""
@@ -2071,8 +2456,16 @@ def build(args):
         if not bp.is_file():
             return skip(f"{no_history}; no baseline at {bp} — run "
                         "`plan-flip-audit.py <plan> --snapshot` when the plan "
-                        "is loaded, before anything is ticked")
-        base = load_baseline(bp, path)
+                        "is loaded, before anything is ticked", BASELINE_CHECKS)
+        try:
+            base = load_baseline(bp, path)
+        except Unreadable as e:
+            return skip(f"{no_history}; {e} — the structural check (11) and findings "
+                        "1, 3, 5 cannot run without it; every other finding still runs",
+                        BASELINE_CHECKS)
+        # Finding 11 needs only the two texts, so it runs even when git below fails.
+        findings.extend(structure_findings(path, text, base))
+        checks_run = sorted(set(checks_run) | {11})
         hf, errors, examined = baseline_findings(
             root, path, text, base, args.flip_threshold)
         if errors:
@@ -2099,7 +2492,7 @@ def build(args):
         # Untracked plan: a plan that is untracked has no history, however much the
         # REPOSITORY has. Without this the tool would report every check run
         # over zero commits and exit 0 — a clean bill it never earned.
-        tracked = gout(repo, "ls-files", "--error-unmatch", "--", rel) is not None
+        tracked = gout(repo, "--literal-pathspecs", "ls-files", "--error-unmatch", "--", rel) is not None
         if not tracked:
             not_run = from_baseline(f"{path.name} is not tracked in {repo}")
         else:

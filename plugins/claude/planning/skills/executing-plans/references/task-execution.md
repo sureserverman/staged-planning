@@ -202,11 +202,15 @@ source or flagged, per `honest-gates`. Handle by severity:
   sweeping its class per `../SKILL.md` § A bug found during execution is a class — sweep it,
   fix every instance, then **re-run at fix-scope** — the task's own `Test:` plus the test
   classes the fix touched, never the full suite
-  (`../../planning-projects/references/test-scope-tiers.md`) — **and re-dispatch the review**.
+  (`../../planning-projects/references/test-scope-tiers.md`) — **and re-dispatch the review over the fix diff only.** The re-review after a Critical
+  fix covers the fix diff only: the commits made since its verdict, briefed with the finding
+  they answer. The task's other lines were read once, and the gate's Tier-2 reads them again.
   Critical-review cycles count against the *same* `Red-Green max cycles` budget as test
   failures; on exhaustion, escalate like any other budget exhaustion (`../SKILL.md` § Stop
   conditions). The executor applies the fix; the reviewer only ever reports.
-- **Important / Suggestion → advisory.** Do not act on them now. Append them to the plan file
+- **Important / Suggestion → advisory.** Important findings are carried to the gate as
+  advisory: the gate's Tier-2 pass triages them with the stage diff, and its exit criterion
+  is where each is fixed. Do not act on them now. Append them to the plan file
   as a note under the task (`**Review notes (Task N.M):** …`) so the stage gate's deep review
   can triage the batch. They never block the task.
 - **Skip for trivial/non-code diffs.** Docs-only, config-only, pure version-bump, or

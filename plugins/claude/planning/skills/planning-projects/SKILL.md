@@ -1,6 +1,6 @@
 ---
 name: planning-projects
-description: Use when the user wants a plan for a project of any size — triages to a format first (Direct/Light/Standard/Master) and may decline to plan a trivial job. Triggers on "roadmap", "break this down", "create a plan", "plan this", "how should I build".
+description: Use when the user wants a plan for a project of any size. Triggers on "roadmap", "break this down", "create a plan", "plan this", "how should I build".
 ---
 
 # Project Planner

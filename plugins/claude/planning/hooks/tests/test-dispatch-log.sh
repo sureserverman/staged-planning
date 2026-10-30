@@ -165,6 +165,55 @@ python3 -c 'import json; print(json.dumps({"session_id": "s", "hook_event_name":
 [ "$(lines "$C")" = 1 ] && ok "cursor_version inside a field is not the key: still logged" \
     || bad "cursor_version inside a field is not the key: still logged" "lines=$(lines "$C")"
 
+# .claude/plan-progress.json is git-ignored, so each worktree has its own. A dispatch from a
+# linked worktree while the run lives in the main one belongs to that run's log: the hook
+# reads its own worktree first, and the main worktree's run when its own has none.
+PS="$HERE/../../skills/executing-plans/scripts/plan-state.py"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+wt_pair() {  # $1 = name: a main repo with no state, and a linked worktree
+    WMAIN="$T/$1-main"; WLINK="$T/$1-linked"
+    git init -q -b main --template= "$WMAIN"; mkrepo "$WMAIN"
+    git -C "$WMAIN" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m base
+    git -C "$WMAIN" worktree add -q -b "$1-side" "$WLINK" 2>/dev/null
+}
+# Catches: a dispatch from a linked worktree going unlogged during a main-worktree run.
+wt_pair dl
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$T/plan.md" > "$WMAIN/.claude/plan-progress.json"
+dispatch_payload planning:code-reviewer | hook "$WLINK"
+if [ "$(rc_of)" = 0 ] && [ ! -s "$T/out" ] && [ "$(lines "$WMAIN")" = 1 ] \
+   && [ "$(field "$WMAIN" 1 subagent_type)" = planning:code-reviewer ] && [ ! -e "$WLINK/.claude" ]; then
+    ok "a dispatch from a linked worktree is logged to the main worktree's run"
+else bad "a dispatch from a linked worktree must reach the main worktree's log" \
+    "rc=$(rc_of) main=$(lines "$WMAIN") linked=$(lines "$WLINK") $(cat "$T/err")"; fi
+# Catches: a main-worktree lookup that strays into writing where no plan is in flight.
+wt_pair dn
+dispatch_payload general-purpose | hook "$WLINK"
+if [ "$(rc_of)" = 0 ] && [ ! -e "$WMAIN/.claude/dispatch-log.jsonl" ] && [ ! -e "$WLINK/.claude" ]; then
+    ok "with no state in either worktree nothing is written"
+else bad "with no plan in flight anywhere nothing is written" "rc=$(rc_of)"; fi
+# Catches: a main-only lookup: the linked worktree's own run keeps its own log while the
+# main worktree holds a finished one.
+wt_pair do
+printf '# Plan\n' > "$T/plan.md"
+printf '{"plan": "%s", "scope": "fixture", "source": "owner: run the fixture"}' "$T/plan.md" \
+    | python3 "$PS" init --repo "$WMAIN" --expected-revision 0 --operation-id op-1 >/dev/null \
+    && printf '{"evidence": "fixture finished"}' \
+    | python3 "$PS" finish --repo "$WMAIN" --expected-revision 1 --operation-id op-2 >/dev/null \
+    || bad "fixture: init/finish in the main worktree failed"
+mkrepo "$WLINK" plan
+dispatch_payload general-purpose | hook "$WLINK"
+if [ "$(lines "$WLINK")" = 1 ] && [ ! -e "$WMAIN/.claude/dispatch-log.jsonl" ]; then
+    ok "the linked worktree's own run is logged in its own log, over a finished main-worktree run"
+else bad "the linked worktree's own run must keep its own log" \
+    "linked=$(lines "$WLINK") main=$(lines "$WMAIN")"; fi
+# Catches: the main worktree's untrusted state taken as a run.
+wt_pair du
+printf 'not json\n' > "$WMAIN/.claude/plan-progress.json"
+dispatch_payload general-purpose | hook "$WLINK"
+if [ "$(rc_of)" = 0 ] && [ ! -s "$T/out" ] && [ ! -e "$WMAIN/.claude/dispatch-log.jsonl" ]; then
+    ok "an unreadable state file in the main worktree is no run: nothing is written"
+else bad "an unreadable main-worktree state must not be logged to" "rc=$(rc_of) main=$(lines "$WMAIN")"; fi
+
 # Catches: no python3 on PATH failing closed.
 E="$T/nopy"; mkrepo "$E" plan; mkdir -p "$T/bin"
 for b in bash cat; do ln -sf "$(command -v $b)" "$T/bin/$b"; done

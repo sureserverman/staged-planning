@@ -165,39 +165,35 @@ Operation:
 
 Inputs: `<project-path>` (absolute), optional `--format json|yaml` (default `json`).
 
-Operation:
+Run the script and reply with its stdout verbatim in a fenced block: the caller reads that output, so no table or summary takes its place. Never parse the file by hand:
 
-1. Read `docs/MATURITY.md`. If missing, return `{"error": "no-maturity-md", "path": "<records home>/MATURITY.md"}` and exit 0 (a caller treats a missing checklist as "not tracked yet").
-2. Parse each axis section into a structure. For each sub-item, record:
-   - `label` — the human text after the checkbox
-   - `state` — one of `auto` | `claim` | `na` | `unticked` | `stale-detector`
-   - `evidence` — the path/date/reason after the state prefix, or `null`
-   - `stale` — boolean; `true` if `state == "claim"` and the claim date is >90 days old
+```
+python3 "<planning-plugin>/skills/project-maturity/scripts/maturity-get.py" \
+  <project-path> [--format yaml]
+```
 
-3. Compute per-axis aggregates:
-   - `ticked: int` — count of `auto` + `claim` lines in the axis
-   - `total: int` — number of lines actually present in the axis (excluding `[N/A]` lines)
-   - `axis_ship_ready: bool` — true iff every present line is `[x]` (auto or claim) OR the entire axis is empty/N/A-only (no required minimum). The sparse model means an axis with no lines is treated as "nothing-to-do-here": ship-ready by vacuity. The per-axis specifics in `references/maturity-axes.md` may add extra requirements (e.g. Documentation README + LICENSE are minimums even in the sparse model).
-   - `stale_count: int` — count of `[STALE-90D]` markers
+It reads `<records home>/MATURITY.md`, resolved through `lib/records_home.py`. Exit 0 prints JSON in the output shape. Exit 2: no `MATURITY.md` (stdout `{"error": "no-maturity-md", "path": "<records home>/MATURITY.md"}`; a caller treats it as "not tracked yet"), the records resolver failed, or a bad path or `--today` (stderr; create nothing).
 
-4. Compute overall `ship_ready: bool` — true iff every axis's `axis_ship_ready` is true AND there are no `stale-detector` markers anywhere in the file.
+Its contract:
 
-Output shape (JSON):
+- Item: `label` (text after the checkbox), `state` (`auto` | `claim` | `na` | `unticked` | `stale-detector`), `evidence` (path/date/reason after the prefix, or `null`), `stale` (a claim >90 days old).
+- Axis: `ticked` = `auto` + `claim` lines; `total` = lines present minus `[N/A]`; `axis_ship_ready` iff every counted line is ticked or the axis is empty/N/A-only; `stale_count` = `[STALE-90D]` markers.
+- `ship_ready` iff every axis is ship-ready, no `[?] stale-detector` is anywhere in the file, and `errors` is empty.
+- `errors` lists each malformed line (bare `[N/A]`, `[x]` without `auto:`/`claim:`, a bad claim date) and each missing or repeated axis heading, with axis, line and reason. Such a line is never classified; its axis is not ship-ready. Report it; do not guess.
+- The per-axis minimums in `references/maturity-axes.md` are not checked.
+
+Output shape (`axes` holds `documentation`, `security`, `packaging`, `ui_ux`, `i18n`, `testing`):
 
 ```json
 {
-  "project": "<final path segment>",
-  "path":    "<absolute path>",
-  "audited": "<YYYY-MM-DD>",
+  "project": "<final path segment>", "path": "<absolute project path>",
+  "file": "<absolute MATURITY.md path>", "audited": "<YYYY-MM-DD the file was last written>",
   "axes": {
-    "documentation": { "ticked": 4, "total": 4, "axis_ship_ready": true,  "stale_count": 0, "items": [...] },
-    "security":      { "ticked": 1, "total": 1, "axis_ship_ready": true,  "stale_count": 0, "items": [...] },
-    "packaging":     { "ticked": 2, "total": 2, "axis_ship_ready": true,  "stale_count": 0, "items": [...] },
-    "ui_ux":         { "ticked": 1, "total": 3, "axis_ship_ready": false, "stale_count": 0, "items": [...] },
-    "i18n":          { "ticked": 0, "total": 1, "axis_ship_ready": false, "stale_count": 0, "items": [...] },
-    "testing":       { "ticked": 2, "total": 4, "axis_ship_ready": false, "stale_count": 0, "items": [...] }
+    "ui_ux": { "ticked": 1, "total": 3, "axis_ship_ready": false, "stale_count": 0, "items": [...] },
+    ...
   },
-  "ship_ready": false
+  "ship_ready": false,
+  "errors": []
 }
 ```
 
@@ -210,7 +206,7 @@ YAML output uses the same shape.
 - `init` never overwrites an existing MATURITY.md.
 - `audit` never overwrites a `[x] claim:` line — only `[ ]`, `[x] auto:`, and `[?] stale-detector` lines are subject to detector updates.
 - `audit` never silently un-ticks. Disappeared evidence becomes `[?] stale-detector previously had: <old>`.
-- Detectors are pure file-system / regex checks executed by `scripts/audit-detectors.py` — no LLM in the detection loop, no remote calls, no package-index queries. The skill's own judgement is confined to the diff/merge, the AI-tool waiver, stale-detector marking, and ship-ready aggregation.
+- Detectors are pure file-system / regex checks executed by `scripts/audit-detectors.py` — no LLM in the detection loop, no remote calls, no package-index queries. The skill's own judgement is confined to the diff/merge, the AI-tool waiver and stale-detector marking; ship-ready aggregation runs in `scripts/maturity-get.py`.
 - The file is human-edited. Preserve formatting (blank lines, comments, the `## Notes` free-form section) byte-for-byte when writing.
 
 ## Integration

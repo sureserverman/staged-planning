@@ -27,8 +27,9 @@
 #     of the same id is dropped. Two launches have two ids and log two lines.
 #
 # INERT UNLESS A PLAN IS IN FLIGHT. It writes nothing unless the project's
-# .claude/plan-progress.json names a plan that is not finished. A `.claude` or log that
-# is a symlink is never written through.
+# .claude/plan-progress.json (or, in a linked worktree with none, the main worktree's)
+# names a plan that is not finished. A `.claude` or log that is a symlink is never
+# written through.
 #
 # ONE LINE PER DISPATCH, appended to <project>/.claude/dispatch-log.jsonl:
 #   {"ts", "event": "dispatch", "session_id", "subagent_type", "description", "tool_use_id"}
@@ -53,22 +54,42 @@ if not start or not os.path.isdir(start):
 r = subprocess.run(["git", "-C", start, "rev-parse", "--show-toplevel"],
                    capture_output=True, text=True)
 repo = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else Path(start)
-claude, log = repo / ".claude", repo / ".claude" / "dispatch-log.jsonl"
-if not claude.is_dir() or claude.is_symlink() or not (claude / "plan-progress.json").is_file() \
-        or log.is_symlink():
+
+
+def logs_here(root):
+    claude, log = root / ".claude", root / ".claude" / "dispatch-log.jsonl"
+    return claude.is_dir() and not claude.is_symlink() \
+        and (claude / "plan-progress.json").is_file() and not log.is_symlink()
+
+
+# .claude/plan-progress.json is git-ignored, so each worktree has its own. With no run in
+# flight here (no state, or a finished run), the run is that of the main worktree: the
+# parent of the common git directory when that is named `.git` (git-worktree(1)).
+r = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute",
+                    "--git-common-dir"], capture_output=True, text=True)
+common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+main = common.parent if common is not None and common.name == ".git" \
+    and common.parent.resolve() != repo.resolve() else None
+if not logs_here(repo) and not (main is not None and logs_here(main)):
     sys.exit(0)
 try:
     spec = importlib.util.spec_from_file_location("dispatch_state_reader",
         Path(os.environ["DISPATCH_HOOKS"]) / "plan_continue_classify.py")
     reader = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(reader)
-    state = reader.read_state(repo)
+    root = repo
+    state = reader.read_state(repo) if logs_here(repo) else None
+    if isinstance(state, dict) and state.get("state_status") == "state_error":
+        sys.exit(0)
+    if (state is None or reader.finished(state, repo)) and main is not None and logs_here(main):
+        root, state = main, reader.read_state(main)
     if not isinstance(state, dict) or state.get("state_status") == "state_error":
         sys.exit(0)
-    if reader.finished(state, repo):
+    if reader.finished(state, root):
         sys.exit(0)
 except Exception:
     sys.exit(0)
+log = root / ".claude" / "dispatch-log.jsonl"
 ti = p["tool_input"]
 line = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "event": "dispatch", "session_id": p.get("session_id") or p.get("conversation_id"),

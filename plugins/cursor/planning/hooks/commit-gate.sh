@@ -11,7 +11,8 @@
 #
 # It parses no commands: a parse of shell text has holes (a quoted `;` splits a message
 # and hides what follows). While a plan is in flight (.claude/plan-progress.json, read by
-# plan_continue_classify.read_state: no symlink below the repo root is followed) in any
+# plan_continue_classify.read_state: no symlink below the repo root is followed; in a
+# linked worktree with none, the main worktree's — run_root) in any
 # repo the command can reach — each `git -C <dir>`, each `cd <dir>`, the payload's `cwd`
 # and `workspace_roots` — it denies:
 #   - a command whose text mentions `hooksPath`, in any case, anywhere: the key must be
@@ -24,8 +25,13 @@
 #     byte-identical to what the installer writes, in a hooks directory the repo owns (a
 #     shared core.hooksPath gates other repos too) — naming the command that installs it.
 #     This is what makes proof on by default.
+# In every repo the command can reach, plan in flight or not, it denies a `git … commit`
+# while a prove-claim.py run is in progress (its lock held: it may have a break applied)
+# or an interrupted run's journal is left (its break may still be in the tree), because
+# `git commit -a` would carry the break. Only prove-claim takes that lock or writes that
+# journal (plan_continue_classify.live_proof_break).
 # With no plan in flight (no execution state, an untrusted one, no plan named, or the
-# named plan gone) it denies one thing: a git commit whose text names `Stage N green`,
+# named plan gone) it denies one thing more: a git commit whose text names `Stage N green`,
 # because a stage closed with no state could never be checked. Everything else is allowed.
 # A snapshot the gate cannot read or that names another branch (`state_error`, which a
 # detached HEAD gives in a worktree whose run started on a branch) and a finished run
@@ -132,13 +138,59 @@ for s in starts:
         repos.append(r)
 
 
-def in_flight(repo):
-    """True when the repo's state file names a plan that is not finished. Any phase
-    counts, as in git-ref-gate.sh."""
+if pcc.mentions_git_commit(command):
+    for r in repos:
+        try:
+            live = pcc.live_proof_break(r)
+        except Exception:
+            continue
+        if live:
+            deny("Command blocked: a prove-claim.py run may have a break applied in this repo.",
+                 f"This command was denied because it commits in {r}, and {live}")
+
+
+UNREADABLE = []  # main worktrees' state files present but unreadable, named in the deny
+
+
+def run_root(repo):
+    """The worktree whose run gates `repo`, its state, and whether that state is the main
+    worktree's unreadable one. .claude/plan-progress.json is git-ignored, so each worktree
+    has its own: the repo's own run first, and only when it has none in flight (no state, or
+    a finished run) the main worktree's — the parent of the common git directory when that
+    is named `.git` (git-worktree(1)), as git-ref-gate.sh reads it."""
     state = pcc.read_state(repo)
     if isinstance(state, dict) and state.get("state_status") == "state_error":
+        return repo, state, False
+    if state is not None and not pcc.finished(state, repo):
+        return repo, state, False
+    try:
+        r = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    except Exception:
+        return repo, state, False
+    common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+    if common is None or common.name != ".git" or common.parent.resolve() == repo.resolve():
+        return repo, state, False  # the main worktree itself, or a bare repository's linked one
+    main = common.parent
+    main_state = pcc.read_state(main)
+    path = main / ".claude" / "plan-progress.json"
+    if (main_state is None and os.path.lexists(path)) or (
+            isinstance(main_state, dict) and main_state.get("state_status") == "state_error"):
+        if str(path) not in UNREADABLE:
+            UNREADABLE.append(str(path))
+        return repo, None, True
+    if main_state is None or pcc.finished(main_state, main):
+        return repo, state, False
+    return main, main_state, False
+
+
+def in_flight(repo):
+    """True when the repo's state file names a plan that is not finished — the main
+    worktree's when a linked worktree has none (run_root). Any phase counts, as in
+    git-ref-gate.sh."""
+    root, state, _ = run_root(repo)
+    if isinstance(state, dict) and state.get("state_status") == "state_error":
         return False
-    if pcc.finished(state, repo):
+    if pcc.finished(state, root):
         return False
     plan = state.get("plan") if isinstance(state, dict) else None
     return isinstance(plan, str) and bool(plan)
@@ -146,16 +198,19 @@ def in_flight(repo):
 
 def unstated(repo):
     """True when no execution state names a plan: none, an untrusted one, no plan named,
-    or the named plan gone. A state_error and a finished plan are not this case."""
-    state = pcc.read_state(repo)
+    or the named plan gone — or the main worktree's state, read for a linked worktree with
+    none, present but unreadable. A state_error and a finished plan are not this case."""
+    root, state, unreadable = run_root(repo)
+    if unreadable:
+        return True
     if isinstance(state, dict) and state.get("state_status") == "state_error":
         return False
-    if pcc.finished(state, repo):
+    if pcc.finished(state, root):
         return False
     plan = state.get("plan") if isinstance(state, dict) else None
     if not isinstance(plan, str) or not plan:
         return True
-    return not (Path(plan) if os.path.isabs(plan) else repo / plan).is_file()
+    return not (Path(plan) if os.path.isabs(plan) else root / plan).is_file()
 
 
 # A git commit whose text names `Stage N green`: the plan convention's stage close.
@@ -166,7 +221,9 @@ if not gated:
     if STAGE_GREEN_COMMIT.search(command) and any(unstated(r) for r in repos):
         deny("Command blocked: a Stage N green commit with no plan in flight.",
              "This command was denied because it commits `Stage N green` while no execution "
-             "state names a plan in this repo, so the stage could never be checked. Record "
+             "state names a plan in this repo, so the stage could never be checked"
+             + "".join(f" ({p} is present but unreadable or untrusted)" for p in UNREADABLE)
+             + ". Record "
              "the run first — `python3 <planning-plugin>/skills/executing-plans/scripts/"
              "plan-state.py init` (executing-plans § Progress state file) — and commit "
              "again; if this commit closes no plan's stage, reword its subject.")

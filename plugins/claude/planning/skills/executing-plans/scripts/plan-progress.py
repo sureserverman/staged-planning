@@ -30,13 +30,20 @@ Safe to chain after any existing statusline command; a broken environment costs
 lines, never noise.
 """
 import datetime
+import errno
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
+import select
+import signal
+import stat
 import subprocess
 import sys
+import tempfile
+import time
 import unicodedata
 from pathlib import Path
 
@@ -371,10 +378,29 @@ def rule_signature():
 PLAN_READS = 0
 
 
+# READ CAPS. Measured 2026-10-29 on real records homes: the largest plan
+# 128 KB, the most plans in one directory 127, the largest scan cache 12 KB, the
+# largest legacy state file 49 KB. Each cap sits far above that, so it bounds a
+# planted or runaway file and never skips a real one. The caps are module globals so
+# the suite can lower them.
+PLAN_READ_CAP = pu.PLAN_READ_CAP    # bytes read from one plan file
+CACHE_READ_CAP = 512 << 10          # bytes read from the scan cache
+STATE_READ_CAP = 512 << 10          # bytes read from a legacy state file
+SCAN_FILE_CAP = 500                 # plan files one cold scan reads
+
+
+def _read_capped(path, cap, encoding=None, errors=None):
+    """lib/plan_parser.py's read_capped(): a regular file of at most `cap` bytes,
+    opened without blocking, decoded as read_text() decodes it; OSError otherwise.
+    One reader for every plan read, including the sub-plan links plan_blocked()
+    follows inside the parser."""
+    return pu.read_capped(path, cap, encoding=encoding, errors=errors)
+
+
 def _read_plan(path):
     global PLAN_READS
     PLAN_READS += 1
-    return path.read_text(errors="ignore")
+    return _read_capped(path, PLAN_READ_CAP, errors="ignore")
 
 
 def scan_signature(plans_dir):
@@ -452,7 +478,7 @@ def _read_cache(cache_file):
     if cache_file is None:
         return None
     try:
-        data = json.loads(Path(cache_file).read_text(encoding="utf-8"))
+        data = json.loads(_read_capped(cache_file, CACHE_READ_CAP, encoding="utf-8"))
     except Exception:
         # Missing, truncated, corrupt, not JSON, wrong encoding — every one of
         # them means "rebuild", never "raise". A cache that can break the
@@ -461,29 +487,51 @@ def _read_cache(cache_file):
     return data if isinstance(data, dict) else None
 
 
+# Set to a list in the forked reader (see _bounded): _write_cache then records its
+# arguments there instead of writing, and the reader writes them only after its answer
+# went into the pipe and the pipe closed. A reader the parent gave up on -- one that
+# unsticks minutes later -- gets EPIPE on that answer, so it can never write the cache.
+_DEFERRED_CACHE_WRITES = None
+
+
 def _write_cache(cache_file, plans_dir, signature, names, rule, masters=()):
     if cache_file is None or rule is None:
         return              # an unkeyed cache is worse than none — see rule_signature()
+    if _DEFERRED_CACHE_WRITES is not None:
+        _DEFERRED_CACHE_WRITES.append(
+            [str(cache_file), str(plans_dir), signature, names, rule, list(masters)])
+        return
     try:
         p = Path(cache_file)
         p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(p.name + ".tmp")
-        tmp.write_text(json.dumps({
-            "version": CACHE_VERSION,
-            "rule": rule,
-            "plans_dir": str(plans_dir),
-            "signature": signature,
-            "eligible": names,
-            # Masterhood is cached beside eligibility because the cap needs
-            # it and only the FILENAME half of it can be recovered from
-            # a name: `# Master Plan:` in the first heading is equally valid, so
-            # recomputing on a cache hit would mean reading every plan file --
-            # the exact cost this cache exists to avoid.
-            "masters": list(masters),
-        }), encoding="utf-8")
+        # A temp file of its own, never a fixed `<name>.tmp`: two sessions in one
+        # repo redraw at once, and with a shared name one writer's replace finds
+        # the file already moved (its write is lost) or moves a file the other
+        # is still writing into.
+        fd, tmp = tempfile.mkstemp(prefix=p.name + ".", suffix=".tmp", dir=p.parent)
+    except BAD_PATH:
+        return  # an unwritable cache is a missed optimisation, not a failure
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "version": CACHE_VERSION,
+                "rule": rule,
+                "plans_dir": str(plans_dir),
+                "signature": signature,
+                "eligible": names,
+                # Masterhood is cached beside eligibility because the cap needs
+                # it and only the FILENAME half of it can be recovered from
+                # a name: `# Master Plan:` in the first heading is equally valid, so
+                # recomputing on a cache hit would mean reading every plan file --
+                # the exact cost this cache exists to avoid.
+                "masters": list(masters),
+            }))
         os.replace(tmp, p)
     except BAD_PATH:
-        pass  # an unwritable cache is a missed optimisation, not a failure
+        try:
+            os.unlink(tmp)      # a failed write leaves no temp file behind
+        except OSError:
+            pass
 
 
 def discover_plans(plans_dir, pinned=None, cache_file=None):
@@ -553,7 +601,11 @@ def discover_plans(plans_dir, pinned=None, cache_file=None):
                     (masters if name in cached_masters else eligible).append(
                         plans_dir / name)
         elif sig is not None:
-            for f in sorted(plans_dir.glob("*.md")):
+            # Newest first by name (a plan's name starts with its date), so a
+            # directory over SCAN_FILE_CAP loses its oldest plans, never the ones
+            # in flight. The stat of every file in scan_signature() is not capped:
+            # it is bounded by the forked reader's deadline (_bounded) instead.
+            for f in sorted(plans_dir.glob("*.md"), reverse=True)[:SCAN_FILE_CAP]:
                 try:
                     text = _read_plan(f)
                     if plan_is_eligible(text, f):
@@ -1477,7 +1529,7 @@ def projection_state(state_file):
         return outcome['state']
     # No run pointer: keep the legacy renderer's silence for unusable legacy
     # files. A parsed version marker still requires the shared owned reader.
-    state = json.loads(state_file.read_text())
+    state = json.loads(pu.read_capped(state_file, STATE_READ_CAP))
     if isinstance(state, dict) and 'schema_version' in state:
         outcome = module.result(repo_root_of(state_file), 'show', {})
         if outcome['status'] != 'ok':
@@ -1512,7 +1564,9 @@ def pinned_row(state_file, state=None, width=0, label=None, text=None):
         state = projection_state(state_file)
     plan = pinned_plan_path(state, state_file)
     if text is None:
-        text = plan.read_text(errors="ignore")
+        # Capped like every plan read, but not counted in PLAN_READS: that counter
+        # measures the discovery scan the cache exists to save.
+        text = _read_capped(plan, PLAN_READ_CAP, errors="ignore")
     done, total, stage_count = parse_plan(text, plan)
     name = label if label is not None else plan_name(plan)
     gate_mark = blocked_gate_marker(text, plan)
@@ -1997,6 +2051,10 @@ def dispatch_check(args):
         return fail(f"cannot read plan {plan}: {e}")
 
     roster = parse_roster(text)
+    # A Light plan has no Preflight, so no roster: its tasks run inline by format.
+    if roster is None and pu.is_light_plan(text, plan):
+        print("dispatch: 0 of 0 (light plan, inline by format)")
+        return 0
     if roster is None:
         return fail(f"roster missing — no `Dispatch roster` item in {plan}")
     count, ids = roster
@@ -2123,6 +2181,240 @@ def stage_order_check(cwd, args=()):
     return 2 if bad else 0
 
 
+# THE RECORDS-HOME READS RUN IN A FORKED CHILD, and the parent waits at most
+# CHILD_DEADLINE_S for its answer. On a dead network mount stat(2) sleeps
+# uninterruptibly (state D): no signal ends that sleep, a stuck thread holds up
+# process exit (exit_group waits for every thread), and timeout(1) cannot kill
+# it either -- so neither an alarm nor a joined thread frees the caller. Only a
+# process that never made the syscall can walk away from it. Both callers
+# allow 5 s (the chain's BAR_TIMEOUT, the band's timeoutMs); this leaves room for
+# interpreter start-up inside that.
+CHILD_DEADLINE_S = 3.0
+# The parent's read size on the answer pipe; correctness does not depend on it.
+ANSWER_CHUNK = 65536
+# Where /dev/fd cannot be listed, the child closes inherited fds below this one.
+FD_CLOSE_CEILING = 256
+
+
+def _test_stall():
+    """Test seam: PLAN_PROGRESS_TEST_STALL_S (seconds) makes the reads sleep that
+    long before the first one, standing in for a dead mount. Inert when unset."""
+    raw = os.environ.get("PLAN_PROGRESS_TEST_STALL_S")
+    if not raw:
+        return
+    try:
+        seconds = float(raw)
+    except ValueError:
+        return
+    if seconds > 0:
+        time.sleep(seconds)
+
+
+def _text_answer(cwd):
+    """(stdout lines, exit status) for the status-line path."""
+    _test_stall()
+    try:
+        return render(cwd), 0
+    except Exception:
+        return [], 0        # what the bottom-of-file handler made of it in-process
+
+
+def _json_answer(cwd):
+    """(stdout lines, exit status) for `--json`."""
+    _test_stall()
+    try:
+        return [render_json(cwd)], 0
+    except Exception as e:
+        print(f"FAIL: --json crashed: {e!r}", file=sys.stderr)
+        return [], 2
+
+
+def _emit(answer):
+    """Print an answer exactly as the in-process code printed it; return its status.
+
+    The child's own stdout/stderr text comes first, then the lines one print()
+    at a time (so an unencodable line costs what it always cost).
+    """
+    sys.stderr.write(answer["err"])
+    sys.stdout.write(answer["out"])
+    for line in answer["lines"]:
+        print(line)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    return answer["status"]
+
+
+# ONE READER PER CWD. A reader stuck on a dead mount stays stuck until the mount
+# recovers, and the status line redraws every few seconds: without a bound, each
+# redraw would leave one more stuck process behind. The reader holds an flock on a
+# per-user, per-cwd file in the system temp directory (never on the records home,
+# which may be the dead mount) for as long as it lives. A redraw waits for that lock
+# inside its own CHILD_DEADLINE_S: a healthy reader -- the status line and the band
+# redrawing on the same event -- lets go within milliseconds and both draw; a stuck
+# one outlasts the wait, and the redraw forks nothing and draws no bar. The bound is
+# per cwd, not per mount. The zero-byte lock files are left in place, one per user
+# and cwd. Where no lock can be had (no fcntl, an unwritable temp directory, a file
+# another user owns), redraws fork as before, unbounded.
+try:
+    import fcntl
+except ImportError:         # not on this platform: no lock, no bound
+    fcntl = None
+# How often a redraw retries a held reader lock while its deadline lasts.
+LOCK_POLL_S = 0.02
+# The longest a reader lives. A stall SIGALRM can interrupt (a FIFO, a hung network
+# call) ends here and frees the lock; a read in uninterruptible sleep on a dead
+# mount does not, and is what the lock is for.
+READER_LIFETIME_S = 60
+
+
+def _reader_lock_path(cwd, tmpdir=None):
+    """The lock file for cwd's reader, in `tmpdir` (default: the system temp dir).
+    abspath, never resolve(): the name must not cost a stat of a path that may be on
+    the dead mount."""
+    key = os.path.abspath(str(cwd)).encode("utf-8", "surrogatepass")
+    name = "plan-progress-reader-%d-%s.lock" % (os.getuid(), hashlib.sha256(key).hexdigest()[:16])
+    return os.path.join(tmpdir or tempfile.gettempdir(), name)
+
+
+def _reader_lock(cwd, deadline):
+    """An fd holding cwd's reader lock; "busy" if another reader still held it at
+    `deadline`; None when no lock can be had. Never raises: everything before the
+    fork runs outside the child's crash handling."""
+    if fcntl is None:
+        return None
+    try:
+        fd = os.open(_reader_lock_path(cwd),
+                     os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+                     | getattr(os, "O_NONBLOCK", 0), 0o600)
+    except Exception:
+        return None
+    try:
+        st = os.fstat(fd)
+        if st.st_uid != os.getuid() or not stat.S_ISREG(st.st_mode):
+            os.close(fd)        # another user's file must not be able to hold our bars
+            return None
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return fd
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    os.close(fd)
+                    return "busy"
+                time.sleep(LOCK_POLL_S)
+    except Exception:
+        os.close(fd)
+        return None
+
+
+def _bounded(compute, cwd):
+    """compute(cwd)'s answer, read in a forked child; None if it did not come in time,
+    or if an earlier reader of this cwd was still stuck.
+
+    The answer is {"lines", "status", "out", "err"}. Where there is no
+    fork, compute runs here, unbounded, exactly as before. One deadline covers the
+    wait for the lock and the wait for the answer.
+    """
+    if not hasattr(os, "fork"):
+        lines, status = compute(cwd)
+        return {"lines": lines, "status": status, "out": "", "err": ""}
+    deadline = time.monotonic() + CHILD_DEADLINE_S
+    lock = _reader_lock(cwd, deadline)
+    if lock == "busy":
+        return None
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        r, w = os.pipe()
+        pid = os.fork()
+    except OSError:
+        # Out of processes or fds. Reading here could be the stall itself.
+        if lock is not None:
+            os.close(lock)
+        return None
+    if pid == 0:
+        _child(compute, cwd, r, w, lock)    # never returns
+    os.close(w)
+    if lock is not None:
+        os.close(lock)      # the child's inherited fd keeps the lock until it exits
+    chunks = []
+    try:
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0 or not select.select([r], [], [], left)[0]:
+                return None             # gave up: the child is left to its syscall
+            chunk = os.read(r, ANSWER_CHUNK)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    finally:
+        os.close(r)
+        try:
+            os.waitpid(pid, os.WNOHANG)     # reap if done; never wait for it
+        except OSError:
+            pass
+    try:
+        answer = json.loads(b"".join(chunks))
+        return answer if isinstance(answer, dict) else None
+    except ValueError:
+        return None                     # the child died mid-answer
+
+
+def _child(compute, cwd, r, w, lock=None):
+    """The forked reader: compute, send the answer over `w`, write the cache, os._exit.
+
+    Fds 0-2 go to /dev/null and every other inherited fd is closed BEFORE any
+    read. A caller reading our stdout to EOF (the chain's `$(...)`) would
+    otherwise wait for this child too, stalled or not, which is the whole wait
+    the fork exists to avoid. Text that would have gone to stdout/stderr is
+    captured and sent with the answer for the parent to print.
+
+    The cache lives in <repo>/.claude, which the reads never touched, so its write can
+    stall where they did not. It runs here, after `w` closes: the parent has its answer
+    and exits, and the caller (which waits for that exit) is free. This process still
+    holds the lock and its lifetime, so a stuck write counts as the one stuck reader.
+    """
+    global _DEFERRED_CACHE_WRITES
+    try:
+        os.close(r)
+        null = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(null, fd)
+        try:
+            inherited = [int(n) for n in os.listdir("/dev/fd")]
+        except (OSError, ValueError):
+            inherited = range(3, FD_CLOSE_CEILING)
+        for fd in inherited:
+            if fd > 2 and fd not in (w, lock):
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        if hasattr(signal, "alarm"):
+            # The default action ends the process, and with it the lock.
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.alarm(READER_LIFETIME_S)
+        sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
+        _DEFERRED_CACHE_WRITES = []
+        try:
+            lines, status = compute(cwd)
+        except Exception:
+            lines, status = [], 0
+        answer = json.dumps({"lines": lines, "status": status,
+                             "out": sys.stdout.getvalue(), "err": sys.stderr.getvalue()}).encode()
+        view = memoryview(answer)
+        while view:
+            view = view[os.write(w, view):]
+        os.close(w)
+        writes, _DEFERRED_CACHE_WRITES = _DEFERRED_CACHE_WRITES, None
+        for args in writes:
+            _write_cache(*args)
+    except BaseException:
+        pass                # a parent that gave up closed the pipe: BrokenPipeError
+    finally:
+        os._exit(0)
+
+
 def main():
     if "--budget-check" in sys.argv[1:]:
         sys.exit(budget_check(os.getcwd()))
@@ -2159,17 +2451,24 @@ def main():
             raw = sys.stdin.read()
             data = json.loads(raw) if raw.strip() else {}
             cwd = data.get("cwd") or (data.get("workspace") or {}).get("current_dir") or "."
-            out = render_json(cwd)
         except Exception as e:
             print(f"FAIL: --json crashed: {e!r}", file=sys.stderr)
             sys.exit(2)
-        print(out)
-        sys.exit(0)
+        answer = _bounded(_json_answer, cwd)
+        if answer is None:
+            # Not exit 0: the band keeps its last model on any failure, and a
+            # document that never arrived must not read as one that did.
+            print(f"FAIL: --json: the records home did not answer within "
+                  f"{CHILD_DEADLINE_S:g} s, or an earlier reader of it is still waiting",
+                  file=sys.stderr)
+            sys.exit(2)
+        sys.exit(_emit(answer))
     raw = sys.stdin.read()
     data = json.loads(raw) if raw.strip() else {}
     cwd = data.get("cwd") or (data.get("workspace") or {}).get("current_dir") or "."
-    for line in render(cwd):
-        print(line)
+    answer = _bounded(_text_answer, cwd)
+    if answer is not None:      # no answer in time: no bars, exit 0 -- this is the statusline
+        _emit(answer)
 
 
 if __name__ == "__main__":

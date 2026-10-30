@@ -169,6 +169,10 @@ which strips the same reviews for the opposite reason.
 Preflight failure and a documented Stop condition — the user chooses, and inline substitution
 is not the executor's call to make), or a routed role is not installed. *"I wasn't sure whether to fan out"* has never been on that list.
 
+**Every message you spawn an agent with carries the background-work rules.** The agent waits on a background job by
+its own completion (`references/task-execution.md` § Waiting on background work), and an
+agent returns only after its own background work has finished or been stopped, and says which.
+
 Why a skipped mandated dispatch leaves no trace: `references/dispatch-fidelity.md`.
 
 ---
@@ -523,7 +527,7 @@ write them.** The reasons behind all three: `references/task-execution.md`.
    `../honest-gates/SKILL.md` § *A test does not exist until its mutant dies*.
 
 5. **Flip the task's Status to `[x]` the moment its test is green**, in the same change as the work — except for a plan the repo does not contain, where rule 7 says what happens instead. It is the authoritative done-marker; downstream tools (backlog unify) read it rather than guessing from gates or git. **The flip records that the task is done, never who did it** — an inlined task and a dispatched one write the identical `[x]`, so rule 7's trailer is the only artifact carrying that.
-6. **Quick review gate (Tier 1) — `high` tier's risk-listed tasks and `Review: required` tasks only.** Whether it runs comes from `references/review-scope.md`; do not re-derive it. **At `none`, `light` and `standard` there is no per-task review**: a green task goes straight to its commit, and the stage's Tier-2 pass is where its diff is read. When it does run: after the test is green and Status is flipped but **before** the commit, spawn `planning:code-reviewer` (read-only) as a **fresh agent seeing only the task diff** — never the executor self-reviewing. A **Critical is blocking** (fix inline, sweep its class, re-run at fix-scope, re-spawn the review — all against the same cycle budget); **Important / Suggestion are advisory**, appended to the plan as `**Review notes (Task N.M):** …` for the gate's deep review to triage. Trivial/non-code diffs skip it — but a docs change *asserting* a command, flag, exit code, default or path is not trivial. Full machinery: `references/task-execution.md`.
+6. **Quick review gate (Tier 1) — `high` tier's risk-listed tasks and `Review: required` tasks only.** Whether it runs comes from `references/review-scope.md`; do not re-derive it. **At `none`, `light` and `standard` there is no per-task review**: a green task goes straight to its commit, and the stage's Tier-2 pass is where its diff is read. When it does run: after the test is green and Status is flipped but **before** the commit, spawn `planning:code-reviewer` (read-only) as a **fresh agent seeing only the task diff** — never the executor self-reviewing. A **Critical is blocking** (fix inline, sweep its class, re-run at fix-scope, re-spawn the review over the fix diff only — all against the same cycle budget); **Important / Suggestion are advisory**, appended to the plan as `**Review notes (Task N.M):** …` for the gate's deep review to triage. Trivial/non-code diffs skip it — but a docs change *asserting* a command, flag, exit code, default or path is not trivial. Full machinery: `references/task-execution.md`.
 7. **Commit after each green task** (`"Stage 2 Task 2.3: parse config entries"`), including the work, any Tier-1 fixes, and — where this repo contains the plan — the flipped `Status: [x]`. The per-task commit is the unit of record and what makes a mid-plan stop recoverable. A passed gate adds its own `"Stage N green"` commit: keep **both** granularities, never collapse to one.
 
    **The plan file may sit outside the repo it plans** — a records resolver can
@@ -599,12 +603,13 @@ When every task in the stage is green, run the stage gate:
   stage-scope command**; the gate stands on that plus the recorded stage-scope result
   (`references/stage-gate.md` § *A review fix does not re-earn the full pass*). Never re-run a
   passed tree (`test-scope-tiers.md` § *Outside a plan, and proven trees*).
-- **The record audit runs at every stage gate:** `python3 <planning-plugin>/skills/executing-plans/scripts/plan-flip-audit.py <plan> --repo <repo-root>`
+- **The record audit runs at every stage gate:** `python3 <planning-plugin>/skills/executing-plans/scripts/plan-flip-audit.py <plan> --repo <repo-root> --require-all-checks`
   — exit 1, a `blocking` finding, fails the gate. Exit 2 is an error to fix first; name each
-  `advisory` finding (exit 4) in the report.
+  `advisory` finding (exit 4) in the report. Report each check it lists NOT RUN (exit 3) as
+  unrun.
 - A scoped gate report states what scope actually ran (honest-gates disclosure) — e.g. "gate green — stage-scope: `:payments` instrumented + full `check`."
 - **The gate report states the stage's dispatched-vs-inline counts, and a reason for every inlined `Dispatch: YES` task** — read off the executor trailers rather than from memory, and reconciled against the roster Preflight declared. A stage that dispatched all it marked still says `dispatch: 4 of 4`; silence is never interpreted. **An empty trailer value is `unknown`, never `inline`.** On this host the line carries a **third term** whenever the roster routed a task inline — `dispatch: 3 of 5 YES tasks dispatched; 1 table-routed inline; Task N.M inlined — <reason>` — per `references/dispatch-fidelity.md` § Counting on this host: a two-term line silently merges a routing decision into a deviation.
-- **The gate report names every review that ran, the agent that ran it, and the diff it saw** — and, for one that did not, which of the **three** reasons applies: the declared tier never mandated it (a *scope* statement, needing no excuse), or, where the tier did mandate it, an evidenced opt-out or a trivial/non-code diff. Never report a tier-scoped absence as an opt-out. Name the agent by a role Codex can actually spawn — an installed role such as `planning:code-reviewer`, or `planning:goal-evaluator` for the evaluator. An agent spawned with no custom role never satisfies a review line: the ledger cannot tell it from any other untyped spawn.
+- **The gate report names every review that ran, the agent that ran it, and the diff it saw** — and, for one that did not, which of the **four** reasons applies: the declared tier never mandated it (a *scope* statement, needing no excuse), or, where the tier did mandate it, an evidenced opt-out, a trivial/non-code diff, or — for the gate evaluator below `high` only — a recorded goal command that decides the goal (`references/stage-gate.md` § Skipped when a recorded command decides the goal). Never report a tier-scoped absence as an opt-out. Name the agent by a role Codex can actually spawn — an installed role such as `planning:code-reviewer`, or `planning:goal-evaluator` for the evaluator. An agent spawned with no custom role never satisfies a review line: the ledger cannot tell it from any other untyped spawn.
   **A mandated review the executor ran itself is a substitution, not a review**, legal only
   where the **user** authorised it — an undispatchable reviewer is a Stop condition, not a
   licence. The review line records it, quoting them; **with no recorded reason the gate
@@ -638,8 +643,9 @@ evaluator (the finished plan). Why:
 
 **Independent evaluator for non-command checks.** **Whether it runs comes from
 `references/review-scope.md` — do not re-derive it**: never at `none`, at `light` and
-`standard` when the gate carries a `(judgment)` check or its stage has `**Outcomes:**`,
-always at `high`. Run command checks yourself; dispatch a fresh evaluator for the judgment
+`standard` when the gate carries a `(judgment)` check or its stage has `**Outcomes:**` —
+unless a recorded goal command decides it (`references/stage-gate.md` § Skipped when a
+recorded command decides the goal) — always at `high`. Run command checks yourself; dispatch a fresh evaluator for the judgment
 checks (on Codex, the `planning:goal-evaluator` role), briefed ONLY with the plan goal,
 the stage goal and the gate's pass criteria — never the transcript or your own summary. **At a stage with Outcomes it is a demo** of the built
 product as its user meets it, briefed by `stage-brief.py demo`, never reading the diff. The session that wrote the code grades its own work too generously. A declared tier that does not

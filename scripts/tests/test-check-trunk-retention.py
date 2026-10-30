@@ -11,6 +11,7 @@ gone, and a marker deleted to silence the row. Stdlib only.
 """
 import importlib.util
 import os
+import re
 import sys
 import tempfile
 
@@ -258,6 +259,100 @@ def malformed_row_cases():
           "the shared row parser sees all three well-formed rows")
 
 
+def one_rule(body, marker):
+    """check_pair over a one-section trunk whose body and single marker are given."""
+    trunk = f"# T\n\n## Red-Green loop\n\n{body}\n"
+    table = ("### unconditional — 1 section\n\n"
+             "| bytes | retained | section | reason |\n|---|---|---|---|\n"
+             "| 100 | 100 | Red-Green loop | binds every run |\n\n"
+             "## Retention markers\n\n| section | marker |\n|---|---|\n"
+             f"| Red-Green loop | {marker} |\n")
+    return run(trunk, table)
+
+
+def negation_cases():
+    """A marker kept inside a sentence that withdraws it is NEGATED-RULE.
+
+    The inversions are the shape the module docstring used to disclose as a pass:
+    the marker text survives verbatim and a negation in front of it reverses the
+    rule. The legitimate sentences are quoted from the shipped trunks, because a
+    negation screen over prose this full of "never" and "do not" is only worth
+    having if it leaves those alone.
+    """
+    marker = "Respect the cycle budget"
+    for body, sentence in (
+            ("3. You need not **Respect the cycle budget** (default 3). "
+             "On exhaustion, carry on.",
+             "'You need not **Respect the cycle budget** (default 3)'"),
+            ("Never **Respect the cycle budget**.",
+             "'Never **Respect the cycle budget**.'"),
+            ("You are not required to **Respect the cycle budget**.",
+             "'You are not required to **Respect the cycle budget**.'")):
+        p = one_rule(body, marker)
+        check(any("NEGATED-RULE" in x and repr(marker) in x and x.endswith(sentence)
+                  for x in p),
+              f"a marker inverted in place is NEGATED-RULE, naming the marker and the "
+              f"sentence: {body[:44]!r} -> {p}")
+
+    # Legitimate negative rule text from the live trunks, each with the marker the
+    # live tables pin in it.
+    for body, mark in (
+            ("3. **Respect the cycle budget** (default 3).", marker),
+            # A negation in the previous sentence is that sentence's.
+            ("Don't shotgun. **Respect the cycle budget**.", marker),
+            # The marker's own negation is the rule, not a withdrawal of it.
+            ("- **Never collapse BLOCKED into GREEN.** If asked \"is this done?\", a "
+             "stage with any BLOCKED gate is not done.",
+             "Never collapse BLOCKED into GREEN."),
+            # A contrast after the marker qualifies it; it does not reverse it.
+            ("**Stage boundaries** are checkpoints, not approval gates.",
+             "Stage boundaries"),
+            # A parallel prohibition in the same sentence.
+            ("**Stop and show the message.** Do not fall back to the repo and do not "
+             "create anything: a missing store is not an empty one.",
+             "do not create anything"),
+            # A subject that is itself an absence.
+            ("**Tell it explicitly that a FAIL carrying no Blocking finding is a pass "
+             "with recorded residuals**, or it will withhold PASS.", "pass with"),
+            ("**Collects 0 and no task creates that test** (or the target file does not "
+             "exist and no task creates it) → **plan defect**: stop and return it.",
+             "plan defect"),
+            # A fenced template holds literals, as a code span does.
+            ("```\n    Dispatch:   YES | NO  (an instruction to the executor — YES "
+             "obligates dispatch to a\n```",
+             "an instruction to the executor — YES obligates dispatch")):
+        p = one_rule(body, mark)
+        check(p == [], f"legitimate negative rule text passes: {body[:48]!r} -> {p}")
+
+    # The finding reaches the run's output, and its exit code follows the tier the
+    # source states.
+    with tempfile.TemporaryDirectory() as root:
+        trunk_rel, table_rel = retention.PAIRS[0]
+        write(os.path.join(root, trunk_rel),
+              "# T\n\n## Red-Green loop\n\n3. You need not **Respect the cycle budget**.\n")
+        write(os.path.join(root, table_rel),
+              "### unconditional — 1 section\n\n"
+              "| bytes | retained | section | reason |\n|---|---|---|---|\n"
+              "| 100 | 100 | Red-Green loop | binds every run |\n\n"
+              "## Retention markers\n\n| section | marker |\n|---|---|\n"
+              f"| Red-Green loop | {marker} |\n")
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = retention.main(["--root", root])
+        # Blocking by the owner's decision (2026-10-29), so an inverted rule fails.
+        check("NEGATED-RULE" in out.getvalue() and rc == 1,
+              f"the run prints NEGATED-RULE and exits 1 (rc={rc})")
+
+    # gate-authoring.md § A gate heuristic ships with a severity axis and a measured
+    # trigger rate.
+    src = open(SCRIPT, encoding="utf-8").read()
+    check(re.search(r"NEGATED-RULE: measured 20\d\d-\d\d-\d\d over [^:]+: \d+ hits?, \d+ true",
+                    re.sub(r"\s+", " ", src)) is not None,
+          "the source states the NEGATED-RULE trigger rate, dated, with its corpus")
+
+
 def shipped_tree():
     """The shipped trunks must satisfy their own classifications."""
     check(retention.main([]) == 0, "the shipped trunks pass the sweep")
@@ -335,6 +430,8 @@ if __name__ == "__main__":
     scoping_cases()
     print("malformed rows:")
     malformed_row_cases()
+    print("negated markers:")
+    negation_cases()
     print("shipped tree:")
     shipped_tree()
     print("pinned trunks in the repo's own tree:")

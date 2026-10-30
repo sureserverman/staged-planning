@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.2.0 — 2026-10-30
+
+A sweep of the code-fixable backlog. One planned item is not in this release: the handoff
+writer's size cap, its atomic claim and `plan-state.py`'s stdin read. Neither is any
+destination-aware handoff work.
+
+- **Proofs and the plan audit.** `prove-claim` finds the runner behind shell syntax and runs
+  bash Tests under bash. A record binds the blobs a task touched and witnessed, so it survives
+  the edits a run must make. Known limit: a bare `pytest` or `cargo test` names no file to
+  bind, so its record is checked at its task commit only, and a later change to the code does
+  not show as drift. The audit adds ORPHAN-PROOF-DIR and STRUCTURE-SHRANK, reads
+  `### Stage N Gate` strictly, and every gate runs it with `--require-all-checks`.
+- **Run state and hooks.** The commit gates and dispatch logger read their own worktree's run,
+  then the main worktree's. `owner-decision.py match` finds the plan's run from any worktree.
+  A commit that ticks a gate box is a stage close whatever its subject. A Light plan closes
+  out cleanly. Known limit: the hooks do not see a run held in another linked worktree.
+- **Repo checks.** The capability index lists mod-registered commands, and its drift check
+  fails a registration it cannot place. LOST-REFERENT checks each § pointer's referent.
+  NEGATED-RULE screens retention markers. `project-maturity get` runs a script.
+- **Status line and Cursor.** The renderer reads the records home in a forked child and waits
+  at most about 3 s. That child also writes the cache, after the bars are out, so a stalled
+  write never holds the caller. A stalled reader never writes the cache, and redraws do not
+  pile up stuck readers. Reads are capped, and non-regular files are refused without blocking. Each Cursor
+  script fork has its own test. macOS and a real stuck mount are untested.
+- **Dispatch and review cost.** Every dispatching file carries the background-work rules.
+  `Review: required` follows the risk list, and a re-review covers the fix diff. Only drifted
+  records are re-proved. The gate evaluator is skipped when a recorded command at the stage's
+  final tree decides the goal. Nothing proves that command actually ran, and no live agent on
+  Codex, Cursor or OpenCode has yet acted on the narrowed rules.
+
 ## 1.1.1 — 2026-10-26
 
 - **A script decides whether an owner decision applies.** `executing-plans/scripts/

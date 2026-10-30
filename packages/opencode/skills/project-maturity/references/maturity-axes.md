@@ -3,10 +3,10 @@
 This document is the authoritative definition for the six maturity axes used by
 the `project-maturity` skill. It specifies exactly how each axis is
 auto-detected, when a manual claim is appropriate, when N/A is valid, and what
-the minimum state is for a project to count that axis as green when `project-maturity
-get` computes `ship_ready`. Every auto-detect rule in this file runs in `scripts/audit-detectors.py`, with no LLM
-judgement; the skill itself applies the AI-tool waiver, stale-detector marking and
-ship-ready aggregation.
+the minimum state is for a reader to count that axis as green (`project-maturity get`
+does not check it; see § ship_ready aggregation). Every auto-detect rule in this file runs in `../scripts/audit-detectors.py`, with no LLM
+judgement; the skill itself applies the AI-tool waiver and stale-detector marking,
+and `../scripts/maturity-get.py` computes the ship-ready aggregation.
 
 ## Sparse-file principle
 
@@ -75,9 +75,12 @@ audit`. The reason should be terse but unambiguous, e.g.
 
 ## ship_ready aggregation
 
-A project is ship-ready (`ship_ready: true` from `project-maturity get`) if and only if **every line present in the file is
-ticked** (`[x] auto:` or `[x] claim:`) AND each axis meets the per-axis
-minimum defined in that axis's § Ship-ready threshold.
+`project-maturity get` (`../scripts/maturity-get.py`) reports `ship_ready: true` if and
+only if **every counted line in the file is ticked** (`[x] auto:` or `[x] claim:`; an
+empty or `[N/A]`-only axis is ready by vacuity), no `[?] stale-detector` marker is
+anywhere in the file, and no line is malformed. It does **not** check the per-axis
+minimums below: they are what a reader of the file holds each axis to, and a file
+that falls short of one can still read `ship_ready: true`.
 
 Per-axis minimums in the sparse model:
 

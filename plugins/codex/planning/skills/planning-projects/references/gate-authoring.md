@@ -73,8 +73,9 @@ its source with the corpus and the date, in the form
 Anything less is advisory: it is reported and named in the gate report, and it never exits 1
 and never fails a gate (`plan-flip-audit.py` exits 4 on advisory findings alone). Not every
 check meets this yet: `plan-flip-audit.py`'s blocking findings 1, 3, 4, 5, 6 and 8 state no
-measured trigger rate in its source. They are open gaps against this rule, not exemptions
-from it.
+measured trigger rate in its source, and `check-trunk-retention.py`'s NEGATED-RULE blocks
+on 0 hits, 0 true, by the owner's decision. They are open gaps against this rule, not
+exemptions from it.
 
 **The measurement, and the reason this is a rule.** Measured over 188 real plans from one
 owner's records homes, one project's plans excluded (the measurement is undated), a void detector with one flat
@@ -93,6 +94,19 @@ A check too noisy to leave on is a defect in the check. It is fixed there — na
 or moved to advisory — and the plans it flags carry it as a finding against the check, not as
 a residual of their own. A heuristic with no measured rate has no ground for either tier: it
 ships advisory until one is measured.
+
+**Two rules for a check that reads plan prose.** `(amended at Preflight … was: 3 of 7 tasks)`
+and a bare `*(amended)*` carry the same word; only the first discloses what changed. So the
+check keys on the absence of a required disclosure (no was-value, no cited rule), never on
+the presence of a word the disclosure protocol requires an honest executor to write. A
+detector that fires on `amended` punishes the protocol it serves. `plan-flip-audit.py` keeps
+`amended` in its weak tier, and reports a lone one only when its trailing parenthetical
+matches none of the `DISCLOSED` markers (`was:`, `§`, `per`, `see`, `measured`, `verified`).
+
+A gate line reading `! grep … — exit 1, no hits` records a pass: grep found nothing, and
+the `!` turns that into success. In a negated test, non-zero is the pass. So a check that
+reads exit codes off gate lines carves the negation out. `plan-flip-audit.py` voids a tick
+on `exit 2` or `exit 78` alone, but keeps bare `exit 1` in its weak tier for this reason.
 
 Position: once, when the check is built or its trigger changes. The measurement over a corpus
 of real plans runs in the building task's test, never in a repo validator: a repo's checks

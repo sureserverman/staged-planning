@@ -84,6 +84,9 @@ Dispatch **one `architecture-researcher` agent per candidate, concurrently**. Ea
 dispatch carries: the candidate (name + layout sketch), the stack (with pinned
 versions where known), the constraints from Phase 1, and the codebase path or an
 explicit greenfield flag.
+Each brief also says: wait on a background job by its own completion
+(`../executing-plans/references/task-execution.md` § Waiting on background work), and an agent returns
+only after its own background work has finished or been stopped, and says which.
 
 On return, **discard uncited claims** — a finding with no doc URL, named real project,
 or codebase file behind it does not enter the matrix. Then:

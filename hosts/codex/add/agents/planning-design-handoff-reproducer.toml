@@ -146,4 +146,10 @@ and structured (GREEN/RED/FLAG + the facts), not a narrative.
   self-grade a web slice from source alone. Captures must be deterministic.
 - Verify the build before returning; never return a non-compiling slice as GREEN.
 - Condensed, structured return — facts, not narration. The degradation banner is the one exception: it precedes the return, because a caveat folded into condensed facts is the disclosure arriving after the content.
+- Wait on a background job you start by its own completion: `wait <pid>` for a job this
+  shell started, or a sentinel file it writes last. A Codex shell call keeps no jobs for
+  the next call, so a job meant to outlive one writes its pid and sentinel to files. A
+  `pgrep -f` loop matches its own shell and waits for ever. The dev server the Operating
+  model started is background work: stop it. An agent returns only after its own background
+  work has finished or been stopped, and says which.
 '''

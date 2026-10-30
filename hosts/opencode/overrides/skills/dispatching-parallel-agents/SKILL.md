@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-description: Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Dispatches one agent per task, running concurrently. Triggers on "dispatch these tasks in parallel", "run these Dispatch YES tasks", "fan out these independent fixes". On OpenCode, invoke this skill by name.
+description: Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Triggers on "dispatch these tasks in parallel", "run these Dispatch YES tasks", "fan out these independent fixes". On OpenCode, invoke this skill by name.
 ---
 
 > On OpenCode, `<planning-plugin>` is this package's folder: the folder that holds `skills/`, `../..` from the base directory OpenCode prints with this skill. In a shell command use its absolute path, quoted.
@@ -149,6 +149,8 @@ Omit the heading entirely when no decision bears on this task.>
 - Do NOT modify files outside the Files list above
 - Do NOT refactor unrelated code
 - Do NOT introduce new dependencies not already in the project
+- Wait on a background job you start by its own completion — the harness notification,
+  `wait <pid>`, or a sentinel file it writes last; a `pgrep -f` loop matches its own shell
 - Commit with message: "Stage <N> Task <N.M>: <description>", ending with the
   executor trailer on its own single physical line:
   `Executor: dispatched — <the agent name you were dispatched as, without the @>`

@@ -10,8 +10,8 @@
 #
 # INERT UNLESS A PLAN IS IN FLIGHT. It runs on every Agent call of every user who
 # enables the plugin, so it does nothing — no Python, no write — unless
-# $CLAUDE_PROJECT_DIR/.claude/plan-progress.json exists. A `.claude` or log that is
-# a symlink is never written through.
+# $CLAUDE_PROJECT_DIR/.claude/plan-progress.json, or the main worktree's (below), exists.
+# A `.claude` or log that is a symlink is never written through.
 #
 # ONE LINE PER EVENT, appended to $CLAUDE_PROJECT_DIR/.claude/dispatch-log.jsonl:
 #   {"ts", "event": "dispatch", "session_id", "agent_name", "description"}
@@ -25,31 +25,54 @@
 # IT STEPS ASIDE UNDER CURSOR. cursor-agent runs a Claude Code plugin's hooks too, and
 # its payload carries a top-level `cursor_version` key. The Cursor build of this plugin
 # logs its own dispatches, so a payload with that key is left alone: exit 0, no line.
+#
+# A LINKED WORKTREE. .claude/plan-progress.json is git-ignored, so each worktree has its
+# own. With no run in flight in $CLAUDE_PROJECT_DIR (no state, or a finished run), the run
+# is the main worktree's — the parent of the common git directory when that is named `.git`
+# (git-worktree(1)) — and the line goes to the main worktree's log.
 D="${CLAUDE_PROJECT_DIR:-}"
-[ -n "$D" ] && [ -d "$D/.claude" ] && [ ! -L "$D/.claude" ] \
-    && [ -f "$D/.claude/plan-progress.json" ] && [ ! -L "$D/.claude/dispatch-log.jsonl" ] \
+logs_here() {  # $1 = worktree: a state file to read, and a log that is not a symlink
+    [ -d "$1/.claude" ] && [ ! -L "$1/.claude" ] \
+        && [ -f "$1/.claude/plan-progress.json" ] && [ ! -L "$1/.claude/dispatch-log.jsonl" ]
+}
+M=""
+if [ -n "$D" ]; then
+    M="$(git -C "$D" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+    case "$M" in */.git) M="${M%/.git}" ;; *) M="" ;; esac
+    { [ -n "$M" ] && [ "$M" != "$D" ] && logs_here "$M"; } || M=""
+fi
+[ -n "$D" ] && { logs_here "$D" || [ -n "$M" ]; } \
     || { cat >/dev/null 2>&1; exit 0; }  # drain stdin: the caller's write must not hit EPIPE
 DISPATCH_HOOKS="${BASH_SOURCE[0]%/*}" \
-DISPATCH_REPO="$D" DISPATCH_LOG="$D/.claude/dispatch-log.jsonl" python3 -I -c '
+DISPATCH_REPO="$D" DISPATCH_MAIN="$M" python3 -I -c '
 import datetime, importlib.util, json, os, sys
 from pathlib import Path
-try:
-    spec = importlib.util.spec_from_file_location("dispatch_state_reader",
-        Path(os.environ["DISPATCH_HOOKS"]) / "plan_continue_classify.py")
-    reader = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(reader)
-    state = reader.read_state(Path(os.environ["DISPATCH_REPO"]))
-    if not isinstance(state, dict) or state.get("state_status") == "state_error":
-        sys.exit(0)
-    if reader.finished(state, Path(os.environ["DISPATCH_REPO"])):
-        sys.exit(0)
-except Exception:
-    sys.exit(0)
 try:
     p = json.loads(sys.stdin.read())
 except Exception:
     sys.exit(0)
 if not isinstance(p, dict) or "cursor_version" in p:
+    sys.exit(0)
+try:
+    spec = importlib.util.spec_from_file_location("dispatch_state_reader",
+        Path(os.environ["DISPATCH_HOOKS"]) / "plan_continue_classify.py")
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    root = Path(os.environ["DISPATCH_REPO"])
+    state = reader.read_state(root)
+    if isinstance(state, dict) and state.get("state_status") == "state_error":
+        sys.exit(0)
+    if (state is None or reader.finished(state, root)) and os.environ["DISPATCH_MAIN"]:
+        root = Path(os.environ["DISPATCH_MAIN"])
+        state = reader.read_state(root)
+    if not isinstance(state, dict) or state.get("state_status") == "state_error":
+        sys.exit(0)
+    if reader.finished(state, root):
+        sys.exit(0)
+except Exception:
+    sys.exit(0)
+claude, log = root / ".claude", root / ".claude" / "dispatch-log.jsonl"
+if not claude.is_dir() or claude.is_symlink() or log.is_symlink():
     sys.exit(0)
 ev = p.get("hook_event_name")
 line = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -65,7 +88,7 @@ elif ev in ("SubagentStart", "SubagentStop") and p.get("agent_id"):
                 agent_type=p.get("agent_type"), agent_id=p.get("agent_id"))
 else:
     sys.exit(0)
-fd = os.open(os.environ["DISPATCH_LOG"], os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
 with os.fdopen(fd, "a") as fh:
     fh.write(json.dumps(line) + "\n")
 ' >/dev/null 2>&1

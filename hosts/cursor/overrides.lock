@@ -1,52 +1,52 @@
 README.md:
-  base_sha256: bb9f64db4c0c4ec9d4ab8ee79bfbfb3719c1f44cff8ac2dbacac74c0a6983565
+  base_sha256: 26ec04f1941659085d9dd99364b42df83aafb19e9c476c62b531885ee1723fde
 agents/architecture-researcher.md:
-  base_sha256: 443967bb5316eaee82f33f1683aa5f9542b98aefaa059fa589391b940e55c13b
+  base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
-  base_sha256: 0401633ea7eb7ab36f955b709ec0c68274d42591e39d37383f5810d8065a7778
+  base_sha256: f326ddd1557c18ecd3fd45032cd9c9ea1b42b810c2ef5edb935fd8de33335622
 agents/code-reviewer.md:
-  base_sha256: 9fae2e15579c341b8be112f6a91cf1e6a127fb6bd541fd25a3a521e9209e7088
+  base_sha256: ec42002dbfae3a4eaf821b41f0f9a4bac791444820bf4266e1839c66f3f0d0d2
 agents/design-handoff-reproducer.md:
-  base_sha256: e9448612954289cc8930264891fbfacdce5f3a983f8735e462ad087c4ceb6874
+  base_sha256: 73089a291824b2d23d08bdd2a3ddaa6bdd45722c4973cf921fe2b33522c2d334
 hooks/dispatch-log.sh:
-  base_sha256: e993234fa47b5068d10f8fa27376ab54aacc9e0a181b449b83f87ed048723454
+  base_sha256: cad2fc046172932a548b2e475cc9a647fad3be8bb2db8f9c52d2577c405c3ca9
   host_fact: 'Cursor sent no subagentStart or subagentStop event in any probe mode, and its preToolUse hook (matcher Task) is a permission hook that runs from the plugin folder, so the fork logs dispatch lines only, on preToolUse: it answers {"permission":"allow"}, takes the repo from the payload''s workspace_roots, logs tool_input.subagent_type (empty when absent), and writes one line per tool_use_id, because an entry on both routes ran it twice for one call.'
   depends_on:
-    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
 hooks/git-ref-gate.sh:
-  base_sha256: 208f0a5b6077d83a29074525fb85eb8f9bdd903436d262cb18484c45713bd076
+  base_sha256: 1ceb9f59909328a442af42353c6fd6e6b39376a05323627ac7468d4a6acc73e9
   host_fact: 'On Cursor an executor left to choose proved only the claims it picked, and it installs nothing it is not told to, so proof there is every claim, once per stage at the gate, and on while a plan is in flight: the fork gates the Stage N green commit, needs a record for every claim of every task of stage N, and its shim is installed by the Cursor hooks installer, which the beforeShellExecution commit gate enforces.'
   depends_on:
-    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
-    skills/executing-plans/scripts/prove-claim.py: 14486ef0915d44700f0e3fa7ea6752df54ea275e31d004301732dc74f2484429
+    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    skills/executing-plans/scripts/prove-claim.py: 463c276752f5ca5c79ce3f4a040d8cb0b9cc7a4c13e57e05690917cd54e29b98
 hooks/plan-continue.sh:
   base_sha256: 43113fb2ba0eaa385c941e242696bf64b86118fce0d408bb774c0a35d8aa6fe2
   host_fact: A Cursor stop hook answers with followup_message, which Cursor submits as the next user message, its payload carries no message text, and it fires only in an interactive session, run from the workspace root; so the fork continues every stop of a plan in flight that the execution state does not record as a stop, finds the repo from workspace_roots, keys the conversation by conversation_id and finds its siblings from its own resolved path.
   depends_on:
-    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
 skills/applying-design-handoff/SKILL.md:
-  base_sha256: 2e93acd0a99ce1ded84747632fd5c25c3f01a979ceea51a9747789060855478e
+  base_sha256: 28a0e74ad72a982e1ed4753a56b0d13d64fa9c39bc8da73671583eb7088dd84c
 skills/applying-design-handoff/references/handoff-pack-format.md:
   base_sha256: f7b0a89982bed0c7859956b6e9ebb2157d4747825420a4a304b1cfd002e463c1
 skills/applying-design-handoff/references/playwright-capture.md:
   base_sha256: 744f361cebb7be0c7c047be7e0f0a5d2183cab5927938f063e72b2cc5ffd62c3
 skills/architecting-projects/SKILL.md:
-  base_sha256: c8af46cfc685b131b8dbdc83b363db4873fb79c81989cfe83a7bff109ead4bef
+  base_sha256: f0c19bb8157098f3fb902aed4784d7e1daf5b757892387dc9203cbd14436ac05
 skills/brainstorming/SKILL.md:
-  base_sha256: 1c06ca3d892ed705315c51a5b465ad820d598c82de46b4212bedb34d68977820
+  base_sha256: 0cc581ff8e4d1982e5d584126198a31f8e99a04125a641aec077c53ac504e8a7
 skills/dispatching-parallel-agents/SKILL.md:
-  base_sha256: 9a2669d897638150ec89c5a6db7f15cfe6e141cb47df8a94a8bdad3a2c46dd36
+  base_sha256: 4d712fba06806607d855cd2243ca29dede60ad40dd1d9621de45a298b20ae493
 skills/dispatching-parallel-agents/references/stack-routing.md:
   base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
 skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
   base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
   host_fact: 'Cursor has no plugin namespace: a plugin agent asked for by name ran as its bare file name, and its built-in agents are generalPurpose and explore, so the validator fails any <plugin>:<name> id and accepts bare names and those built-ins.'
 skills/executing-plans/SKILL.md:
-  base_sha256: 3af4ce0de3c75d212c9520a0f23608747bea0f118462e8ed659421313bc0141d
+  base_sha256: 30c1dc8c98c04fec7c91f9ff55fe702639da3c062be47b2189c5de8ab000e956
 skills/executing-plans/references/close-out.md:
-  base_sha256: a672a8653367a8c62a5017e15e54f72b86ffb39361830e90654da2718a2372d7
+  base_sha256: 32f67592719da394f433cc790cbfd71a55de8e6ee686bf114ff2a0afa5b04926
 skills/executing-plans/references/light-plans.md:
-  base_sha256: e0244928930b57a7e051d73425659931139d3eae14e8b4012032394ce63922f6
+  base_sha256: 746269d2e2bb8c318fd0c09ab13ad698de19164bc56d4acd2017172910874767
 skills/executing-plans/references/master-plans.md:
   base_sha256: 4792dee784f32689b02a0d3617c01baa89f49a67900e74f742bfc33d0049f2ec
 skills/executing-plans/references/plan-continue-hook.md:
@@ -54,33 +54,33 @@ skills/executing-plans/references/plan-continue-hook.md:
 skills/executing-plans/references/preflight-checks.md:
   base_sha256: dce2921011f25d9ec1436da43df755d0a2a23550995ef1c7411627594ab7f7ed
 skills/executing-plans/references/progress-state-file.md:
-  base_sha256: ae82cd6fa6807f279808ddfe95ac1a377f5bd029de2ffcd66ade6b1f5ba517c3
+  base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
 skills/executing-plans/references/review-scope.md:
-  base_sha256: 8667ef32842f1661c31b0c19da89b315632415dd9a9240a25645e0a2e06c28a1
+  base_sha256: ab1060b4c86442377d6c8196515a26c00069d28a30ad65bf45c6a81cae842747
 skills/executing-plans/references/session-handoff.md:
   base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
 skills/executing-plans/references/stage-gate.md:
-  base_sha256: 8d95d68340828623ba3182539e4f7bb848c9a71e048a365d3751c7f75a840c96
+  base_sha256: e191d6c94a13b15b8b1483f6df4b5388157f91dfb6cb1634b541776d57f98d25
 skills/executing-plans/references/task-execution.md:
-  base_sha256: 95d907fc71bf73851bfd095979f5abe67162709f42866f954676561087a94d00
+  base_sha256: 55a766681eacf67e4416a06ce8216c13900497f86962529a213836110b72ea9e
 skills/executing-plans/scripts/plan-flip-audit.py:
-  base_sha256: e11e96af2202b6912b6dc4f0ed2342a62e0afed96e3c9a40df82c16fcbc95147
+  base_sha256: d099abceee8c18882c38587520eeb2951a4af2d121c6789cd9262ef9da904d1a
   host_fact: 'The Cursor proof model of the hooks/git-ref-gate.sh fork (every claim, once per stage at the gate): findings 8 and 9 hold every claim of a ticked task to a record and skip the tasks of the stage still in flight, read through the hooks'' state reader, so the audit and the Cursor commit gate count the same set. It also carries unrecorded_gate(), which core has none of: the Cursor stop hook asks it whether a stage claimed done (stage-complete, closeout, or ticked gate boxes) lacks its Stage N green commit.'
   depends_on:
-    hooks/plan_continue_classify.py: 86075ebf6296c2a5660e40ba9c54c246ef8f073bb89528e6064b1ff1981fb9a1
+    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
     lib/staleness.py: fb4e58f7e56fd36e0b1c63d097cd7837bd938263da6db6e1d5268a43a83a486c
-    skills/executing-plans/scripts/prove-claim.py: 14486ef0915d44700f0e3fa7ea6752df54ea275e31d004301732dc74f2484429
+    skills/executing-plans/scripts/prove-claim.py: 463c276752f5ca5c79ce3f4a040d8cb0b9cc7a4c13e57e05690917cd54e29b98
 skills/executing-plans/scripts/statusline-chain.sh:
   base_sha256: 930df5bf1e77fdf09366ff3723369e7bfe6aad6980feff674cff2219ad4c1fd2
   host_fact: The Cursor CLI pipes its own payload to the statusLine command, and Cursor writes no status line script of its own, so the fork defaults the base script to ~/.cursor/statusline.sh and passes the payload bytes through unread to the base and to plan-progress.py.
   depends_on:
-    skills/executing-plans/scripts/plan-progress.py: 86694d30f1d8f0d9520b431261e1499c0f990f11c6fdaab600a4af128140a79d
+    skills/executing-plans/scripts/plan-progress.py: 729dd773531953328579f7241cc8316c42bad39bb2062b7c3f8d25d910784387
 skills/executing-plans/scripts/statusline-install.py:
   base_sha256: 879e0e5ed07808911d8597d1e5d2086c18616e627244e0b5af7096b4cdc3c80d
   host_fact: The Cursor CLI reads statusLine from ~/.cursor/cli-config.json, not from Claude Code's settings.json, a plugin cannot contribute it, and a local install is not a versioned cache, so the fork writes, repairs and removes that one key there, pointing at the sibling statusline-chain.sh.
 skills/honest-gates/SKILL.md:
   base_sha256: 7b00a13103068f95b1e7ce5a8cfd23fb1c58c1b733659543b577c882f9ae94db
 skills/planning-projects/SKILL.md:
-  base_sha256: 2889e31b309c2cba2aadab06a40ff3b9797a0738f3be0f76e7f81c278110fedb
+  base_sha256: e5f851e4253e4878e0598e456aa1fa38ac42b8f5ab77b43da5ed55c1ffc7f400
 skills/project-maturity/SKILL.md:
-  base_sha256: b2c8eb0f6f768d9471eb7be18c693c967428655e85c0941af9fd5de0467791e0
+  base_sha256: 40a8ab78a2515420f8ed3184e8f004936eff894399a56615911219bc26e9caff

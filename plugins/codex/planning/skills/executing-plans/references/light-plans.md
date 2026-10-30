@@ -51,7 +51,8 @@ running at full weight:
    goal-evaluator runs — at the gate (Step 3.5) and at close-out (Phase Close-out step 3) —
    is decided by the review-scope table, not by this plan being Light: off at `none`, on at
    `light` and `standard` wherever a gate check carries `(judgment)` or the stage has
-   `**Outcomes:**`, always on at `high`. A Light plan whose result nobody outside the code
+   `**Outcomes:**` — unless a recorded goal command decides it
+   (`stage-gate.md` § Skipped when a recorded command decides the goal) — always on at `high`. A Light plan whose result nobody outside the code
    meets has no Outcomes and an all-command gate, so it runs no evaluator — but that is a
    consequence of what the plan contains, not an exemption the format grants. A `(judgment)` check is a check that needs a reader; being in a small
    plan does not make it need one less.

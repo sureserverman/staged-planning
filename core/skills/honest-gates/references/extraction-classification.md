@@ -68,9 +68,9 @@ destination:
 
 Each row names a string that must be **trunk-resident**, in the body of the section that
 claims it (not its heading line), on one physical line. `scripts/check-trunk-retention.py`
-sweeps this table in full; a marker pins **presence, never assertion**, so a rule
-inverted in place around its marker text still passes — the contract suite in `../tests/`
-is what reads the sentences.
+sweeps this table in full. A marker pins presence, and a negation in the few words before
+it (`You need not **…**`) fails as NEGATED-RULE; a rule withdrawn later in its sentence
+still passes there — the contract suite in `../tests/` is what reads whole sentences.
 
 **One marker per obligation, not per section.** The Prohibited section retains nine distinct
 prohibitions; pinned by one string, eight could be demoted with this sweep green.

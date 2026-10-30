@@ -316,6 +316,67 @@ def finished(state, root):
     return len(text) <= MAX_PLAN_BYTES and not OPEN_TASK.search(text)
 
 
+def mentions_git_commit(command):
+    """True when the text names both `git` and `commit`: the commit gates' trigger. Two
+    linear searches, not one `git.*commit` pattern, so a large payload with many `git`
+    and no `commit` costs no backtracking. Over-inclusive on purpose, as the gates are."""
+    return bool(re.search(r"\bgit\b", command) and re.search(r"\bcommit\b", command))
+
+
+def live_proof_break(repo):
+    """Why a commit in `repo` must wait for prove-claim.py, or None: an interrupted run's
+    journal is still there (its break may be in the tree), or a run holds its lock now
+    (the lock is held for the whole run, so a break may be applied). Shared by the
+    Claude guard (proof-guard.sh) and the Cursor gate (commit-gate.sh).
+
+    Only prove-claim takes that lock or writes that journal, so a repo that never ran it
+    never matches. FAILS OPEN: git failing or printing nothing, the lock missing, or a
+    filesystem without flock (ENOLCK, EOPNOTSUPP) all return None. Testing the lock takes
+    it for an instant; a run starting in that instant exits 2, "wait for it"."""
+    import fcntl
+    import subprocess
+
+    def path(name):
+        r = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", name],
+                           capture_output=True, text=True, timeout=10)
+        p = r.stdout.strip()
+        if r.returncode != 0 or not p:
+            return None
+        return Path(p) if os.path.isabs(p) else Path(repo) / p
+
+    # The lock first: a live run has its journal too while its break is applied, and
+    # telling it to "run prove-claim.py again" then only meets "wait for it".
+    lock = path("prove-claim.lock")
+    held = False
+    if lock is not None:
+        try:
+            fd = os.open(lock, os.O_RDONLY)
+        except OSError:
+            fd = None
+        if fd is not None:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except BlockingIOError:
+                held = True
+            except OSError:
+                pass
+            finally:
+                os.close(fd)
+    if held:
+        return (f"a prove-claim.py run is in progress ({lock} is held): it may have a "
+                "break applied, and a commit now would carry the break or move the tree "
+                "under its proof. Wait for the run to finish, then commit.")
+    journal = path("prove-claim-journal.json")
+    if journal is not None and journal.is_file():
+        return (f"an interrupted prove-claim.py run left its journal {journal}: its break "
+                "may still be in the tree. Run prove-claim.py again — it restores the tree "
+                "and stops; if it says the repo has moved or the journal is unreadable, "
+                "check the files it names by hand (git status, git diff) and delete the "
+                "journal. Then commit.")
+    return None
+
+
 def read_state(root):
     """The parsed <root>/.claude/plan-progress.json, or None.
 

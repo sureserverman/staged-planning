@@ -150,6 +150,205 @@ with tempfile.TemporaryDirectory() as t:
     rc, out = run("--plan", plan, "--stage", 2, "--repo", repo)
     check("a claimed Tier-2 review with a matching dispatch passes", rc == 0, f"rc={rc} {out}")
 
+    # The gate evaluator skipped because a recorded command decides the goal
+    # (stage-gate.md § Skipped when a recorded command decides the goal): the line names the
+    # command and the commit, the gate's ticked `(goal)` check runs that command, and the
+    # gate has no `(judgment)` line. Anything short of that names the line and exits 1.
+    head = git(repo, "rev-parse", "HEAD").stdout.strip()
+    goal = "- [x] **(goal)** the parser reads every entry: `python3 tests/test_parse.py`"
+
+    def skip_plan(gate_lines):
+        p = write_plan(t)
+        p.write_text(p.read_text().replace("- [ ] Stage-scope: `true`", gate_lines))
+        return p
+
+    def skip_line(cmd="python3 tests/test_parse.py", sha=None):
+        return f"evaluator: skipped — goal command `{cmd}` at {sha or head}"
+
+    write_log(repo, [])
+    for name, gate_lines, line, want, needle in (
+        ("a skip naming the ticked (goal) command and a commit on HEAD passes",
+         goal, skip_line(), 0, "goal command"),
+        ("a skip at a gate with a (judgment) line exits 1 naming it",
+         goal + "\n- [x] **(judgment)** the errors read well", skip_line(), 1, "(judgment)"),
+        ("a skip whose (goal) check is not ticked exits 1 naming it",
+         goal.replace("[x]", "[ ]"), skip_line(), 1, "(goal)"),
+        ("a skip naming another command than the (goal) check's exits 1 naming it",
+         goal, skip_line(cmd="true"), 1, "(goal)"),
+        ("a skip at a gate with no (goal) check exits 1 naming it",
+         "- [x] Stage-scope: `python3 tests/test_parse.py`", skip_line(), 1, "(goal)"),
+        ("a skip naming a commit HEAD does not hold exits 1 naming it",
+         goal, skip_line(sha="0123abc"), 1, "0123abc"),
+        ("a skip naming no command or commit exits 1 naming it",
+         goal, "evaluator: skipped — goal command ran green", 1, "name the command"),
+        ("a bare `evaluator: skipped` exits 1 naming it",
+         goal, "evaluator: skipped", 1, "name the command"),
+        ("a skip giving prose in place of the goal command exits 1 naming it",
+         goal, "evaluator: skipped — the suite passed", 1, "name the command"),
+        ("a skip at a plan declaring review-scope high exits 1 naming it",
+         goal + "\n\nreview-scope: high — fixture", skip_line(), 1, "high"),
+        ("a numbered (judgment) box blocks the skip",
+         goal + "\n1. [x] **(judgment)** the errors read well", skip_line(), 1, "(judgment)"),
+        ("a (judgment) box under a sub-heading of the gate blocks the skip",
+         goal + "\n\n#### Round 2\n\n- [x] **(judgment)** the errors read well",
+         skip_line(), 1, "(judgment)"),
+        ("a scope line for the evaluator at a gate with a (judgment) line exits 1",
+         goal + "\n- [x] **(judgment)** the errors read well",
+         "evaluator: not run — not mandated", 1, "mandated here"),
+        ("an owner opt-out for the evaluator at a gate with a (judgment) line passes",
+         goal + "\n- [x] **(judgment)** the errors read well",
+         'evaluator: not run — owner opt-out, owner 2026-10-30: "skip it"', 0, "scope"),
+    ):
+        rc, out = run("--plan", skip_plan(gate_lines), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=line + "\n")
+        check(name, rc == want and needle in out, f"rc={rc} {out}")
+
+    # The skip's commit is the tree the stage ends on. A commit the stage changed files
+    # after says nothing about what ships; the proof tree and the plan may move.
+    plain = git(repo, "rev-parse", "HEAD").stdout.strip()
+    (repo / "later.py").write_text("x = 1\n")
+    git(repo, "add", "later.py")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "later")
+    moved = git(repo, "rev-parse", "HEAD").stdout.strip()
+    rc, out = run("--plan", skip_plan(goal), "--stage", 2, "--repo", repo,
+                  "--report", "-", stdin=skip_line(sha=plain) + "\n")
+    check("a skip at a commit the stage changed files after exits 1 naming the file",
+          rc == 1 and "later.py" in out, f"rc={rc} {out}")
+    rc, out = run("--plan", skip_plan(goal), "--stage", 2, "--repo", repo,
+                  "--report", "-", stdin=skip_line(sha=moved) + "\n")
+    check("a skip at the commit the stage ends on passes", rc == 0, f"rc={rc} {out}")
+    (repo / "proof").mkdir(exist_ok=True)
+    (repo / "proof" / "note.md").write_text("x\n")
+    git(repo, "add", "-f", "proof/note.md")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "proof")
+    rc, out = run("--plan", skip_plan(goal), "--stage", 2, "--repo", repo,
+                  "--report", "-", stdin=skip_line(sha=moved) + "\n")
+    check("a later commit touching only proof/ leaves the skip standing", rc == 0, f"rc={rc} {out}")
+    head = git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    # The skip checks read the plan and git, never the log, so a missing log does not
+    # turn them off. A claim still needs the log and stays NOT RUN.
+    log_path = repo / ".claude" / "dispatch-log.jsonl"
+    log_path.unlink()
+    for name, line, want, needle in (
+        ("with no log a bare `evaluator: skipped` still exits 1 naming it",
+         "evaluator: skipped", 1, "name the command"),
+        ("with no log a correct skip and no claim exits 0",
+         skip_line(sha=head), 0, "goal command"),
+        ("with no log a false skip beside a claim exits 1, not 3",
+         "evaluator: skipped\nreview: Tier-2 planning:code-reviewer over a..b — APPROVE", 1,
+         "name the command"),
+        ("with no log a claim beside a correct skip stays NOT RUN",
+         skip_line(sha=head) + "\nreview: Tier-2 planning:code-reviewer over a..b — APPROVE",
+         3, "NOT RUN"),
+    ):
+        rc, out = run("--plan", skip_plan(goal), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=line + "\n")
+        check(name, rc == want and needle in out, f"rc={rc} {out}")
+    write_log(repo, [])
+    # An evaluator line naming no agent, at every gate where the evaluator is mandated: a
+    # `(judgment)` line, Outcomes, or `high`. Only a goal-command skip (below `high`) or an
+    # owner's quoted words excuse it; an excuse word never does, and `skipped` names its
+    # goal command even where the evaluator is not mandated.
+    judgment = goal + "\n- [x] **(judgment)** the errors read well"
+
+    def gate_plan(kind):
+        p = skip_plan(judgment if kind in ("judgment", "none") else goal)
+        text = p.read_text()
+        if kind == "outcomes":
+            text = text.replace("## Stage 2: two\n", "## Stage 2: two\n\n**Outcomes:** the user\n"
+                                "- Works: the parser reads a file.\n")
+        elif kind == "stage1-outcomes":
+            text = text.replace("## Stage 1: one\n", "## Stage 1: one\n\n**Outcomes:** the user\n"
+                                "- Works: the parser reads a file.\n")
+        elif kind in ("high", "none"):
+            text += f"\n\nreview-scope: {kind} — fixture\n"
+        p.write_text(text)
+        return p
+
+    SKIP_EXCUSES = ("docs-only diff", "trivial, I judged it unnecessary", "non-code",
+                    "config-only", "comment-only", "version bump", "not run", "not mandated",
+                    "not dispatched", "opt-out")
+    RUN_EXCUSES = ("not run — the diff looked small", "not dispatched — the diff looked small",
+                   "not run — not mandated", "not run — opt-out")
+    QUOTED = 'owner, 2026-10-30: "no evaluator here"'
+    for kind in ("judgment", "outcomes", "high"):
+        for why in SKIP_EXCUSES:
+            line = f"evaluator: skipped — {why}"
+            rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
+                          "--report", "-", stdin=line + "\n")
+            check(f"at a {kind} gate `{line}` exits 1 naming it",
+                  rc == 1 and line in out, f"rc={rc} {out}")
+        for why in RUN_EXCUSES:
+            line = f"evaluator: {why}"
+            rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
+                          "--report", "-", stdin=line + "\n")
+            check(f"at a {kind} gate `{line}` exits 1 naming it",
+                  rc == 1 and line in out, f"rc={rc} {out}")
+        for line in (f"evaluator: skipped — {QUOTED}", f"evaluator: not run — {QUOTED}"):
+            rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
+                          "--report", "-", stdin=line + "\n")
+            check(f"at a {kind} gate an owner's quoted words excuse `{line[:30]}`",
+                  rc == 0, f"rc={rc} {out}")
+    for kind, line, want in (
+            ("outcomes", skip_line(), 0),
+            ("plain", "evaluator: skipped — docs-only diff", 1),
+            ("plain", "evaluator: not run — tier is light, no (judgment) check or Outcomes", 0),
+            ("stage1-outcomes", "evaluator: not run — tier is light, no Outcomes at this gate", 0),
+            ("none", "evaluator: not run — tier none", 0)):
+        rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=line + "\n")
+        check(f"at a {kind} gate `{line[:45]}` exits {want}", rc == want, f"rc={rc} {out}")
+
+    # review-scope.md: conformance lines carry `(judgment)` but the executor reads them, so a
+    # gate whose only `(judgment)` lines are those is, for the evaluator, a gate carrying none.
+    conformance = goal + ("\n- [x] **(judgment)** No change contradicts a decision in force "
+                          "(DEC-1); no Supersedes citation")
+    tierline = "evaluator: not run — tier is light, no (judgment) check or Outcomes"
+    for name, gate_lines, line, want in (
+            ("a conformance-only gate takes a scope line", conformance, tierline, 0),
+            ("a conformance-only gate takes the goal skip", conformance, skip_line(), 0),
+            ("an architecture-conformance line funds nothing either",
+             goal + "\n- [x] **(judgment)** architecture-conformance: no boundary crossed",
+             tierline, 0),
+            ("a real (judgment) line beside a conformance line still mandates it",
+             conformance + "\n- [x] **(judgment)** the errors read well", tierline, 1),
+            ("a real (judgment) line beside a conformance line still blocks the skip",
+             conformance + "\n- [x] **(judgment)** the errors read well", skip_line(), 1)):
+        rc, out = run("--plan", skip_plan(gate_lines), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=line + "\n")
+        check(name, rc == want, f"rc={rc} {out}")
+    # Another label for the same line is the same line, and a mandated gate states it.
+    for line in ("Gate evaluator: skipped — docs-only diff", "goal evaluator: skipped — trivial",
+                 "Goal-evaluator: skipped — trivial", "evaluator skipped — docs-only diff"):
+        rc, out = run("--plan", gate_plan("judgment"), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=line + "\n")
+        check(f"at a mandated gate `{line}` exits 1", rc == 1, f"rc={rc} {out}")
+    write_log(repo, [dispatch("2026-10-06T10:05:00+00:00", "planning:code-reviewer")])
+    for kind, want in (("judgment", 1), ("outcomes", 1), ("high", 1), ("plain", 0)):
+        rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=REVIEW + "\n")
+        check(f"a {kind} gate reporting no evaluator line exits {want}",
+              rc == want and (want == 0 or "no evaluator line" in out), f"rc={rc} {out}")
+    write_log(repo, [])
+    # Any other no-agent, no-verdict line fails where the evaluator is mandated; a line stating
+    # a verdict stays advisory (the measured 0% true rate in the script's docstring).
+    for line, kind, want in (("evaluator: n/a", "judgment", 1), ("evaluator: waived", "outcomes", 1),
+                             ("evaluator: omitted — docs-only", "high", 1),
+                             ("evaluator: skip", "judgment", 1), ("evaluator: n/a", "plain", 4),
+                             ("evaluator: looked at it, clean", "judgment", 4)):
+        rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
+                      "--report", "-", stdin=line + "\n")
+        check(f"at a {kind} gate `{line}` exits {want}", rc == want, f"rc={rc} {out}")
+
+    # Catches: the (goal) box of another stage standing in for this stage's.
+    other = write_plan(t)
+    other.write_text(other.read_text().replace("- [x] Stage-scope: `true`", goal))
+    rc, out = run("--plan", other, "--stage", 2, "--repo", repo, "--report", "-",
+                  stdin=skip_line() + "\n")
+    check("the (goal) box of another stage does not record this stage's goal",
+          rc == 1 and "(goal)" in out, f"rc={rc} {out}")
+
     # Catches: a fabricated review passing — no dispatch of the claimed type.
     write_log(repo, [dispatch("2026-10-06T10:05:00+00:00", "general-purpose")])
     rc, out = run("--plan", plan, "--stage", 2, "--repo", repo)

@@ -1,6 +1,6 @@
 ---
 name: planning-projects
-description: Use when the user wants a plan for a project of any size — triages to a format first (Direct/Light/Standard/Master) and may decline to plan a trivial job. Triggers on "roadmap", "break this down", "create a plan", "plan this", "how should I build".
+description: Use when the user wants a plan for a project of any size. Triggers on "roadmap", "break this down", "create a plan", "plan this", "how should I build".
 ---
 
 > On Cursor, `<planning-plugin>` is this plugin's installed folder: the folder that holds `skills/` and `.cursor-plugin/` (`~/.cursor/plugins/local/planning` for a local install), which is `../..` from this SKILL.md. In a shell command use its absolute path, quoted.

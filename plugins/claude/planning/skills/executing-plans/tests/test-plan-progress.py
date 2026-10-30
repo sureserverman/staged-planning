@@ -8,16 +8,20 @@ JSON, and asserts: silence when idle/broken (never a traceback), the Status
 counts via the shared lib/plan_parser.py regexes, the bar geometry, the per-phase
 glyphs, walk-up discovery from a subdirectory, and staleness marking.
 """
+import contextlib
 import hashlib
 import importlib.util
 import inspect
+import io
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -81,11 +85,18 @@ def check(cond, label):
         FAILURES.append(label)
 
 
+def _as_text(r):
+    """`r` (captured as bytes) with stdout/stderr decoded the way text=True would."""
+    def dec(b):
+        return b.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return subprocess.CompletedProcess(r.args, r.returncode, dec(r.stdout), dec(r.stderr))
+
+
 def run(cwd_value, extra_stdin=None):
     stdin = extra_stdin if extra_stdin is not None else json.dumps({"cwd": str(cwd_value)})
-    r = subprocess.run(
-        [sys.executable, str(SCRIPT)], input=stdin, capture_output=True, text=True
-    )
+    raw = subprocess.run([sys.executable, str(SCRIPT)], input=stdin.encode(),
+                         capture_output=True)
+    r = _as_text(raw)
     plain_out = ANSI_RE.sub("", r.stdout)
     # Every fixture state the suite renders through the CLI is also rendered
     # through `--json` with the SAME stdin, and the two must agree group for
@@ -93,11 +104,58 @@ def run(cwd_value, extra_stdin=None):
     # design (exit 2), so parity is asserted only where the text mode had a
     # valid statusline payload to read.
     if _stdin_is_payload(stdin):
-        rj = subprocess.run([sys.executable, str(SCRIPT), "--json"],
-                            input=stdin, capture_output=True, text=True)
+        rawj = subprocess.run([sys.executable, str(SCRIPT), "--json"],
+                              input=stdin.encode(), capture_output=True)
+        rj = _as_text(rawj)
         json_parity(plain_out.splitlines(), rj.stdout,
                     f"cli {Path(str(cwd_value)).name}", rc=rj.returncode)
+        byte_parity(stdin, raw, rawj, f"cli {Path(str(cwd_value)).name}")
     return r, plain_out
+
+
+# The CLI does its records-home reads in a forked child and prints what the child
+# produced. Every fixture state run() renders is ALSO rendered in-process here, and
+# the CLI's stdout bytes, stderr text and exit status must match it exactly: the
+# fork is a bound on time, never a change to output.
+BYTE_PARITY_RUNS = []
+BYTE_PARITY_MISMATCHES = []
+_REF_MOD = []
+
+
+def _inprocess(fn, cwd):
+    """(stdout bytes, stderr text, status) of fn(cwd) run in this process, the way
+    main() would emit it."""
+    if not _REF_MOD:
+        _REF_MOD.append(load_module())
+    mod = _REF_MOD[0]
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        try:
+            if fn == "render":
+                out = "".join(line + "\n" for line in mod.render.__wrapped__(cwd))
+                status = 0
+            else:
+                try:
+                    out, status = mod.render_json(cwd) + "\n", 0
+                except Exception as e:                          # noqa: BLE001
+                    print(f"FAIL: --json crashed: {e!r}", file=sys.stderr)
+                    out, status = "", 2
+        except Exception:                                       # noqa: BLE001
+            out, status = "", 0     # the text path's bottom-of-file handler
+    return out.encode("utf-8"), err.getvalue(), status
+
+
+def byte_parity(stdin, raw, rawj, where):
+    data = json.loads(stdin) if stdin.strip() else {}
+    cwd = data.get("cwd") or (data.get("workspace") or {}).get("current_dir") or "."
+    BYTE_PARITY_RUNS.append(where)
+    for mode, got in (("render", raw), ("json", rawj)):
+        want = _inprocess(mode, cwd)
+        have = (got.stdout, got.stderr.decode("utf-8"), got.returncode)
+        if have != want:
+            BYTE_PARITY_MISMATCHES.append(
+                f"[{where} {mode}] cli {have[0][:80]!r}/{have[1][:80]!r}/rc {have[2]} "
+                f"vs in-process {want[0][:80]!r}/{want[1][:80]!r}/rc {want[2]}")
 
 
 def _stdin_is_payload(stdin):
@@ -2453,6 +2511,30 @@ def case_dispatch_check():
     check(r.returncode == 2 and "roster missing" in r.stderr,
           f"no roster item exits 2 with `roster missing` ({r.returncode}, {r.stderr!r})")
 
+    # A Light plan has no Preflight, so no roster item: every task runs inline by
+    # format. It is a Light plan by its `# Light Plan:` heading OR its file name.
+    light_body = ("\n\n### Task 1.1: scaffold\n- **Status:** [x]\n\n"
+                  "## Verification\n\n- [x] the suite is green\n")
+    light = tmp / "light"
+    light.mkdir()
+    by_heading = light / "plan.md"
+    by_heading.write_text("# Light Plan: demo" + light_body)
+    by_name = light / "demo-light-plan.md"
+    by_name.write_text("# Plan: demo" + light_body)
+    for p, how in ((by_heading, "a `# Light Plan:` heading"),
+                   (by_name, "a `-light-plan.md` file name")):
+        r = dcheck(light, p)
+        check(r.returncode == 0
+              and r.stdout == "dispatch: 0 of 0 (light plan, inline by format)\n",
+              f"a plan with {how} and no roster exits 0 inline by format "
+              f"({r.returncode}, {r.stdout!r}, {r.stderr!r})")
+    standard = light / "standard.md"
+    standard.write_text("# Plan: demo" + light_body)
+    r = dcheck(light, standard)
+    check(r.returncode == 2 and "roster missing" in r.stderr,
+          f"a Standard plan with no roster still exits 2 `roster missing` "
+          f"({r.returncode}, {r.stderr!r})")
+
     print("  reasons, follow-ups, ranges and broken inputs:")
     repo, plan = make_repo("reasons", "5 of 21 tasks", [
         ("Stage 1 Task 1.2: scaffold", "dispatched — example-expert"),
@@ -3045,10 +3127,637 @@ def case_json_mode():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+STALL_ENV = "PLAN_PROGRESS_TEST_STALL_S"
+# Both callers give the renderer 5 s (the chain's BAR_TIMEOUT, the band's
+# timeoutMs), so a stalled records home must cost less than that.
+STALL_BOUND_S = 4.0
+# How long a test waits for a CLI before calling it hung and killing it: past
+# STALL_BOUND_S, so a hang is measured as a hang, and far below the 30 s stall.
+CLI_GIVE_UP_S = 10.0
+
+
+def stall_fixture(prefix):
+    """(tmp, repo, env): a repo whose records home (`<repo>/docs`, no resolver
+    configured) has in-flight plans, one of them pinned by a state file."""
+    tmp = Path(tempfile.mkdtemp(prefix=prefix))
+    repo = tmp / "repo"
+    plans = repo / "docs" / "plans"
+    plans.mkdir(parents=True)
+    pinned = plans / "2026-01-01-stalled-plan.md"
+    pinned.write_text(PLAN)
+    (plans / "2026-02-01-sibling-plan.md").write_text(PLAN)
+    write_state(repo, plan=str(pinned), phase="task", stage=2, task="2.2",
+                task_desc="render output")
+    home = tmp / "home"
+    home.mkdir()
+    tmpdir = tmp / "tmpdir"        # the reader lock lives here, and goes with the fixture
+    tmpdir.mkdir()
+    env = dict(os.environ, HOME=str(home), TMPDIR=str(tmpdir))
+    env.pop(STALL_ENV, None)
+    return tmp, repo, env
+
+
+def start_cli(repo, env, *args):
+    """The CLI with stdout and stderr on pipes, in its own process group so every
+    child it forks can be found and killed by the group id (= its pid)."""
+    proc = subprocess.Popen([sys.executable, str(SCRIPT), *args],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, env=env, start_new_session=True)
+    t0 = time.monotonic()
+    # Sent now, not at communicate(): a CLI started alongside another must not
+    # sit waiting for its stdin while the first one is being read.
+    proc.stdin.write(json.dumps({"cwd": str(repo)}).encode())
+    proc.stdin.close()
+    proc.stdin = None       # so communicate() does not flush the closed pipe
+    return proc, t0
+
+
+def finish_cli(proc, t0):
+    """(elapsed s or None if it hung, stdout, stderr), reading both pipes to EOF --
+    what statusline-chain.sh's `$(...)` does."""
+    try:
+        out, err = proc.communicate(timeout=max(0.1, CLI_GIVE_UP_S - (time.monotonic() - t0)))
+        return time.monotonic() - t0, out, err
+    except subprocess.TimeoutExpired:
+        kill_group(proc.pid)
+        out, err = proc.communicate()
+        return None, out, err
+
+
+def group_alive(pgid):
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def kill_group(pgid):
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def case_stalled_records_home_is_bounded():
+    """A records home whose reads never return costs one bounded redraw, not 5 s.
+
+    PLAN_PROGRESS_TEST_STALL_S stands in for a dead network mount: the reads
+    sleep before the first one starts. Both the status-line path and --json are
+    run with stdout on a pipe read to EOF, because that is how the chain reads
+    the renderer -- a forked child still holding the pipe would hold the caller.
+    """
+    print("a stalled records home is bounded (status line and --json):")
+    tmp, repo, env = stall_fixture("pp-stall-")
+    pgids = []
+    try:
+        pre = subprocess.run([sys.executable, str(SCRIPT)], env=env, capture_output=True,
+                             input=json.dumps({"cwd": str(repo)}).encode())
+        check(b"3/5" in pre.stdout,
+              f"precondition: with no stall this fixture renders bars ({pre.stdout[:80]!r})")
+        prej = subprocess.run([sys.executable, str(SCRIPT), "--json"], env=env,
+                              capture_output=True, input=json.dumps({"cwd": str(repo)}).encode())
+        check(prej.returncode == 0 and json.loads(prej.stdout or b"{}").get("groups"),
+              "precondition: with no stall --json reports groups")
+
+        stalled = dict(env, **{STALL_ENV: "30"})
+        # Both started at once, so the case costs one bound, not two.
+        text, t_text = start_cli(repo, stalled)
+        js, t_js = start_cli(repo, stalled, "--json")
+        pgids += [text.pid, js.pid]
+        el_text, out_text, err_text = finish_cli(text, t_text)
+        el_js, out_js, err_js = finish_cli(js, t_js)
+        for name, el in (("status line", el_text), ("--json", el_js)):
+            check(el is not None and el < STALL_BOUND_S,
+                  f"{name}: returns within {STALL_BOUND_S:.0f} s of a 30 s stall, pipes read "
+                  f"to EOF (took {'hung past %.0f s' % CLI_GIVE_UP_S if el is None else '%.2f s' % el})")
+        check(text.returncode == 0 and out_text == b"" and err_text == b"",
+              f"status line: degrades to silence, exit 0 (rc {text.returncode}, "
+              f"stdout {out_text[:60]!r}, stderr {err_text[:60]!r})")
+        check(out_js == b"" and b"Traceback" not in err_js,
+              f"--json: no document and no traceback (stdout {out_js[:60]!r}, stderr {err_js[:80]!r})")
+        check(js.returncode != 0,
+              f"--json: a records home that never answered is not exit 0 (rc {js.returncode})")
+        # The bound came from the CLI giving up on its reads, not from the stall
+        # being skipped: the stalled reader is still there. Exactly one: both CLIs
+        # read the same cwd, and whichever forked second found the first reader's
+        # lock held and forked none (case_one_stuck_reader_per_cwd).
+        alive = [g for g in (text.pid, js.pid) if group_alive(g)]
+        check(el_text is not None and el_js is not None and len(alive) == 1,
+              f"one stalled reader is still stalled when both CLIs have returned "
+              f"({len(alive)} alive)")
+    finally:
+        for g in pgids:
+            kill_group(g)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def case_stalled_child_never_writes_cache():
+    """A reader the CLI gave up on never writes the scan cache, even after it unsticks.
+
+    The stall is just past the CLI's deadline, and the case waits until the
+    stalled reader has woken up and finished before looking for the cache.
+    """
+    print("a stalled reader never writes the cache:")
+    mod = load_module()
+    deadline = getattr(mod, "CHILD_DEADLINE_S", 3.0)
+    stall = deadline + 1.0
+    fixtures = [stall_fixture("pp-stall-cache-"), stall_fixture("pp-stall-cache-json-")]
+    procs = []
+    try:
+        for (tmp, repo, env), args in zip(fixtures, ((), ("--json",))):
+            cache = repo / ".claude" / mod.CACHE_NAME
+            check(not cache.exists(), f"precondition{' (--json)' if args else ''}: no cache yet")
+            procs.append(start_cli(repo, dict(env, **{STALL_ENV: str(stall)}), *args))
+        # Both CLIs are read before either reader is waited on, so neither
+        # CLI's time includes the other's wait.
+        finished = [finish_cli(proc, t0) for proc, t0 in procs]
+        for ((tmp, repo, env), args), (proc, t0), (el, out, _) in zip(
+                zip(fixtures, ((), ("--json",))), procs, finished):
+            name = "--json" if args else "status line"
+            check(el is not None and el < STALL_BOUND_S and out == b"",
+                  f"{name}: the CLI gave up before the {stall:.1f} s stall ended "
+                  f"({'hung' if el is None else '%.2f s' % el}, stdout {out[:40]!r})")
+            # Wait (bounded) for the reader to wake, finish and exit by itself.
+            limit = t0 + stall + 3.0
+            while group_alive(proc.pid) and time.monotonic() < limit:
+                time.sleep(0.05)
+            check(not group_alive(proc.pid),
+                  f"{name}: the stalled reader woke up and exited on its own")
+            cache = repo / ".claude" / mod.CACHE_NAME
+            check(not cache.exists(),
+                  f"{name}: the reader that unstuck after the CLI gave up wrote no cache")
+            # Control: the same fixture, unstalled, does write the cache -- so
+            # its absence above is the bound working, not a fixture that never caches.
+            subprocess.run([sys.executable, str(SCRIPT), *args], env=env, capture_output=True,
+                           input=json.dumps({"cwd": str(repo)}).encode())
+            check(wait_for_cache(cache, time.monotonic() + 5.0),
+                  f"{name}: control: an unstalled run writes the cache")
+    finally:
+        for proc, _ in procs:
+            kill_group(proc.pid)
+        for tmp, _, _ in fixtures:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def case_cli_output_matches_inprocess():
+    print("the CLI's output is byte-identical to the in-process render:")
+    # One fixture state whose render writes to STDERR (a versioned state file
+    # outside a git run is a state_error), so the parity covers the child's
+    # captured stderr and not only its stdout.
+    tmp = Path(tempfile.mkdtemp(prefix="pp-bytes-"))
+    repo = tmp / "repo"
+    repo.mkdir()
+    write_state(repo, schema_version=99, plan="plans/x-plan.md")
+    r, _ = run(repo)
+    check("state_error" in r.stderr,
+          f"precondition: this fixture's render writes a state_error to stderr ({r.stderr[:80]!r})")
+    shutil.rmtree(tmp, ignore_errors=True)
+    print(f"  byte parity asserted over {len(BYTE_PARITY_RUNS)} rendered fixture states")
+    check(len(BYTE_PARITY_RUNS) >= 30,
+          f"byte parity ran across the suite's fixture states, not a token few "
+          f"({len(BYTE_PARITY_RUNS)})")
+    check(not BYTE_PARITY_MISMATCHES,
+          "CLI stdout bytes, stderr and exit status equal the in-process render() / "
+          "render_json() on every fixture"
+          + (" — " + "; ".join(BYTE_PARITY_MISMATCHES[:5]) if BYTE_PARITY_MISMATCHES else ""))
+    # The seam is inert when unset: the parity runs above had it unset.
+    check(STALL_ENV not in os.environ, "the stall seam was unset for every parity run")
+
+
 def run_text(cwd_value, env):
     return subprocess.run([sys.executable, str(SCRIPT)],
                           input=json.dumps({"cwd": str(cwd_value)}),
                           capture_output=True, text=True, env=env).stdout
+
+
+# A child for the FIFO cases: a blocking read of a FIFO with no writer never
+# returns, so the reads run in a subprocess the suite can time out, never here.
+_FIFO_PROBE = r"""
+import importlib.util, json, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("plan_progress", sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+plans = Path(sys.argv[2]); out = {}
+for name in ("fifo-plan.md", "link-to-fifo-plan.md"):
+    try:
+        mod._read_plan(plans / name); out[name] = "read"
+    except mod.BAD_PATH:
+        out[name] = "refused"
+out["cache"] = mod._read_cache(plans / "fifo-cache.json")
+out["chosen"] = [f.name for f in mod.discover_plans(plans, cache_file=None)]
+master = plans / "masters" / "2026-01-02-fifo-master-plan.md"
+out["master_blocked"] = mod.pu.plan_blocked(master.read_text(), master)[0]
+state = {"plan": str(plans / "fifo-plan.md")}
+try:
+    mod.pinned_row(plans / "x" / ".claude" / "plan-progress.json", state); out["pinned"] = "read"
+except Exception:
+    out["pinned"] = "refused"
+print(json.dumps(out))
+"""
+
+
+def case_read_caps_and_odd_files():
+    """Every plan and cache read is capped, and refuses what is not a file.
+
+    The caps are set low on the loaded module, so a case needs a few KB rather
+    than a MB, and goes red on a renderer that ignores them.
+    """
+    print("read caps and odd files:")
+    base = tempfile.mkdtemp(prefix="pp-caps-")
+    try:
+        mod = load_module()
+        started = "### Task 1.1: a\n- **Status:** [x]\n\n### Task 1.2: b\n- **Status:** [ ]\n"
+
+        # -- a plan over the size cap is skipped and the rest draws
+        tmp = Path(tempfile.mkdtemp(prefix="pp-cap-", dir=base))
+        plans = tmp / "plans"
+        plans.mkdir()
+        mod.PLAN_READ_CAP = 4096
+        for i in range(3):
+            (plans / f"2026-0{i+1}-01-p{i}-plan.md").write_text(started)
+        big = plans / "2026-09-01-big-plan.md"
+        big.write_text(started + "<!-- " + "x" * 5000 + " -->\n")
+        chosen = [p.name for p in mod.discover_plans(plans, cache_file=None)]
+        check("2026-09-01-big-plan.md" not in chosen,
+              f"a plan over the size cap is skipped (chosen {chosen})")
+        check(chosen == [f"2026-0{i}-01-p{i-1}-plan.md" for i in (3, 2, 1)],
+              f"and the rest draws (chosen {chosen})")
+        refused = False
+        try:
+            mod._read_plan(big)
+        except mod.BAD_PATH:
+            refused = True
+        check(refused, "_read_plan refuses a plan over the size cap with a BAD_PATH error")
+        pinned_refused = False
+        try:
+            mod.pinned_row(tmp / ".claude" / "plan-progress.json", {"plan": str(big)})
+        except Exception:
+            pinned_refused = True
+        check(pinned_refused, "the pinned plan's read is capped too (its bar is skipped)")
+        under = plans / "2026-01-01-p0-plan.md"
+        check(mod._read_plan(under) == under.read_text(errors="ignore"),
+              "a plan under the cap reads exactly as read_text did")
+        crlf = plans / "crlf.md"
+        crlf.write_bytes(b"line one\r\nline two\r\n\xff\n")
+        check(mod._read_plan(crlf) == crlf.read_text(errors="ignore"),
+              "newlines and undecodable bytes read exactly as read_text did")
+
+        # -- a cache file over the size cap is not trusted
+        mod.CACHE_READ_CAP = 4096
+        cache = tmp / ".claude" / "plan-progress-cache.json"
+        cache.parent.mkdir()
+        cache.write_text(json.dumps({"version": 3, "pad": "x" * 5000}))
+        check(mod._read_cache(cache) is None, "a cache over the size cap is not read")
+        cache.write_text(json.dumps({"version": 3}))
+        check(mod._read_cache(cache) == {"version": 3}, "a cache under the cap still is")
+
+        # -- a cold scan over the file-count cap stops at the cap
+        tmp2 = Path(tempfile.mkdtemp(prefix="pp-count-", dir=base))
+        many = tmp2 / "plans"
+        many.mkdir()
+        mod.SCAN_FILE_CAP = 10
+        for i in range(15):
+            (many / f"2026-01-{i+1:02d}-p{i:02d}-plan.md").write_text(started)
+        mod.PLAN_READS = 0
+        chosen = [p.name for p in mod.discover_plans(many, cache_file=None)]
+        check(mod.PLAN_READS == 10,
+              f"a cold scan over the file-count cap stops at the cap (read {mod.PLAN_READS} of 15)")
+        check(chosen == [f"2026-01-{d:02d}-p{d-1:02d}-plan.md" for d in (15, 14, 13)],
+              f"and the files it reads are the newest by name (chosen {chosen})")
+
+        # -- two concurrent _write_cache calls leave one whole cache
+        tmp3 = Path(tempfile.mkdtemp(prefix="pp-race-", dir=base))
+        cache3 = tmp3 / ".claude" / "plan-progress-cache.json"
+        real_replace = os.replace
+        temps, raised = [], []
+
+        def interleaved(src, dst):
+            # The first writer's replace runs only after a second writer has
+            # written AND replaced: the race two sessions in one repo can hit.
+            temps.append(str(src))
+            if len(temps) == 1:
+                mod._write_cache(cache3, tmp3, [["b", 2, 2]], ["second"], ["r"])
+            try:
+                real_replace(src, dst)
+            except OSError as e:
+                raised.append(repr(e))
+                raise
+        mod.os.replace = interleaved
+        try:
+            mod._write_cache(cache3, tmp3, [["a", 1, 1]], ["first"], ["r"])
+        finally:
+            mod.os.replace = real_replace
+        check(len(temps) == 2 and temps[0] != temps[1],
+              f"two concurrent _write_cache calls use two temp files ({temps})")
+        check(not raised, f"and neither writer's replace failed ({raised})")
+        try:
+            final = json.loads(cache3.read_text(encoding="utf-8"))
+        except Exception:
+            final = None
+        check(isinstance(final, dict) and final.get("eligible") == ["first"],
+              f"the final cache is whole and is the last replacer's ({final})")
+        left = sorted(p.name for p in cache3.parent.iterdir() if p.name != cache3.name)
+        check(left == [], f"no temp file is left behind ({left})")
+
+        # -- a plan or cache path that is a FIFO is refused without blocking
+        tmp4 = Path(tempfile.mkdtemp(prefix="pp-fifo-", dir=base))
+        fplans = tmp4 / "plans"
+        fplans.mkdir()
+        os.mkfifo(fplans / "fifo-plan.md")
+        os.symlink(fplans / "fifo-plan.md", fplans / "link-to-fifo-plan.md")
+        os.mkfifo(fplans / "fifo-cache.json")
+        (fplans / "2026-01-01-real-plan.md").write_text(started)
+        # In a subdirectory, so the scan below (not recursive) never lists it.
+        (fplans / "masters").mkdir()
+        (fplans / "masters" / "2026-01-02-fifo-master-plan.md").write_text(
+            "# Master Plan: probe\n\n## Sub-plans\n\n### Sub-plan 1: fifo\n"
+            "- **Status:** [ ]\n- **Plan:** ../link-to-fifo-plan.md\n")
+        t0 = time.monotonic()
+        try:
+            r = subprocess.run([sys.executable, "-c", _FIFO_PROBE, str(SCRIPT), str(fplans)],
+                               capture_output=True, text=True, timeout=10)
+            got = json.loads(r.stdout) if r.returncode == 0 else {"rc": r.returncode,
+                                                                   "err": r.stderr[-300:]}
+        except subprocess.TimeoutExpired:
+            got = {"blocked": True}
+        took = time.monotonic() - t0
+        check(not got.get("blocked") and took < 5,
+              f"a plan path that is a FIFO returns at once (took {took:.1f} s, {got})")
+        check(got.get("fifo-plan.md") == "refused" and got.get("link-to-fifo-plan.md") == "refused",
+              f"and is refused, directly or through a symlink ({got})")
+        check(got.get("pinned") == "refused", f"a pinned plan that is a FIFO is refused ({got})")
+        check("cache" in got and got["cache"] is None, f"a cache that is a FIFO is not read ({got})")
+        check(got.get("master_blocked") is False,
+              f"a master whose sub-plan link is a FIFO is read without blocking ({got})")
+        check(got.get("chosen") == ["2026-01-01-real-plan.md"],
+              f"a cold scan skips the FIFO and draws the rest ({got})")
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+
+BLOCKED_SUB = ("# Plan: blocked sub\n\n## Stage 1: s\n\n### Task 1.1: t\n- **Status:** [x]\n\n"
+               "### Stage 1 Gate\n- [~] a check that could not run\n")
+
+
+def case_master_link_and_state_reads_capped():
+    """The reads the first sweep missed: a master's sub-plan links (followed in
+    lib/plan_parser.py) and the legacy state file are capped too."""
+    print("master links and the state file are capped:")
+    mod = load_module()
+    base = Path(tempfile.mkdtemp(prefix="pp-caps2-"))
+    try:
+        plans = base / "plans"
+        plans.mkdir()
+        sub = plans / "2026-01-01-sub-plan.md"
+        sub.write_text(BLOCKED_SUB)
+        master = plans / "2026-01-01-demo-master-plan.md"
+        master.write_text("# Master Plan: demo\n\n## Sub-plans\n\n### Sub-plan 1: s\n"
+                          "- **Status:** [ ]\n- **Plan:** ./2026-01-01-sub-plan.md\n")
+        check(mod.pu.plan_blocked(master.read_text(), master)[0] is True,
+              "precondition: a master whose sub-plan has a [~] gate reads blocked")
+        mod.pu.PLAN_READ_CAP = 64
+        try:
+            check(mod.pu.plan_blocked(master.read_text(), master)[0] is False,
+                  "a sub-plan over the read cap is not read through its master's link")
+        finally:
+            mod.pu.PLAN_READ_CAP = 1 << 20
+
+        repo = base / "repo"
+        (repo / ".claude").mkdir(parents=True)
+        state = repo / ".claude" / "plan-progress.json"
+        state.write_text(json.dumps({"plan": str(sub), "phase": "task", "pad": "x" * 5000}))
+        mod.STATE_READ_CAP = 4096
+        raised = False
+        try:
+            mod.projection_state(state)
+        except Exception:
+            raised = True
+        check(raised, "a legacy state file over the read cap is refused")
+        state.write_text(json.dumps({"plan": str(sub), "phase": "task"}))
+        check(mod.projection_state(state).get("phase") == "task",
+              "a legacy state file under the cap still reads")
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def wait_for_cache(path, limit):
+    """True once the reader's write shows up: it runs after the CLI has exited."""
+    while not path.is_file() and time.monotonic() < limit:
+        time.sleep(0.02)
+    return path.is_file()
+
+
+# The real cache write, slowed: the module is loaded with _write_cache wrapped so that
+# only the real write sleeps (while the reader computes, it only defers). stdout must
+# reach EOF, and the CLI must exit, before that sleep ends.
+_SLOW_CACHE_PARENT = r"""
+import importlib.util, sys, time
+spec = importlib.util.spec_from_file_location("plan_progress", sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+real = mod._write_cache
+delay = float(sys.argv[2])
+def slow(*a, **k):
+    if mod._DEFERRED_CACHE_WRITES is None:
+        time.sleep(delay)
+    return real(*a, **k)
+mod._write_cache = slow
+sys.argv = [sys.argv[1]]
+mod.main()
+"""
+
+
+def case_output_released_before_cache_write():
+    """The caller reads stdout to EOF; a slow cache write after the bars must not hold it."""
+    print("output released before the cache write:")
+    tmp, repo, env = stall_fixture("pp-release-")
+    proc = None
+    try:
+        proc = subprocess.Popen([sys.executable, "-c", _SLOW_CACHE_PARENT, str(SCRIPT), "6"],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+        t0 = time.monotonic()
+        proc.stdin.write(json.dumps({"cwd": str(repo)}).encode())
+        proc.stdin.close()
+        out = proc.stdout.read()        # to EOF, as `$(...)` reads it
+        took = time.monotonic() - t0
+        proc.wait(timeout=30)           # and then waits for the exit, as `$(...)` does
+        exited = time.monotonic() - t0
+        check(b"stalled" in out, f"the bars were printed ({out[:60]!r})")
+        check(took < 3.0, f"stdout reached EOF before the 6 s cache write ended ({took:.2f} s)")
+        check(exited < 3.0, f"the CLI exited before the 6 s cache write ended ({exited:.2f} s)")
+        check(wait_for_cache(repo / ".claude" / "plan-progress-cache.json", t0 + 12.0),
+              "and the cache was still written afterwards")
+    finally:
+        if proc is not None:
+            kill_group(proc.pid)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def case_one_stuck_reader_per_cwd():
+    """A redraw while an earlier reader of the same cwd is still stuck forks no
+    second reader: on a dead mount they would otherwise pile up, one per redraw."""
+    print("one stuck reader per cwd:")
+    tmp, repo, env = stall_fixture("pp-onereader-")
+    procs = []
+    try:
+        stalled = dict(env, **{STALL_ENV: "12"})
+        first, t0 = start_cli(repo, stalled)
+        procs.append(first)
+        took1, _, _ = finish_cli(first, t0)
+        second, t1 = start_cli(repo, stalled)
+        procs.append(second)
+        took2, out2, _ = finish_cli(second, t1)
+        check(took1 is not None and took2 is not None,
+              f"both redraws returned ({took1}, {took2})")
+        check(group_alive(first.pid), "the first redraw's reader is still stuck")
+        check(not group_alive(second.pid),
+              "the second redraw left no reader of its own behind")
+        check(took2 is not None and took2 < STALL_BOUND_S and out2 == b"",
+              f"and it returned within its bound with no bar ({took2}, {out2[:40]!r})")
+        other = tmp / "other"
+        other.mkdir()
+        third, t2 = start_cli(other, env)
+        procs.append(third)
+        took3, _, _ = finish_cli(third, t2)
+        check(took3 is not None and took3 < 3.0,
+              f"another cwd is not held by it ({took3})")
+    finally:
+        for p in procs:
+            kill_group(p.pid)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+
+def _lock_path(mod, cwd, tmpdir):
+    """Where the CLI run with TMPDIR=tmpdir keeps cwd's reader lock."""
+    return Path(mod._reader_lock_path(str(cwd), str(tmpdir)))
+
+
+# Loaded like the CLI, with the reader's lifetime lowered: the reader stalls 30 s, so
+# only the lifetime can end it.
+_SHORT_LIFETIME = r"""
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("plan_progress", sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+mod.READER_LIFETIME_S = 2
+sys.argv = [sys.argv[1]]
+mod.main()
+"""
+
+
+def case_reader_lock_is_a_short_wait():
+    """The lock bounds STUCK readers; it must not cost a healthy redraw its bar."""
+    print("the reader lock waits for a healthy holder:")
+    mod = load_module()
+    tmp, repo, env = stall_fixture("pp-lockwait-")
+    procs = []
+    try:
+        # A holder that lets go after 0.5 s: the next redraw waits for it and draws.
+        path = _lock_path(mod, repo, env["TMPDIR"])
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        import fcntl
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        cli, t0 = start_cli(repo, env)
+        procs.append(cli)
+        time.sleep(0.5)
+        os.close(fd)
+        took, out, _ = finish_cli(cli, t0)
+        check(took is not None and b"stalled" in out,
+              f"a redraw that meets a healthy reader's lock waits and draws ({took}, {out[:40]!r})")
+        # The status line and --json, at once, in one cwd: both draw.
+        text, t1 = start_cli(repo, env)
+        js, t2 = start_cli(repo, env, "--json")
+        procs += [text, js]
+        _, out_t, _ = finish_cli(text, t1)
+        _, out_j, _ = finish_cli(js, t2)
+        check(b"stalled" in out_t and js.returncode == 0 and b'"groups"' in out_j,
+              f"the status line and --json redrawing together both draw "
+              f"({out_t[:30]!r}, rc {js.returncode})")
+
+        # A reader past its lifetime dies and lets the lock go.
+        stalled = dict(env, **{STALL_ENV: "30"})
+        short = subprocess.Popen([sys.executable, "-c", _SHORT_LIFETIME, str(SCRIPT)],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, env=stalled, start_new_session=True)
+        procs.append(short)
+        short.communicate(json.dumps({"cwd": str(repo)}).encode(), timeout=CLI_GIVE_UP_S)
+        deadline = time.monotonic() + 5
+        while group_alive(short.pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        check(not group_alive(short.pid),
+              "a reader stuck past its lifetime dies instead of holding the lock")
+        after, t3 = start_cli(repo, env)
+        procs.append(after)
+        took4, out4, _ = finish_cli(after, t3)
+        check(took4 is not None and took4 < 2.0 and b"stalled" in out4,
+              f"and the next redraw draws at once ({took4}, {out4[:30]!r})")
+    finally:
+        for p in procs:
+            kill_group(p.pid)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def case_reader_lock_fallbacks():
+    """Where no lock can be had, redraws fork as before and draw: an unusable lock
+    must never cost the bar. Not covered: a lock file another user owns (needs a
+    second account)."""
+    print("reader lock fallbacks:")
+    mod = load_module()
+    tmp, repo, env = stall_fixture("pp-lockfb-")
+    try:
+        def draws(env2, label):
+            cli, t0 = start_cli(repo, env2)
+            took, out, _ = finish_cli(cli, t0)
+            kill_group(cli.pid)
+            check(took is not None and took < 2.0 and b"stalled" in out,
+                  f"{label}: the CLI still draws ({took}, {out[:30]!r})")
+
+        # A directory where the lock file goes: its open fails. (An unwritable TMPDIR
+        # does not reach that branch: tempfile.gettempdir() skips it for another.)
+        with_dir = tmp / "dir"
+        with_dir.mkdir()
+        _lock_path(mod, repo, with_dir).mkdir()
+        draws(dict(env, TMPDIR=str(with_dir)), "a directory at the lock path")
+
+        with_link = tmp / "link"
+        with_link.mkdir()
+        target = tmp / "target"
+        target.write_text("untouched\n")
+        os.symlink(target, _lock_path(mod, repo, with_link))
+        draws(dict(env, TMPDIR=str(with_link)), "a symlink at the lock path")
+        check(target.read_text() == "untouched\n", "and the symlink's target is untouched")
+
+        with_fifo = tmp / "fifo"
+        with_fifo.mkdir()
+        os.mkfifo(_lock_path(mod, repo, with_fifo))
+        draws(dict(env, TMPDIR=str(with_fifo)), "a FIFO at the lock path")
+
+        real = mod.fcntl
+        mod.fcntl = None
+        try:
+            check(mod._reader_lock(str(repo), time.monotonic() + 1) is None,
+                  "no fcntl: no lock, and the caller forks as before")
+        finally:
+            mod.fcntl = real
+
+        # A cwd holding a lone surrogate (valid JSON, not encodable UTF-8) answers as
+        # it did before the fork existed: an empty document, exit 0. Code before the
+        # fork must not turn it into a silent exit with no document.
+        bad = subprocess.run([sys.executable, str(SCRIPT), "--json"], env=env,
+                             input=b'{"cwd": "\\ud800"}', capture_output=True, timeout=CLI_GIVE_UP_S)
+        try:
+            doc = json.loads(bad.stdout)
+        except ValueError:
+            doc = None
+        check(bad.returncode == 0 and isinstance(doc, dict) and doc.get("groups") == [],
+              f"--json with a lone-surrogate cwd still answers an empty document "
+              f"(rc {bad.returncode}, {bad.stdout[:60]!r})")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def main():
@@ -3207,6 +3916,15 @@ def main():
     case_json_spans()
     case_detail_folds_repeated_stages()
     case_master_subplans()
+    case_stalled_records_home_is_bounded()
+    case_stalled_child_never_writes_cache()
+    case_cli_output_matches_inprocess()
+    case_read_caps_and_odd_files()
+    case_master_link_and_state_reads_capped()
+    case_output_released_before_cache_write()
+    case_one_stuck_reader_per_cwd()
+    case_reader_lock_is_a_short_wait()
+    case_reader_lock_fallbacks()
     print(f"  --json parity asserted over {len(JSON_PARITY_RUNS)} rendered fixture states")
     check(len(JSON_PARITY_RUNS) >= 50,
           f"json: parity ran across the suite's fixture states, not a token few "

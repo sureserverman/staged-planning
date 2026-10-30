@@ -216,7 +216,10 @@ heuristic, no git archaeology. Implemented by `parse_plan_status()` in
   propagates upward the same way: a master whose sub-plans are all accepted is
   not blocked, and a master's own acceptance closes it whatever its sub-plans
   say. An unresolvable link is not evidence of blockage, and the function never
-  raises on one. It is the only function in the library that reads files.
+  raises on one. Each link is read through `read_capped()`: a regular file of at
+  most `PLAN_READ_CAP` (1 MiB) bytes, opened without blocking, so a link to a FIFO
+  or a runaway file is not blockage either. The two are the only functions in the
+  library that read files.
 - **Consumers call `plan_blocked()`, never `plan_has_blocked_gate()` directly.**
   The raw predicate answers "does this file contain a `[~]` box", which is a
   different question — it misses a master and ignores acceptance — and

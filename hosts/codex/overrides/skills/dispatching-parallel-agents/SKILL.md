@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-description: "Fan out a plan's independent Dispatch YES tasks to agents at once, then integrate their results."
+description: "Use when a plan has Dispatch YES tasks whose dependencies are green, or to dispatch these tasks in parallel."
 ---
 
 > On Codex, `<planning-plugin>` is this plugin's installed folder: the folder that holds `skills/` and `.codex-plugin/`, which is `../..` from this SKILL.md. In a shell command use its absolute path, quoted.
@@ -153,6 +153,9 @@ When none is installed, leave this heading out and say so in the Context block.>
 - Do NOT modify files outside the Files list above
 - Do NOT refactor unrelated code
 - Do NOT introduce new dependencies not already in the project
+- Wait on a background job you start by its own completion — `wait_agent` for an agent
+  you spawned, `wait <pid>`, or a sentinel file it writes last (a Codex shell call keeps no
+  jobs for the next call); a `pgrep -f` loop matches its own shell and waits for ever
 - Commit with message: "Stage <N> Task <N.M>: <description>", ending with the
   executor trailer on its own single physical line:
   `Executor: dispatched — planning:<the role you were spawned as>`
