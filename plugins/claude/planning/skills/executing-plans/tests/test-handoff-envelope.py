@@ -11,13 +11,16 @@ that is a link gets no write, and the file it points at stays as it was; `verify
 names its failure code with exit 3 — id-mismatch (wrong id, or the right one only
 above the final block), cwd-mismatch, branch-mismatch, no-ready, plan-missing — and
 exits 0 when the final RESUME HERE block agrees; the request reader rejects a
-request.json that is too large or a link, and compares its session id.
+request.json that is too large or a link, and compares its session id; every writer
+refuses an envelope over the reader's limit before writing, printing the size and the
+limit and leaving nothing in the handoff root, and each names the reader's constant.
 
 Every subprocess runs with PLANNING_SUPERVISOR_ID_CMD stripped unless a case sets
 it, inside temp dirs and fixture git repos made with `git init`.
 
 Stdlib only.
 """
+import ast
 import importlib.util
 import json
 import os
@@ -105,6 +108,81 @@ def plan_with(path, *blocks):
     path.write_text("# A plan\n\n## Stage 1\n\nStatus: [x]\n\n" + "\n".join(blocks),
                     encoding="utf-8")
     return path
+
+
+def plan_path(length):
+    """An absolute path of exactly `length` chars, in legal 200-char components."""
+    path = (("/" + "d" * 199) * (length // 200 + 1))[:length]
+    return path[:-1] + "d" if path.endswith("/") else path
+
+
+def v1_size(event, hid, sid, plan, **extra):
+    """The bytes a version-1 envelope takes on disk, its newline included."""
+    body = {"protocol": PROTOCOL, "version": 1, "event": event, "handoff_id": hid,
+            "managed_session_id": sid, "timestamp": "2026-01-01T00:00:00Z", "plan": plan, **extra}
+    return len(json.dumps(body, separators=(",", ":"))) + 1
+
+
+def v1_plan_for(size, event, hid, sid, **extra):
+    """A plan path that makes this version-1 envelope exactly `size` bytes."""
+    return plan_path(size - v1_size(event, hid, sid, "", **extra))
+
+
+def numbers(text):
+    """The numbers a refusal prints, leaving out the digits of a handoff id."""
+    return {int(n) for n in re.findall(r"\d+", re.sub(r"h-[0-9a-f]{20}", "", text))}
+
+
+def fixture_repo(parent, name):
+    """A fresh repo on branch `feature`, with no template hooks; returns its real path."""
+    d = pathlib.Path(parent) / name
+    subprocess.run(["git", "init", "-q", "--template=", "-b", "feature", str(d)], check=True)
+    return pathlib.Path(os.path.realpath(d))
+
+
+def plan_state(root, operation, revision, payload):
+    r = subprocess.run([sys.executable, os.path.join(os.path.dirname(SCRIPT), "plan-state.py"),
+                        operation, "--repo", str(root), "--expected-revision", str(revision),
+                        "--operation-id", f"fixture-{operation}-{revision}"],
+                       input=json.dumps(payload), capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        raise RuntimeError(f"fixture plan-state {operation} failed: {r.stdout}{r.stderr}")
+
+
+def deep_file(root, length):
+    """A regular file under `root` whose absolute path is exactly `length` chars."""
+    prefix = str(root) + "/"
+    name = "local-plan.md"
+    chunks, left = [], length - len(prefix) - len(name) - 1
+    while left > 0:
+        n = min(left, 200)
+        if left - n == 1:       # a component needs a char and its slash
+            n -= 1
+        chunks.append("d" * n)
+        left -= n + 1
+    target = pathlib.Path(prefix + "/".join(chunks)) if chunks else pathlib.Path(root)
+    target.mkdir(parents=True, exist_ok=True)
+    return target / name
+
+
+def v2_ready(parent, name, length, hid):
+    """Run `ready --next` for a held same-root plan at a path of `length` chars."""
+    root = fixture_repo(parent, name)
+    plan = deep_file(root, length)
+    plan.write_text("# Project Plan: synthetic\n## Stage 1: Work\n### Task 1.1: Work\n"
+                    "- **Status:** [ ]\n### Stage 1 Gate\n- [ ] synthetic check\n"
+                    f"\n**RESUME HERE (2026-01-01):**\nhandoff_id: {hid}\ncwd: {root}\n"
+                    f"branch: feature\nplan: {plan}\nnext: Task 1.1\n", encoding="utf-8")
+    plan_state(root, "init", 0, {"plan": str(plan), "source": "Fixture owner authorized work",
+                                 "scope": "Synthetic fixture only", "stage": 1, "task": "1.1"})
+    plan_state(root, "set-blocker", 1, {
+        "disposition": "handoff", "prevented_operation": "synthetic successor work",
+        "evidence": "synthetic measured stage gate", "dependency": "synthetic adoption",
+        "remaining_work": ["synthetic next task"], "reason": "rule requested: synthetic rollover",
+        "handoff_id": hid})
+    env = dict(env_for(SID), PLANNING_HANDOFF_VERSIONS="1,2")
+    return (root, *run(["ready", "--root", str(root), "--handoff-id", hid, "--plan", str(plan),
+                        "--next", "Task 1.1"], env=env, cwd=str(root)))
 
 
 tmp = tempfile.mkdtemp(prefix="handoff-envelope-test-")
@@ -553,6 +631,154 @@ try:
         check(wrote is False and not (r9 / ".claude" / "handoffs" / f".{hid9}.claim").exists(),
               "a claim whose envelope fails to write is removed, so a retry is not refused "
               "(red if the claim outlives the failed write)")
+
+        # A claim appears whole in one step, so no kill leaves an empty one.
+        kid = "h-" + "7" * 20
+        kname, kclaim = f"{kid}.accepted.json", f".{kid}.claim"
+        accepted = {"event": "HANDOFF_ACCEPTED", "handoff_id": kid, "managed_session_id": "s-a",
+                    "plan": "p.md", "timestamp": "2026-10-30T10:00:00Z"}
+        kbody = json.dumps(accepted).encode() + b"\n"
+
+        def fresh(name):
+            root = pathlib.Path(tmp) / name
+            (root / ".claude" / "handoffs").mkdir(parents=True)
+            return root, root / ".claude" / "handoffs"
+
+        def killed_writer(root, patch):
+            code = ("import importlib.util, os, sys\n"
+                    f"spec = importlib.util.spec_from_file_location('w', {str(SCRIPT)!r})\n"
+                    "mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n"
+                    + patch +
+                    f"mod.write_handoff_file({str(root)!r}, {kname!r}, {kbody!r}, {kclaim!r})\n")
+            return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True).returncode
+
+        after_claim = ("real = mod._replace_at\n"
+                       "mod._replace_at = lambda hfd, name, body, exclusive=False: "
+                       "os._exit(9) if name.endswith('.json') else real(hfd, name, body, exclusive)\n")
+
+        def writes(root, event, **changes):
+            body = dict(accepted, event=event, **changes)
+            name = f"{kid}.{'accepted' if event == 'HANDOFF_ACCEPTED' else 'failed'}.json"
+            return mod.write_handoff_file(str(root), name, json.dumps(body).encode() + b"\n", kclaim)
+
+        root, hd = fresh("killed-link")
+        rc = killed_writer(root, "os.link = lambda *a, **k: os._exit(9)\n")
+        check(rc == 9 and not (hd / kclaim).exists(),
+              f"a writer killed before the claim's link leaves no claim (red with O_EXCL) ({rc})")
+        check(writes(root, "HANDOFF_ACCEPTED") is True, "and the id can be claimed again")
+
+        root, hd = fresh("killed-retry")
+        rc = killed_writer(root, after_claim)
+        check(rc == 9 and (hd / kclaim).read_bytes() == kbody and not (hd / kname).exists(),
+              f"a writer killed after claiming leaves a complete claim, never an empty one ({rc})")
+        check(writes(root, "HANDOFF_ACCEPTED", timestamp="2026-10-30T11:00:00Z") is True
+              and (hd / kname).read_bytes() == kbody,
+              "the same outcome retried finishes it, with the claim's own bytes")
+        check(writes(root, "HANDOFF_ACCEPTED", timestamp="2026-10-30T12:00:00Z") is True
+              and (hd / kname).read_bytes() == kbody,
+              "the same outcome retried after it is published still stands, so its owner knows")
+        check(writes(root, "HANDOFF_ACCEPTED", managed_session_id="s-b") is False
+              and (hd / kname).read_bytes() == kbody,
+              "with the outcome published, another owner backs off")
+
+        root, hd = fresh("killed-forged")
+        (hd / kclaim).write_bytes(json.dumps(dict(accepted, handoff_id="h-" + "1" * 20)).encode())
+        check(writes(root, "HANDOFF_ACCEPTED") is False and not (hd / kname).exists(),
+              "a claim naming another id publishes nothing")
+
+        for field, value in (("managed_session_id", "s-b"), ("plan", "other.md")):
+            root, hd = fresh(f"killed-{field}")
+            killed_writer(root, after_claim)
+            check(writes(root, "HANDOFF_ACCEPTED", **{field: value}) is False
+                  and (hd / kname).read_bytes() == kbody,
+                  f"another {field} is refused, and the killed writer's outcome reaches the reader")
+
+        root, hd = fresh("killed-fail")
+        killed_writer(root, after_claim)
+        check(writes(root, "HANDOFF_FAILED", failure_code="x") is False
+              and (hd / kname).read_bytes() == kbody and not (hd / f"{kid}.failed.json").exists(),
+              "a different event is refused, and the killed writer's outcome reaches the reader")
+
+        root, hd = fresh("killed-empty")
+        (hd / kclaim).write_bytes(b"")
+        check(writes(root, "HANDOFF_ACCEPTED") is False and not (hd / kname).exists(),
+              "an empty claim from an older writer still refuses")
+
+        root, hd = fresh("lost-race")
+        real = mod._replace_at
+
+        def beaten(hfd, name, body, exclusive=False):
+            if name == kname:
+                (hd / kname).write_bytes(kbody)
+            return real(hfd, name, body, exclusive)
+        mod._replace_at = beaten
+        won = mod.write_handoff_file(str(root), kname, kbody, kclaim)
+        mod._replace_at = real
+        check(won is True and (hd / kclaim).exists() and (hd / kname).read_bytes() == kbody,
+              "a claimer whose own outcome another writer published first keeps its claim")
+
+        root, hd = fresh("other-outcome")
+        (hd / kname).write_bytes(json.dumps(dict(accepted, managed_session_id="s-z")).encode())
+        check(writes(root, "HANDOFF_ACCEPTED") is False,
+              "a fresh claim over a different published outcome is refused (red if it reports success)")
+
+        root, hd = fresh("fsync-fails")
+        real_fsync = os.fsync
+        calls = []
+
+        def flaky_fsync(fd):
+            if (hd / kname).exists() and not calls:
+                calls.append(fd)
+                raise OSError("disk trouble")
+            return real_fsync(fd)
+        mod.os.fsync = flaky_fsync
+        stood = writes(root, "HANDOFF_ACCEPTED")
+        mod.os.fsync = real_fsync
+        check(calls and stood is True and (hd / kclaim).exists(),
+              "a failure after publishing keeps the claim and reports the outcome that stands")
+        check(writes(root, "HANDOFF_FAILED", failure_code="x") is False
+              and not (hd / f"{kid}.failed.json").exists(),
+              "so no second outcome can follow it")
+
+        root, hd = fresh("no-links")
+        real_link = mod.os.link
+
+        def no_link(*a, **k):
+            raise PermissionError(1, "no hard links here")
+        mod.os.link = no_link
+        check(writes(root, "HANDOFF_ACCEPTED") is True and (hd / kname).exists() and (hd / kclaim).exists(),
+              "on a filesystem without hard links the claim falls back to an exclusive create")
+        check(writes(root, "HANDOFF_FAILED", failure_code="x") is False,
+              "and it still holds the id")
+
+        root, hd = fresh("no-links-other")
+        (hd / kname).write_bytes(json.dumps(dict(accepted, managed_session_id="s-z")).encode())
+        before_other = (hd / kname).read_bytes()
+        check(writes(root, "HANDOFF_ACCEPTED") is False and (hd / kname).read_bytes() == before_other,
+              "without hard links, a different published outcome is neither replaced nor claimed as ours")
+
+        root, hd = fresh("no-links-killed")
+        (hd / kclaim).write_bytes(kbody)
+        check(writes(root, "HANDOFF_FAILED", failure_code="x") is False and (hd / kname).read_bytes() == kbody,
+              "without hard links, a killed writer's complete claim still reaches the reader")
+
+        root, hd = fresh("no-links-full")
+        real_write = mod.os.write
+
+        def full_disk(fd, data):
+            if (hd / kclaim).exists():
+                raise OSError(28, "no space")
+            return real_write(fd, data)
+        mod.os.write = full_disk
+        wrote = writes(root, "HANDOFF_ACCEPTED")
+        mod.os.write = real_write
+        check(wrote is False and not (hd / kclaim).exists(),
+              "without hard links, a write error frees the id instead of burning it")
+        mod.os.link = real_link
+
+        root, hd = fresh("links")
+        writes(root, "HANDOFF_ACCEPTED")
+        check((hd / kclaim).stat().st_nlink == 1, "a claim holds one link when done")
     if callable(fn):
         check(fn(str(r7), {ENV_VAR: id_cmd(SID)}) is True,
               "request_pending(root, env) -> True on a match")
@@ -636,6 +862,152 @@ try:
                       "--plan", "p.md"], env=env_for())
     check(rc == 0 and log is None and not rlog.exists(),
           f"with {ENV_VAR} unset the id command never runs ({rc}, {log})")
+
+    # 10. the writer refuses what the reader would refuse, before writing anything
+    print("oversized envelopes")
+    LIMIT = 4096
+    over = "h-" + "1" * 20
+    for cmd, suffix, event, extra, size_extra in (
+            ("ready", "ready", "HANDOFF_READY", [], {}),
+            ("accept", "accepted", "HANDOFF_ACCEPTED", [], {}),
+            ("fail", "failed", "HANDOFF_FAILED", ["--code", "no-ready"],
+             {"failure_code": "no-ready"})):
+        r10 = pathlib.Path(tmp) / f"oversized-{cmd}"
+        r10.mkdir()
+        big_plan = v1_plan_for(5000, event, over, SID, **size_extra)
+        rc, _o, err = run([cmd, "--root", str(r10), "--handoff-id", over, "--plan", big_plan, *extra],
+                          sid=SID)
+        check(rc != 0 and {5000, LIMIT} <= numbers(err),
+              f"{cmd}: a plan path making the envelope 5000 B is refused with size and limit "
+              f"printed (red if the refusal is generic) ({rc}, {err[:120]!r})")
+        check(tree(r10) == [],
+              f"{cmd}: nothing appears under the root, no claim and no .claude ({tree(r10)})")
+    r10 = pathlib.Path(tmp) / "oversized-retry"
+    r10.mkdir()
+    big_plan = v1_plan_for(5000, "HANDOFF_ACCEPTED", over, SID)
+    run(["accept", "--root", str(r10), "--handoff-id", over, "--plan", big_plan], sid=SID)
+    rc, _o, err = run(["fail", "--root", str(r10), "--handoff-id", over, "--code", "no-ready"], sid=SID)
+    check(rc == 0, f"a refused accept does not consume the id: fail can still be written ({rc}, {err!r})")
+
+    for size, label in ((4000, "a 4000 B envelope"), (LIMIT, "an envelope exactly at the limit")):
+        r10 = pathlib.Path(tmp) / f"within-{size}"
+        r10.mkdir()
+        fit_plan = v1_plan_for(size, "HANDOFF_READY", over, SID)
+        rc, out, err = run(["ready", "--root", str(r10), "--handoff-id", over, "--plan", fit_plan],
+                           sid=SID)
+        written = r10 / ".claude" / "handoffs" / f"{over}.ready.json"
+        check(rc == 0 and written.is_file() and written.stat().st_size == size,
+              f"{label} is written at that size ({rc}, {err[:120]!r}, "
+              f"{written.stat().st_size if written.is_file() else None})")
+        rc, out, err = run(["plan", "--root", str(r10), "--handoff-id", over])
+        check(rc == 0 and out == fit_plan,
+              f"{label} reads back through the reader, with the same plan ({rc}, {len(out)})")
+    r10 = pathlib.Path(tmp) / "one-over"
+    r10.mkdir()
+    rc, _o, err = run(["ready", "--root", str(r10), "--handoff-id", over, "--plan",
+                       v1_plan_for(LIMIT + 1, "HANDOFF_READY", over, SID)], sid=SID)
+    check(rc != 0 and {LIMIT + 1, LIMIT} <= numbers(err) and tree(r10) == [],
+          f"one byte over the limit is refused, names both numbers, writes nothing ({rc}, {err[:120]!r})")
+
+    print("oversized envelopes, version 2")
+    v2id = "h-" + "2" * 20
+    # A short path measures this fixture's overhead: the plan path appears three times.
+    root, rc, _o, err = v2_ready(tmp, "v2-measure", 300, v2id)
+    measured = root / ".claude" / "handoffs" / f"{v2id}.ready.json"
+    check(rc == 0 and measured.is_file(), f"a short v2 ready is written ({rc}, {err!r})")
+    base = measured.stat().st_size if measured.is_file() else 0
+    root, rc, out, err = v2_ready(tmp, "v2-oversize", 1600, v2id)
+    check(rc == 3 and out == "oversized-envelope" and LIMIT in numbers(err)
+          and any(n > LIMIT for n in numbers(err)),
+          f"v2 ready over the limit keeps its code and prints size and limit ({rc}, {out!r}, {err[:120]!r})")
+    check(tree(root / ".claude" / "handoffs") == [],
+          f"v2 ready over the limit leaves the handoff root empty ({tree(root / '.claude' / 'handoffs')})")
+    # This ready fits by itself, but the outcome its successor must write would not.
+    root, rc, out, err = v2_ready(tmp, "v2-outcome", 300 + (4000 - base) // 3, v2id)
+    check(rc == 3 and out == "oversized-envelope" and LIMIT in numbers(err)
+          and any(n > LIMIT for n in numbers(err)),
+          f"v2 ready whose largest outcome would not fit prints size and limit "
+          f"({rc}, {out!r}, {err[:120]!r})")
+    check(tree(root / ".claude" / "handoffs") == [],
+          f"and leaves the handoff root empty ({tree(root / '.claude' / 'handoffs')})")
+    root, rc, out, err = v2_ready(tmp, "v2-fitting", 300 + (3700 - base) // 3, v2id)
+    wrote = rc
+    rc, out, err = run(["plan", "--root", str(root), "--handoff-id", v2id])
+    check(wrote == 0 and rc == 0 and pathlib.Path(out).is_file(),
+          f"a v2 ready whose outcomes fit too is written and read back ({wrote}, {rc}, {err[:120]!r})")
+
+    # A hand-placed ready that fits, with an outcome that cannot: the outcome writer's own check.
+    root = fixture_repo(tmp, "v2-fail")
+    v2_plan = plan_path(1100)
+    planted = {"protocol": PROTOCOL, "version": 2, "event": "HANDOFF_READY", "handoff_id": v2id,
+               "managed_session_id": "predecessor", "timestamp": "2026-01-01T00:00:00Z",
+               "plan": v2_plan, "source_root": str(root), "source_plan": v2_plan,
+               "predecessor_session_id": "predecessor",
+               "destination": {"root": str(root), "branch": "feature", "plan": v2_plan,
+                               "locator": "Task 1.1", "master_plan": None},
+               "selection": {"boundary": False, "subplan": None, "current_subplan": None}}
+    hd = root / ".claude" / "handoffs"
+    hd.mkdir(parents=True)
+    raw_ready = json.dumps(planted, separators=(",", ":")) + "\n"
+    padded = plan_path(1100 + (4000 - len(raw_ready)) // 3)
+    planted.update(plan=padded, source_plan=padded)
+    planted["destination"]["plan"] = padded
+    (hd / f"{v2id}.ready.json").write_text(json.dumps(planted, separators=(",", ":")) + "\n",
+                                           encoding="utf-8")
+    before_fail = tree(hd)
+    rc, out, err = run(["fail", "--root", str(root), "--handoff-id", v2id, "--code", "no-ready"],
+                       env=dict(env_for("successor"), PLANNING_HANDOFF_VERSIONS="1,2"), cwd=str(root))
+    check(rc == 3 and out == "oversized-envelope" and LIMIT in numbers(err)
+          and any(n > LIMIT for n in numbers(err)),
+          f"a v2 outcome over the limit is refused with size and limit ({rc}, {out!r}, {err[:120]!r})")
+    check(tree(hd) == before_fail, f"and no outcome or claim appears ({tree(hd)})")
+
+    # A finished outcome names the plan once, so only a path near the system's own limit fills it.
+    root = fixture_repo(tmp, "v2-finished")
+    done = deep_file(root, 3950)
+    done.write_text("# Project Plan: synthetic\n## Stage 1: Work\n### Task 1.1: Work\n"
+                    "- **Status:** [x]\n### Stage 1 Gate\n- [x] synthetic check\n"
+                    "**Completed:** 2026-01-01 — synthetic\n", encoding="utf-8")
+    plan_state(root, "init", 0, {"plan": str(done), "source": "Fixture owner authorized work",
+                                 "scope": "Synthetic fixture only"})
+    plan_state(root, "finish", 1, {"evidence": "Synthetic close-out complete"})
+    hd = root / ".claude" / "handoffs"
+    hd.mkdir(parents=True)
+    (hd / "request.json").write_text(json.dumps(
+        {"protocol": PROTOCOL, "version": 2, "managed_session_id": SID,
+         "requested_at": "2026-01-01T00:00:00Z", "request_id": v2id}), encoding="utf-8")
+    rc, out, err = run(["finished", "--root", str(root), "--plan", str(done)],
+                       env=dict(env_for(SID), PLANNING_HANDOFF_VERSIONS="1,2"), cwd=str(root))
+    check(rc == 3 and out == "oversized-envelope" and LIMIT in numbers(err)
+          and any(n > LIMIT for n in numbers(err)),
+          f"finished over the limit is refused as oversized with size and limit, not as a stale "
+          f"outcome ({rc}, {out!r}, {err[:120]!r})")
+    check(tree(hd) == ["request.json"], f"and writes no outcome ({tree(hd)})")
+
+    print("one limit")
+    scripts = pathlib.Path(SCRIPT).parent
+    writers, parsed = set(), {}
+    for path in sorted(scripts.glob("handoff*.py")):
+        parsed[path.name] = ast.parse(path.read_text(encoding="utf-8"))
+        names = {n.attr if isinstance(n, ast.Attribute) else n.name
+                 for n in ast.walk(parsed[path.name])
+                 if isinstance(n, (ast.Attribute, ast.FunctionDef))}
+        names |= {n.id for n in ast.walk(parsed[path.name]) if isinstance(n, ast.Name)}
+        if "write_handoff_file" in names:
+            writers.add(path.name)
+            check("MAX_READ_BYTES" in names,
+                  f"{path.name} refers to the reader's constant by name "
+                  f"(red if it bounds its envelope some other way or not at all)")
+    check({"handoff-envelope.py", "handoff_v2.py", "handoff_finished.py"} <= writers,
+          f"the writers are all found ({sorted(writers)})")
+    literals = [(name, n.lineno) for name, t in parsed.items() for n in ast.walk(t)
+                if isinstance(n, ast.Constant) and n.value == LIMIT]
+    check(len(literals) == 1 and literals[0][0] == "handoff-envelope.py",
+          f"the number itself appears once, as the reader's constant ({literals})")
+    definitions = [name for name, t in parsed.items() for n in ast.walk(t)
+                   if isinstance(n, ast.Assign) and any(
+                       isinstance(a, ast.Name) and a.id == "MAX_READ_BYTES" for a in n.targets)]
+    check(definitions == ["handoff-envelope.py"], f"and only the reader defines it ({definitions})")
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

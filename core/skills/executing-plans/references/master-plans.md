@@ -130,3 +130,16 @@ gate and surfaces only at the master close-out — the most expensive place to f
 **Stop conditions are unchanged** and apply inside whichever sub-plan is executing; a
 stopped sub-plan blocks its register dependents exactly as a failed task blocks its
 `Blocks` list.
+
+
+## Explicit execution destinations at boundaries
+
+A completed sub-plan can hand off through its parent master's checkpoint while
+continuing in a different execution repository. Resolve the next entry through the
+explicit root/branch metadata in `master-plan-format.md` and the v2 protocol;
+master-origin selection must name its completed current sub-plan. Do not skip the
+current entry's integration gate or infer a root from the master plan's location.
+Use `session-handoff.md`'s version-2 sequence, retaining the source channel and
+creating/resuming the destination's own state. Without a capable reader, report
+manual continuation and preserve the predecessor. This does not change the
+master's dependency ordering, close-out requirements or owner constraints.

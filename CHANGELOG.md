@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.4.0 — 2026-10-30
+
+- **A handoff can name where the work continues.** Destination-aware version 2 envelopes carry
+  a master's next sub-plan to another repository, and a same-root stage can adopt its handoff. A
+  reader asks for version 2; with no such request the writer keeps writing version 1, so a
+  running supervisor is unaffected. A writer can also tell a supervisor that a plan finished.
+- **An envelope is never too big for the reader.** Over the reader's
+  4096-byte limit, every writer refuses before writing and prints the size and the limit.
+- **One outcome per handoff, even through a kill.** A claim now holds the whole outcome and
+  appears in one step. The next writer to reach it publishes what a killed writer left, so the reader learns
+  it, and succeeds only if it asked for that same outcome. Any other session, plan, event or code
+  is refused.
+- **`plan-state.py` waits on stdin less.** `show` never reads it. A detached HEAD, a missing
+  option or a corrupt snapshot is refused before it reads. Closed, blank or unreadable stdin is a
+  missing document, and the refusal names the operation. Other refusals still read first, such as
+  a stale revision or a snapshot owned by another branch, so an open silent stdin can hang those.
+- **Known limits.** An empty claim from an older writer, or a malformed claim, refuses both
+  outcomes, so that id gets neither. A filesystem without hard links gets an exclusive create,
+  which a kill can leave partial. A kill can leave a `.tmp` dotfile. Near the limit, a version 1
+  `ready` can fit while its `accept` does not. Every writer failure still says "already accepted
+  or failed", even on an I/O error. A supervisor that deletes a consumed outcome but keeps the
+  claim can see a late writer publish it again. A `null` snapshot reads as no snapshot, so such a call waits
+  for its document. No live supervisor consumes version 2 yet.
+
 ## 1.3.0 — 2026-10-30
 
 - **A run can come back from a lost snapshot.** `plan-state.py recover` rebuilds a snapshot lost

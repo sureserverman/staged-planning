@@ -7,7 +7,8 @@ the operator.
 ## Interface and exits
 
 `python3 scripts/plan-state.py OP --repo REPO --expected-revision N --operation-id ID`
-reads a JSON object from stdin. `show` needs no mutation options. Payload fields below
+reads a JSON object from stdin. `show` needs no mutation options and takes no document:
+it never reads stdin, so an open stdin cannot hang it and anything sent there is ignored. A detached HEAD, a missing option or a corrupt snapshot is refused before stdin is read; other refusals read it first. Closed, blank or unreadable stdin is a missing document, and its refusal names the operation. Payload fields below
 are required unless marked optional. Unknown fields and operations are refused.
 All responses are JSON objects containing `status`; mutation receipts also carry
 `operation_id`, `run_id`, `revision` and `operation`. `show` returns `state`.

@@ -233,3 +233,99 @@ command and its exit, and no state file.
 
 The manual path (**Resuming**, above) needs none of this: a session the user points at the
 plan runs no `verify` and writes no envelope.
+
+
+## Destination-aware contract
+
+At a cross-repository boundary use the explicit execution metadata and version-2
+selection rules in `../../../references/handoff-protocol.md`. Before publication,
+resolve the next executable entry; its plan storage directory is not its execution
+root. Freeze source channel, destination root/branch, absolute resume plan, task
+locator and master linkage. Pending master gates and blocked or cancelled execution
+cannot be bypassed. A missing v2 advertisement requires manual continuation.
+The adopter receives `--handoff-root <source root>` with `--adopt-handoff <id>`;
+it stays in the destination cwd, verifies against the frozen source envelope and
+obtains destination-owned state through the normal state API, never by copying the
+predecessor's authorization or pointer. A finished sub-plan is not a finished master.
+The version-2 protocol section governs this path; the v1 sequence above remains
+for legacy same-root handoffs. Implementation is qualified through the destination
+and existing envelope suites before either built supported host advertises this path.
+
+
+## Version-2 publication and adoption
+
+This sequence governs negotiated v2 handoffs and replaces the v1 command sequence
+above for that path. It does not enable supervisor support on a host lacking a port.
+
+Before relinquishing source ownership, select the next executable work with
+`handoff_destination.resolve_destination`, passing the current plan/root, exact next
+`Task N.M` and `boundary=True` at a sub-plan boundary. When the current plan is the
+master, supply `current_subplan=N` for its completed current entry. An ambiguous
+choice needs the owner's explicit selection. Preserve parent master linkage and
+re-read its owner constraints. No inference from a records directory is permitted.
+
+Write the source plan's last RESUME HERE block with one field per line:
+
+```text
+**RESUME HERE (2026-01-01):**
+handoff_id: h-0123456789abcdef0123
+reason: <the original measured reason>
+cwd: /work/river
+branch: feature
+plan: /records/next-plan.md
+next: Task 1.1
+```
+
+The id, root, branch, plan and next locator must agree exactly with the resolved
+destination; paths may contain spaces. Keep the measured handoff commit and source
+`plan-state.py set-blocker` sequence, then publish from the original source cwd:
+
+```text
+python3 <planning-plugin>/skills/executing-plans/scripts/handoff-envelope.py ready --root SOURCE --handoff-id ID --plan SOURCE_PLAN --next 'Task N.M' --sub-plan-boundary --current-subplan N
+```
+
+Omit boundary flags within a sub-plan. `--current-subplan` is mandatory only when
+SOURCE_PLAN is the master; optional `--subplan N` selects among executable entries.
+The writer resolves the original predecessor identity before freezing the ready
+record. Its source state must already have disposition `handoff` with this exact
+id. Retrying the same id returns identical bytes or refuses stale metadata.
+Without advertised v2, a change of root or resume-plan artifact reports
+`manual-continuation`; no automatic fallback is published. A legacy invocation
+without `--next` also refuses a checkpoint known to name another root.
+
+The successor starts in DESTINATION. Its invocation carries
+`--adopt-handoff ID --handoff-root SOURCE`. For each helper command pass
+`--root DESTINATION --handoff-root SOURCE`:
+
+1. `plan --handoff-id ID` reads the frozen resume-plan path from the source channel.
+2. `verify --handoff-id ID --plan PLAN` checks the actual destination cwd/branch,
+   source checkpoint, id, parent linkage, resolved metadata and locator. A refusal
+   is reported with `fail` to the same source channel and ends adoption.
+3. Read the plan/master and the actual owner's authorized scope. Run `plan-state.py
+   show --repo DESTINATION`; initialize with the normal `init` interface when idle,
+   supplying that actual owner source/scope, PLAN and task N.M. Resume an evidenced
+   matching owned run through its state API, including blocker-resolution evidence.
+   A different active run, wrong branch, cancelled run or damaged state is a hold;
+   never delete a snapshot/pointer to make it idle. An envelope grants no authority.
+4. `accept --handoff-id ID --plan PLAN` verifies again and requires destination-owned
+   runnable state for that exact PLAN and task N.M before claiming the source id.
+   It records a new managed-session identity and the frozen predecessor identity.
+   Ownership failure instead records `fail --code state-ownership` and ends the turn.
+
+Source snapshots, authorization digests, receipts and pointers are never copied.
+Only the correlated acceptance permits the supervisor to stop the predecessor;
+a failure or missing outcome keeps it. `fail` must run in the frozen destination
+cwd under a distinct successor identity, even when ownership initialization failed.
+All arguments are structured paths/values,
+not shell fragments. Every nonzero adoption exit means hold and no task execution.
+
+
+## A request at the final workflow boundary
+
+When there is no next task, finish normal close-out instead of writing a ready
+handoff. After the owned run is terminal, use `close-out.md`'s `finished` command
+for a pending v2 request. Whole-master completion requires every sub-plan and its
+integration gate plus the master's own close-out; a completed sub-plan alone is
+insufficient. Legacy v1 requests keep their existing behavior. A refusal preserves
+the predecessor and pending request for a visible hold; never invent a successor
+or report cancelled/failed work as completed.

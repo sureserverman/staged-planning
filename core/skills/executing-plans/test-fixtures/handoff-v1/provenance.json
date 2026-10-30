@@ -1,0 +1,7 @@
+{
+  "release": "1.1.1",
+  "source_commit": "9e9033dd5c31aeb2a2450bac838339c5ca58d437",
+  "source_artifact": "plugins/codex/planning/skills/executing-plans/scripts/handoff-envelope.py",
+  "claude_artifact_identical": true,
+  "sha256": "9bdd86f3bb885bd7d114e294ff96741d9f57294c56145a14a4910e319b2be541"
+}

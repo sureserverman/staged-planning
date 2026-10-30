@@ -16,8 +16,9 @@ Subcommands, each with `--root <repo>`:
     plan             print the `plan` a valid <id>.ready.json names, else print no-ready, exit 3
     verify           exit 0 when the handoff checks out, else print a failure code, exit 3
     request-pending  exit 0 when request.json asks this managed session to hand off, else 1
+    finished         answer a v2 request after verified terminal workflow close-out
 
-Protocol, version 1. Every envelope has exactly these keys:
+Legacy protocol, version 1. Its envelopes have exactly these keys:
 
     {"protocol": "planning-handoff", "version": 1, "event": ...,
      "handoff_id": ..., "managed_session_id": ..., "timestamp": ..., "plan": ...}
@@ -50,11 +51,15 @@ broken supervisor setup is visible. request-pending stays silent, and checks tha
 request.json is there and valid before it runs the command, so a gate with no request
 starts no process.
 
-One outcome per handoff. `accept` and `fail` first claim the id by creating
-handoffs/.<id>.claim with O_EXCL; when it exists — this id was already accepted or
-failed, by this session or another — they write nothing, print `refused` to stderr and
-exit 1. So two runs given one id cannot both own the plan, and a late `fail` cannot
-overwrite an `accepted`. A claim whose envelope then fails to write is removed again.
+One outcome per handoff. `accept` and `fail` first claim the id by linking
+handoffs/.<id>.claim to a temp file holding the whole outcome, so the claim appears
+complete or not at all. When it exists — this id was already accepted or failed, by this
+session or another — a writer asking for any other outcome prints `refused` to stderr and
+exits 1. So two runs given one id cannot both own the plan, and a late `fail` cannot overwrite
+an `accepted`. A writer killed after claiming left its outcome in the claim. The next writer
+to reach it publishes those bytes, so the reader learns the outcome, and succeeds only if it
+asked for that same outcome. A claim whose envelope then
+fails to write is removed again.
 
 Root. `--root` is the handoff root the protocol names: the git top level of the project
 (session-handoff.md's `<repo root>`), the same root context-usage.py reads a request at.
@@ -70,9 +75,15 @@ missing, empty or different is rewritten the same temp-then-rename way, so an
 interrupted first write cannot leave envelopes unignored. A refused write prints
 `refused` to stderr and exits 1.
 
+Size. An envelope the reader would refuse is never written: over MAX_READ_BYTES, the
+writer prints its size and the limit to stderr and refuses before it creates anything,
+so no directory, claim or file appears and the id stays free. Version 1 exits 1;
+version 2 prints `oversized-envelope` and exits 3. MAX_READ_BYTES here is the one limit:
+every writer names it.
+
 Reads open each component O_NOFOLLOW (the file also O_NONBLOCK) and refuse: a link,
 anything but a regular file, more than 4096 bytes, non-JSON, a protocol other than
-`planning-handoff`, a version other than 1, a handoff id failing its pattern, an
+`planning-handoff`, an unsupported version, a handoff id failing its pattern, an
 invalid managed session id. A refused read counts as absent.
 
 verify --handoff-id ID --plan PATH checks, in this order, and prints the first failure:
@@ -102,10 +113,21 @@ importlib (the hyphenated filename prevents a plain import).
 
 Exit codes: 0 ok; 1 refused write / no pending request; 2 bad CLI usage; 3 verify failed.
 
+Version 2 is negotiated by PLANNING_HANDOFF_VERSIONS and implemented in
+handoff_v2.py with handoff_destination.py. `ready --next 'Task N.M'` resolves the
+explicit destination; --sub-plan-boundary (plus --current-subplan for a master
+source) selects only work whose dependencies and current-entry gates are green.
+The ready record is immutable and bounded before publication. --handoff-root SOURCE
+on plan/verify/accept/fail keeps outcomes in the source channel while the actual cwd
+and ownership remain at the destination. V2 accept verifies both the checkpoint and
+an already initialized/resumed destination-owned run through plan_state; no source
+state or authority is copied. The public protocol specifies exact v2 schemas.
+
 Stdlib only.
 """
 import argparse
 import datetime
+import errno
 import importlib.util
 import json
 import os
@@ -210,12 +232,18 @@ def read_handoff_file(root, name):
     finally:
         _close_all(fds)
     if (not isinstance(data, dict) or data.get("protocol") != PROTOCOL
-            or type(data.get("version")) is not int or data["version"] != VERSION):
+            or type(data.get("version")) is not int or data["version"] not in (1, 2)):
         return None
     if "handoff_id" in data and not valid_handoff_id(data["handoff_id"]):
         return None
     if not valid_session_id(data.get("managed_session_id")):
         return None
+    if data['version'] == 2:
+        from handoff_v2 import schema
+        from handoff_finished import schema as finished_schema
+        validator = finished_schema if data.get('event') in (None, 'HANDOFF_FINISHED') else schema
+        if not validator(data, root):
+            return None
     return data
 
 
@@ -339,7 +367,24 @@ def _open_owned_dir(name, parent_fd):
     return fd
 
 
-def _replace_at(hfd, name, body):
+def _create_new(hfd, name, body):
+    """An exclusive write for a filesystem without hard links. A kill can leave it partial;
+    a write error removes it."""
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=hfd)
+    try:
+        try:
+            view = memoryview(body)
+            while view:
+                view = view[os.write(fd, view):]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except BaseException:
+        os.unlink(name, dir_fd=hfd)
+        raise
+
+
+def _replace_at(hfd, name, body, exclusive=False):
     """Put `body` at `name` in the directory hfd: a fresh O_EXCL | O_NOFOLLOW temp with
     a random name, written in full, then renamed over `name`. Raises on any failure,
     after removing its temp."""
@@ -350,9 +395,20 @@ def _replace_at(hfd, name, body):
             view = memoryview(body)
             while view:
                 view = view[os.write(fd, view):]
+            os.fsync(fd)
         finally:
             os.close(fd)
-        os.replace(tmp, name, src_dir_fd=hfd, dst_dir_fd=hfd)
+        if exclusive:
+            try:
+                os.link(tmp, name, src_dir_fd=hfd, dst_dir_fd=hfd, follow_symlinks=False)
+            except OSError as exc:
+                if exc.errno not in (errno.EPERM, errno.ENOTSUP, errno.ENOSYS):
+                    raise
+                _create_new(hfd, name, body)
+            os.unlink(tmp, dir_fd=hfd)
+        else:
+            os.replace(tmp, name, src_dir_fd=hfd, dst_dir_fd=hfd)
+        os.fsync(hfd)
     except BaseException:
         try:
             os.unlink(tmp, dir_fd=hfd)
@@ -373,29 +429,89 @@ def _gitignore_ok(hfd):
         os.close(fd)
 
 
-def write_handoff_file(root, name, body, claim=None):
+def _read_regular(hfd, name):
+    """The bytes of `name`; empty when it is not a small regular file of ours. Raises
+    FileNotFoundError when it is missing."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=hfd)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_size > MAX_READ_BYTES:
+            return b""
+        return os.read(fd, MAX_READ_BYTES + 1)
+    finally:
+        os.close(fd)
+
+
+def _outcome_fields(raw):
+    """An envelope's fields without its timestamp, or None when it is not an envelope."""
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    return {k: v for k, v in data.items() if k != "timestamp"} if isinstance(data, dict) else None
+
+
+def _same_outcome(raw, body):
+    fields = _outcome_fields(raw)
+    return fields is not None and fields == _outcome_fields(body)
+
+
+def _finish_claim(hfd, claim, body):
+    """Publish the outcome a killed writer left in an existing claim. True only when the
+    outcome at that name is the one this writer asked for, timestamp aside. An empty claim is
+    an older writer's: it says only that the id is taken."""
+    raw = _read_regular(hfd, claim)
+    fields = _outcome_fields(raw)
+    suffixes = {EVENTS[cmd][0]: EVENTS[cmd][1] for cmd in ("accept", "fail")}
+    handoff_id = claim[1:-len(".claim")]
+    if fields is None or fields.get("handoff_id") != handoff_id or fields.get("event") not in suffixes:
+        return False
+    target = f"{handoff_id}.{suffixes[fields['event']]}.json"
+    try:
+        _replace_at(hfd, target, raw, exclusive=True)
+    except FileExistsError:
+        pass
+    return _same_outcome(raw, body) and _same_outcome(_read_regular(hfd, target), body)
+
+
+def write_handoff_file(root, name, body, claim=None, exclusive=False):
     """Write `body` (bytes) to <root>/.claude/handoffs/<name>, first making sure
-    handoffs/.gitignore is exactly `*`. With `claim`, first create that file with O_EXCL
-    and refuse when it exists. Returns whether it was written; never raises."""
+    handoffs/.gitignore is exactly `*`. With `claim`, first link that file to a temp holding
+    `body`, and refuse when it exists, after publishing any outcome a killed writer left in
+    it. Returns whether this writer's outcome stands; never raises. A claim goes away again
+    only when no outcome reached `name`."""
     fds = []
     try:
+        if len(body) > MAX_READ_BYTES:
+            return False
         fds.append(os.open(root, os.O_RDONLY | os.O_DIRECTORY))
         fds.append(_open_owned_dir(CLAUDE_DIR, fds[-1]))
         fds.append(_open_owned_dir(HANDOFF_DIR, fds[-1]))
         if not _gitignore_ok(fds[-1]):
             _replace_at(fds[-1], GITIGNORE, GITIGNORE_BODY)
         if claim is not None:
-            os.close(os.open(claim, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                             0o600, dir_fd=fds[-1]))
+            try:
+                _replace_at(fds[-1], claim, body, exclusive=True)
+            except FileExistsError:
+                return _finish_claim(fds[-1], claim, body)
         try:
-            _replace_at(fds[-1], name, body)
-        except BaseException:
-            if claim is not None:      # no outcome was written: free the id for a retry
+            _replace_at(fds[-1], name, body, exclusive=exclusive or claim is not None)
+        except BaseException as exc:
+            if claim is None:
+                raise
+            try:
+                stands = _read_regular(fds[-1], name)
+            except FileNotFoundError:   # no outcome was written: free the id for a retry
                 try:
                     os.unlink(claim, dir_fd=fds[-1])
                 except OSError:
                     pass
-            raise
+                raise exc
+            except Exception:           # cannot tell: the claim keeps the id
+                raise exc
+            if not isinstance(exc, Exception):
+                raise
+            return _same_outcome(stands, body)
         return True
     except Exception:
         return False
@@ -524,30 +640,53 @@ def main(argv=None):
         p.add_argument("--root", required=True)
         p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
         p.add_argument("--plan", required=True)
+        if cmd == 'ready':
+            p.add_argument('--next', help='exact next locator, e.g. Task 1.1')
+            p.add_argument('--sub-plan-boundary', action='store_true')
+            p.add_argument('--subplan', type=int)
+            p.add_argument('--current-subplan', type=int)
+        else:
+            p.add_argument('--handoff-root', help='source channel root; never changes cwd')
     p = sub.add_parser("fail", help="write <id>.failed.json")
     p.add_argument("--root", required=True)
     p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
-    p.add_argument("--code", required=True, choices=FAILURE_CODES)
+    from handoff_v2 import ERRORS
+    p.add_argument("--code", required=True, choices=FAILURE_CODES + ERRORS)
     p.add_argument("--plan", help="plan file (recorded as null when omitted)")
+    p.add_argument('--handoff-root')
     p = sub.add_parser("plan", help="print the plan <id>.ready.json names; exit 3 no-ready")
     p.add_argument("--root", required=True)
     p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
+    p.add_argument('--handoff-root')
     p = sub.add_parser("verify", help="check a handoff; exit 3 with a failure code")
     p.add_argument("--root", required=True)
     p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
+    p.add_argument("--plan", required=True)
+    p.add_argument('--handoff-root')
+    p = sub.add_parser("finished", help="answer a v2 request after workflow close-out")
+    p.add_argument("--root", required=True)
     p.add_argument("--plan", required=True)
     p = sub.add_parser("request-pending", help="exit 0 when a handoff is requested of us")
     p.add_argument("--root", required=True)
     _warn_if_stale()
     args = ap.parse_args(argv)
+    source = getattr(args, 'handoff_root', None) or args.root
 
+    if args.cmd == 'finished':
+        from handoff_finished import finished
+        from handoff_destination import DestinationError
+        try:
+            return finished(sys.modules[__name__], args.root, args.plan, os.environ)
+        except DestinationError as exc:
+            print(exc.code)
+            return 3
     if args.cmd == "new-id":
         print(new_id())
         return 0
     if args.cmd == "request-pending":
         return 0 if request_pending(args.root, os.environ) else 1
     if args.cmd == "plan":
-        ready = read_ready(args.root, args.handoff_id)
+        ready = read_ready(source, args.handoff_id)
         plan = ready.get("plan") if ready else None
         if not isinstance(plan, str) or not os.path.isabs(plan):
             print("no-ready")
@@ -555,29 +694,83 @@ def main(argv=None):
         print(plan)
         return 0
     if args.cmd == "verify":
-        code = verify(args.root, args.handoff_id, args.plan)
+        ready = read_ready(source, args.handoff_id)
+        if ready and ready['version'] == 2:
+            from handoff_v2 import verify as verify_v2
+            from handoff_destination import DestinationError
+            try:
+                verify_v2(sys.modules[__name__], args.root, source, args.handoff_id, args.plan, ready)
+                code = None
+            except DestinationError as exc:
+                code = exc.code
+        elif os.path.realpath(source) != os.path.realpath(args.root):
+            code = 'no-ready'
+        else:
+            code = verify(args.root, args.handoff_id, args.plan)
         if code is None:
             return 0
         print(code)
         return 3
 
-    sid, why = identity(os.environ, args.root)
+    sid, why = identity(os.environ, source)
     if sid is None:
         if why is not None:
             print(f"{ID_CMD_VAR} is set but gave no session id: {why}", file=sys.stderr)
         print("unsupervised")
         return 0
     event, suffix = EVENTS[args.cmd]
+    if args.cmd == 'ready' and args.next:
+        from handoff_v2 import ready as ready_v2
+        from handoff_destination import DestinationError
+        try:
+            data = ready_v2(sys.modules[__name__], args, os.environ, sid)
+        except DestinationError as exc:
+            print(exc.code)
+            return 3
+        if data is not None:
+            print(os.path.join(os.path.realpath(source), CLAUDE_DIR, HANDOFF_DIR, f'{args.handoff_id}.ready.json'))
+            return 0
+    elif args.cmd == 'ready' and (args.sub_plan_boundary or args.subplan is not None
+                                 or args.current_subplan is not None):
+        print('locator-mismatch')
+        return 3
+    if args.cmd == 'ready':
+        # A legacy invocation must not publish a known cross-root checkpoint as v1.
+        text = read_plan(args.plan)
+        lines = last_block(text) if text else None
+        if lines:
+            cwd_lines = [line[4:].strip().strip('`') for line in lines if line.startswith('cwd:')]
+            checkpoint_root = cwd_lines[0] if len(cwd_lines) == 1 else block_field(lines, 'cwd')
+            if checkpoint_root and os.path.realpath(checkpoint_root) != os.path.realpath(args.root):
+                print('manual-continuation')
+                return 3
     body = envelope(event, args.handoff_id, sid, args.plan, getattr(args, "code", None))
+    if args.cmd in ('accept', 'fail'):
+        ready = read_ready(source, args.handoff_id)
+        if ready and ready['version'] == 2:
+            from handoff_v2 import outcome
+            from handoff_destination import DestinationError
+            try:
+                body = outcome(sys.modules[__name__], args, source, ready, sid)
+            except DestinationError as exc:
+                print(exc.code)
+                return 3
+        elif os.path.realpath(source) != os.path.realpath(args.root) and args.cmd == 'accept':
+            print('no-ready')
+            return 3
     name = f"{args.handoff_id}.{suffix}.json"
     claim = f".{args.handoff_id}.claim" if args.cmd in ("accept", "fail") else None
-    if not write_handoff_file(args.root, name, (json.dumps(body) + "\n").encode("utf-8"),
-                              claim):
-        print(f"refused: could not write {name} under {args.root}/.claude/handoffs"
+    raw = (json.dumps(body, separators=(',', ':')) + "\n").encode("utf-8")
+    if len(raw) > MAX_READ_BYTES:
+        from handoff_v2 import size_refusal
+        print(size_refusal(name, len(raw), MAX_READ_BYTES), file=sys.stderr)
+        return 1
+    if not write_handoff_file(source, name, raw, claim):
+        print(f"refused: could not write {name} under {source}/.claude/handoffs"
               + (" (this handoff was already accepted or failed)" if claim else ""),
               file=sys.stderr)
         return 1
-    print(os.path.join(os.path.abspath(args.root), CLAUDE_DIR, HANDOFF_DIR, name))
+    print(os.path.join(os.path.abspath(source), CLAUDE_DIR, HANDOFF_DIR, name))
     return 0
 
 

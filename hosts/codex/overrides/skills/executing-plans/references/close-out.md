@@ -263,3 +263,20 @@ independent owning worktree can initialize a separate run. Unowned legacy state 
 beside it, so the next plan's review claims are checked against a log of its own run. This applies to every close-out,
 blocked or clean — it is a `##` section rather than a trailing line because a line inside the
 blocked-gate section is one a reader working an unblocked plan never reaches.
+
+
+## Answering a pending request after completion
+
+After `plan-state.py finish`, run `python3 <planning-plugin>/skills/executing-plans/scripts/handoff-envelope.py finished --root <repo root> --plan <absolute plan path>`.
+It writes a v2 `HANDOFF_FINISHED` only for this session's pending v2 request and a
+terminal owned run whose whole single/master workflow has green tasks, gates and
+close-out markers. A sub-plan closing while its master has more work writes no
+success signal: continue the master's normal boundary procedure instead.
+`no-request` (exit 0) includes no request, another session's request and a legacy v1
+request; it creates no file. A refusal (exit 3) names the unmet condition and leaves
+state and existing outcomes intact. Retrying the same successful request reuses the
+immutable outcome. It never starts a successor or changes a failed/cancelled run.
+This command is the read-only state / channel publication exception after finish;
+no execution-state mutation follows a terminal run. A blocked-accepted close-out
+cannot answer as successful workflow completion. Completion consumption remains a
+separate supervisor integration obligation.

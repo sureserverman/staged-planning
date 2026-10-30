@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 3196764da7912f854c1d549e6d5897e908be3793c472e8fb29691d24fd11d9e2
+  base_sha256: de8696e016d4600062f0b56596aa144ff95447ce23020890c88f604402dd748f
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -26,7 +26,7 @@ skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
 skills/executing-plans/SKILL.md:
   base_sha256: 30c1dc8c98c04fec7c91f9ff55fe702639da3c062be47b2189c5de8ab000e956
 skills/executing-plans/references/close-out.md:
-  base_sha256: 32f67592719da394f433cc790cbfd71a55de8e6ee686bf114ff2a0afa5b04926
+  base_sha256: 0f6c703028c2c2e5f76a66070e6d610c0d67ce339028f71457ce2f79878f98f0
 skills/executing-plans/references/dispatch-fidelity.md:
   base_sha256: 35fe47e1ca68e9beba6baf7f3e1a5300db21b70b07dc822f4c99a62a9ff61ecd
 skills/executing-plans/references/extraction-classification.md:
@@ -36,7 +36,7 @@ skills/executing-plans/references/gate-failure-procedure.md:
 skills/executing-plans/references/integration.md:
   base_sha256: 24cd403ebe8622e879e8554c954a02eb27f9398e92c5d39a579b557c8e68d567
 skills/executing-plans/references/master-plans.md:
-  base_sha256: 4792dee784f32689b02a0d3617c01baa89f49a67900e74f742bfc33d0049f2ec
+  base_sha256: 7743f85e5aca0beef1220b9b8d2df5ab4bad81234df7bce8e303975ef5f5965c
 skills/executing-plans/references/plan-continue-hook.md:
   base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
 skills/executing-plans/references/preflight-checks.md:
@@ -44,7 +44,7 @@ skills/executing-plans/references/preflight-checks.md:
 skills/executing-plans/references/progress-state-file.md:
   base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
 skills/executing-plans/references/session-handoff.md:
-  base_sha256: ec8a94b15c7d983b12c961a0fd4bf0e6b2896bde6a7896678d98c1768a15bbd2
+  base_sha256: 38879c8f79aaff2ff23735b6ded3ac354882abb0594b5588c649a5bf0cb6ae31
 skills/executing-plans/references/stage-gate.md:
   base_sha256: e191d6c94a13b15b8b1483f6df4b5388157f91dfb6cb1634b541776d57f98d25
 skills/executing-plans/references/task-execution.md:
@@ -57,5 +57,5 @@ skills/executing-plans/scripts/plan-progress.py:
   host_fact: OpenCode has no status line a plugin or a command can feed, so the status-line renderer and its --json model can never run; the fork ships the budget, stage-order and dispatch checks byte-identical and exits 64 on any other argument.
   depends_on:
     lib/plan_parser.py: 657fd27d6289af4d507616a9ba24c57041db547e5350a1438ee0478db6eed73b
-    skills/executing-plans/scripts/plan_state.py: 998966a71141850096a7a2e83ad799152b0ba9a8beed164aff6c00482ca63c74
+    skills/executing-plans/scripts/plan_state.py: 38e2a8a2b6a3111e0669d9295cf27c649ddb6cdece809444bf64a84cb8e792e5
     skills/planning-projects/scripts/validate-dispatch.py: c30f005300c83639de0d5a3df3462870a6e6cba4012689c1789c66e6cc582404

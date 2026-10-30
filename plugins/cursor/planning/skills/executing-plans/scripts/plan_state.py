@@ -822,6 +822,22 @@ def mutate(state,operation,payload):
     return {}
 
 
+def admissible(repo,operation,expected,operation_id):
+    """The refusals no payload can change, so a caller can learn them without sending one."""
+    owner=owner_of(repo)
+    need(owner['branch'] is not None,'detached HEAD owns no run: switch to a branch first')
+    need(integer(expected) and text_field(operation_id), 'expected revision and operation id required')
+    try:
+        with own_directory(owner['root'],'.claude') as directory:
+            state=read_json(directory,'plan-progress.json')
+    except FileNotFoundError:
+        state=None
+    # A legacy file is what `migrate` exists for, so only it may wait for its document.
+    if state is not None and (operation!='migrate' or not isinstance(state,dict) or 'schema_version' in state):
+        validate(state)
+    return {'status':'ok'}
+
+
 def execute(repo,operation,payload,expected=None,operation_id=None):
     owner=owner_of(repo)
     need(operation=='show' or owner['branch'] is not None,
@@ -902,8 +918,12 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
 
 
 def result(repo,operation,payload,expected=None,operation_id=None):
+    return guarded(execute,repo,operation,payload,expected,operation_id)
+
+
+def guarded(function,*args):
     try:
-        return execute(repo,operation,payload,expected,operation_id)
+        return function(*args)
     except StateError as e:
         return {'status':e.status,'message':str(e)}
     except (OSError,ValueError,TypeError,KeyError,AttributeError,RecursionError,

@@ -204,3 +204,22 @@ session per sub-plan recommended — the master file is the handoff artifact); o
 sub-plan's close-out, flip its register `Status`, run its `**Gate:**` checks, commit
 `"Sub-plan N green"`; version bumps are deferred from sub-plan close-outs to the master
 close-out.
+
+
+## Execution destination metadata
+
+Plans stored in a records directory do not execute there. To name an exact next
+working repository/worktree, add these separate master-entry fields:
+
+```text
+- **Execution root:** `/work/river`
+- **Execution branch:** `feature`
+```
+
+A sub-plan can instead declare the unbulleted `Execution root:` and
+`Execution branch:` fields above its first `##` heading. Both fields are required when either is supplied;
+entry and sub-plan declarations must agree. Absolute roots may contain spaces.
+These fields do not register projects, create worktrees or authorize branch changes.
+Old plans with neither declaration retain same-root execution. Do not infer the
+root from a plan path. The protocol's version-2 section defines dependency/gate
+selection, explicit ambiguity resolution and reader-first compatibility.
