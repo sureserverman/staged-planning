@@ -214,6 +214,31 @@ if [ "$(rc_of)" = 0 ] && [ ! -s "$T/out" ] && [ ! -e "$WMAIN/.claude/dispatch-lo
     ok "an unreadable state file in the main worktree is no run: nothing is written"
 else bad "an unreadable main-worktree state must not be logged to" "rc=$(rc_of) main=$(lines "$WMAIN")"; fi
 
+# Catches: a dispatch logged nowhere while a sibling holds the run.
+wt_pair ds; printf '# Plan\n' > "$T/plan.md"; git -C "$WMAIN" worktree add -q -b ds-run "$T/ds-run" 2>/dev/null
+mkdir -p "$T/ds-run/.claude"; printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$T/plan.md" > "$T/ds-run/.claude/plan-progress.json"
+dispatch_payload general-purpose | hook "$WLINK"
+if [ "$(rc_of)" = 0 ] && [ "$(lines "$T/ds-run")" = 1 ] && [ ! -e "$WLINK/.claude" ]; then
+    ok "a dispatch from a linked worktree is logged to a sibling's run"
+else bad "a sibling's run must take the line" "rc=$(rc_of) run=$(lines "$T/ds-run")"; fi
+dispatch_payload general-purpose | hook "$WMAIN"
+if [ "$(lines "$T/ds-run")" = 2 ]; then ok "a dispatch from the main worktree is logged to a linked worktree's run"
+else bad "a linked worktree's run must take the main worktree's line" "run=$(lines "$T/ds-run")"; fi
+# Catches: another worktree's unreadable state (a detached one reads that way for good)
+# losing the line of the readable run.
+git -C "$WMAIN" worktree add -q -b ds-bad "$T/ds-bad" 2>/dev/null; mkdir -p "$T/ds-bad/.claude"
+printf 'not json\n' > "$T/ds-bad/.claude/plan-progress.json"
+dispatch_payload general-purpose | hook "$WLINK"
+if [ "$(lines "$T/ds-run")" = 3 ]; then ok "a dispatch reaches the readable run past another worktree's unreadable state"
+else bad "an unreadable state must not lose the readable run's line" "run=$(lines "$T/ds-run")"; fi
+# Catches: picking one of two runs, which would put a line in the wrong run's ledger.
+git -C "$WMAIN" worktree add -q -b ds-two "$T/ds-two" 2>/dev/null; mkdir -p "$T/ds-two/.claude"
+cp "$T/ds-run/.claude/plan-progress.json" "$T/ds-two/.claude/plan-progress.json"
+dispatch_payload general-purpose | hook "$WLINK"
+if [ "$(rc_of)" = 0 ] && [ ! -s "$T/out" ] && [ "$(lines "$T/ds-run")" = 3 ] && [ "$(lines "$T/ds-two")" = 0 ]; then
+    ok "with two runs elsewhere, the dispatch goes in neither log"
+else bad "two runs elsewhere must log to neither" "one=$(lines "$T/ds-run") two=$(lines "$T/ds-two")"; fi
+
 # Catches: no python3 on PATH failing closed.
 E="$T/nopy"; mkrepo "$E" plan; mkdir -p "$T/bin"
 for b in bash cat; do ln -sf "$(command -v $b)" "$T/bin/$b"; done

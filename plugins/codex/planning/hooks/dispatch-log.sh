@@ -17,7 +17,7 @@
 #     only, whose payloads carry the role (`agent_type`) and the agent's id.
 #
 # INERT UNLESS A PLAN IS IN FLIGHT. It writes nothing unless the project's
-# .claude/plan-progress.json (or, in a linked worktree with none, the main worktree's)
+# .claude/plan-progress.json (or, in a worktree with none, the one run among the others)
 # exists. A `.claude` or log that is a symlink is never written through.
 #
 # ONE LINE PER EVENT, appended to <project>/.claude/dispatch-log.jsonl:
@@ -54,15 +54,9 @@ def logs_here(root):
 
 
 # .claude/plan-progress.json is git-ignored, so each worktree has its own. With no run in
-# flight here (no state, or a finished run), the run is that of the main worktree: the
-# parent of the common git directory when that is named `.git` (git-worktree(1)).
-r = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute",
-                    "--git-common-dir"], capture_output=True, text=True)
-common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
-main = common.parent if common is not None and common.name == ".git" \
-    and common.parent.resolve() != repo.resolve() else None
-if not logs_here(repo) and not (main is not None and logs_here(main)):
-    sys.exit(0)
+# flight here (no state, or a finished run), the line goes to the log of the one run in
+# flight among the others, and with two or more to neither: a line in the log of the wrong run
+# would pass the review check of that run.
 try:
     spec = importlib.util.spec_from_file_location("dispatch_state_reader",
         Path(os.environ["DISPATCH_HOOKS"]) / "plan_continue_classify.py")
@@ -72,8 +66,11 @@ try:
     state = reader.read_state(repo) if logs_here(repo) else None
     if isinstance(state, dict) and state.get("state_status") == "state_error":
         sys.exit(0)
-    if (state is None or reader.finished(state, repo)) and main is not None and logs_here(main):
-        root, state = main, reader.read_state(main)
+    if state is None or reader.finished(state, repo):
+        runs, _ = reader.other_runs(repo)
+        if len(runs) != 1 or not logs_here(runs[0][0]):
+            sys.exit(0)
+        root, state = runs[0]
     if not isinstance(state, dict) or state.get("state_status") == "state_error":
         sys.exit(0)
     if reader.finished(state, root):

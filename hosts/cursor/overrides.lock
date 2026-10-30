@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 26ec04f1941659085d9dd99364b42df83aafb19e9c476c62b531885ee1723fde
+  base_sha256: 5258af45f598d9e41d811df48e18838242b5ce68fdb4d08066c98922f4dec8e5
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -9,21 +9,21 @@ agents/code-reviewer.md:
 agents/design-handoff-reproducer.md:
   base_sha256: 73089a291824b2d23d08bdd2a3ddaa6bdd45722c4973cf921fe2b33522c2d334
 hooks/dispatch-log.sh:
-  base_sha256: cad2fc046172932a548b2e475cc9a647fad3be8bb2db8f9c52d2577c405c3ca9
+  base_sha256: 84d74a452f78bf8c8c8b1528e3019852942acef9b373318ab2a26c2791d1fc5f
   host_fact: 'Cursor sent no subagentStart or subagentStop event in any probe mode, and its preToolUse hook (matcher Task) is a permission hook that runs from the plugin folder, so the fork logs dispatch lines only, on preToolUse: it answers {"permission":"allow"}, takes the repo from the payload''s workspace_roots, logs tool_input.subagent_type (empty when absent), and writes one line per tool_use_id, because an entry on both routes ran it twice for one call.'
   depends_on:
-    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
 hooks/git-ref-gate.sh:
-  base_sha256: 1ceb9f59909328a442af42353c6fd6e6b39376a05323627ac7468d4a6acc73e9
+  base_sha256: a980aad7caff06811de397e191dc47cc15793ccdb802d2002fd7a3e7c4c9a922
   host_fact: 'On Cursor an executor left to choose proved only the claims it picked, and it installs nothing it is not told to, so proof there is every claim, once per stage at the gate, and on while a plan is in flight: the fork gates the Stage N green commit, needs a record for every claim of every task of stage N, and its shim is installed by the Cursor hooks installer, which the beforeShellExecution commit gate enforces.'
   depends_on:
-    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
     skills/executing-plans/scripts/prove-claim.py: 463c276752f5ca5c79ce3f4a040d8cb0b9cc7a4c13e57e05690917cd54e29b98
 hooks/plan-continue.sh:
   base_sha256: 43113fb2ba0eaa385c941e242696bf64b86118fce0d408bb774c0a35d8aa6fe2
   host_fact: A Cursor stop hook answers with followup_message, which Cursor submits as the next user message, its payload carries no message text, and it fires only in an interactive session, run from the workspace root; so the fork continues every stop of a plan in flight that the execution state does not record as a stop, finds the repo from workspace_roots, keys the conversation by conversation_id and finds its siblings from its own resolved path.
   depends_on:
-    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
 skills/applying-design-handoff/SKILL.md:
   base_sha256: 28a0e74ad72a982e1ed4753a56b0d13d64fa9c39bc8da73671583eb7088dd84c
 skills/applying-design-handoff/references/handoff-pack-format.md:
@@ -67,7 +67,7 @@ skills/executing-plans/scripts/plan-flip-audit.py:
   base_sha256: d099abceee8c18882c38587520eeb2951a4af2d121c6789cd9262ef9da904d1a
   host_fact: 'The Cursor proof model of the hooks/git-ref-gate.sh fork (every claim, once per stage at the gate): findings 8 and 9 hold every claim of a ticked task to a record and skip the tasks of the stage still in flight, read through the hooks'' state reader, so the audit and the Cursor commit gate count the same set. It also carries unrecorded_gate(), which core has none of: the Cursor stop hook asks it whether a stage claimed done (stage-complete, closeout, or ticked gate boxes) lacks its Stage N green commit.'
   depends_on:
-    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
     lib/staleness.py: fb4e58f7e56fd36e0b1c63d097cd7837bd938263da6db6e1d5268a43a83a486c
     skills/executing-plans/scripts/prove-claim.py: 463c276752f5ca5c79ce3f4a040d8cb0b9cc7a4c13e57e05690917cd54e29b98
 skills/executing-plans/scripts/statusline-chain.sh:

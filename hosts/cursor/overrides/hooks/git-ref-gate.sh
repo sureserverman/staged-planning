@@ -60,9 +60,9 @@
 # are not "no plan": the gate allows them, so a new plan started after a finished one
 # is ungated until `plan-state.py init` records it.
 #
-# IN A LINKED WORKTREE the plan in flight is this worktree's own, and only when it has none
-# (no state, or a finished run) the main worktree's (resolve_run_root): .claude/ is
-# git-ignored, so each worktree has its own state file.
+# IN ANY WORKTREE the plan in flight is this worktree's own, and only when it has none
+# (no state, or a finished run) the one in flight among the others (resolve_run_root):
+# .claude/ is git-ignored, so each worktree has its own state file.
 # IT FAILS OPEN on its own errors (no python3, unreadable state, git or import
 # failures, any uncaught exception) and says why on stderr. A record it cannot read is a
 # problem with the record, not an error of the hook: it refuses. There is deliberately NO
@@ -210,36 +210,47 @@ if live:
     refuse(f"commit gate: refused — {live}")
 
 
-# git sets these for a hook run in a linked worktree; read there, the main worktree's owned
-# snapshot would be checked against the linked worktree's git identity.
-GIT_IDENTITY = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+def ambiguous(runs):
+    """Two or more other worktrees hold runs and this one holds none. A commit naming a task
+    or closing a stage is refused, by the audit's own patterns; if those cannot load, the
+    gate fails open. Any other commit is not this gate's to judge without a plan, so one
+    that ticks a gate box under a neutral subject lands: only a plan could show the tick."""
+    try:
+        spec = importlib.util.spec_from_file_location("plan_flip_audit",
+                                                      scripts / "plan-flip-audit.py")
+        audit = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(audit)
+    except Exception as e:
+        allow(f"cannot load plan-flip-audit.py ({e}); allowing")
+    for sha in added_commits():
+        subject = git("log", "-1", "--format=%s", sha).stdout.strip()
+        if audit.STAGE_GREEN.match(subject) or audit.subject_tasks(subject):
+            refuse(f"commit gate: refused — {sha[:7]} \"{subject}\" names a task or stage, but "
+                   f"{len(runs)} other worktrees hold runs in flight ("
+                   + ", ".join(str(wt) for wt, _ in runs)
+                   + ") and this one holds none, so none can judge it. Commit from the worktree "
+                   "whose run this is; if this commit is no run's, reword its subject. A stale "
+                   "run keeps counting until it is finished or its state file is moved away.")
+    allow()
 
 
 def resolve_run_root(state):
     """The worktree whose run judges these commits, and its state. .claude/plan-progress.json
     is git-ignored, so each worktree has its own: this worktree's run first, and only when it
-    has none in flight (no state, or a finished run) the main worktree's — the parent of the
-    common git directory when that is named `.git` (git-worktree(1)). The main worktree's
-    state present but unreadable or untrusted is named, as no plan in flight."""
+    has none in flight (no state, or a finished run) the one in flight among the others
+    (pcc.other_runs). Two or more cannot be told apart (ambiguous). With none, another
+    worktree's state present but unreadable or untrusted is named, as no plan in flight: a
+    worktree left detached reads that way for good, so it must not hide a readable run."""
     if state is not None and not pcc.finished(state, repo):
         return repo, state
-    r = git("rev-parse", "--path-format=absolute", "--git-common-dir")
-    common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
-    if common is None or common.name != ".git" or common.parent.resolve() == repo.resolve():
-        return repo, state  # the main worktree itself, or a bare repository's linked one
-    main = common.parent
-    saved = {k: os.environ.pop(k) for k in GIT_IDENTITY if k in os.environ}
-    try:
-        main_state = pcc.read_state(main)
-    finally:
-        os.environ.update(saved)
-    path = main / ".claude" / "plan-progress.json"
-    if (main_state is None and os.path.lexists(path)) or (
-            isinstance(main_state, dict) and main_state.get("state_status") == "state_error"):
-        unstated(f"the main worktree's {path} is present but unreadable or untrusted")
-    if main_state is None or pcc.finished(main_state, main):
-        return repo, state
-    return main, main_state
+    runs, unreadable = pcc.other_runs(repo)
+    if len(runs) > 1:
+        ambiguous(runs)
+    if runs:
+        return runs[0]  # a readable run outranks another worktree's unreadable state
+    if unreadable:
+        unstated(", ".join(unreadable) + " present but unreadable or untrusted")
+    return repo, state
 
 
 state = pcc.read_state(repo)

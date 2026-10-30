@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 — 2026-10-30
+
+- **The hooks see a run held in another worktree.** With no run of its own, a worktree
+  answers to the one run in flight among the others, not only the main worktree's. A run in a
+  linked worktree now gates commits from the main worktree and from siblings, takes their
+  dispatch lines, and guards `core.hooksPath` for them, on Claude, Codex and Cursor.
+- **Two or more runs elsewhere are not guessed between.** The commit hook refuses a commit
+  naming a task or stage and lets any other land. A dispatch goes in neither log. The guards on
+  config shared by every worktree deny.
+- **Known limits.** An unrelated commit whose subject names a task is judged against the one
+  run. A stale run counts until it is finished or its state file is moved away. With two runs,
+  a neutral-subject commit ticking a gate box lands. A worktree on a mount that is down reads
+  as holding no run.
+
 ## 1.2.0 — 2026-10-30
 
 A sweep of the code-fixable backlog. One planned item is not in this release: the handoff

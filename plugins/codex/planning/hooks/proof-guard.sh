@@ -6,7 +6,7 @@
 # nothing. It acts only in a repo whose git `reference-transaction` hook is the
 # shim proof-hooks-install.py writes (the project opted in) AND which has a plan
 # in flight (.claude/plan-progress.json, read by plan_continue_classify.read_state;
-# any phase counts; in a linked worktree with none, the main worktree's — run_root).
+# any phase counts; in a worktree with none, any other worktree's — in_flight).
 # Everywhere else it prints nothing and exits 0 — no decision at all.
 #
 # WHAT IT DENIES. The git ref hook (hooks/git-ref-gate.sh) refuses an unproven
@@ -145,49 +145,24 @@ def opted_in(repo):
         return False
 
 
-def run_root(repo, state):
-    """The worktree whose run gates `repo`, and its state. .claude/plan-progress.json is
-    git-ignored, so each worktree has its own: the repo's own run first, and only when it has
-    none in flight (no state, or a finished run) the main worktree's — the parent of the
-    common git directory when that is named `.git` (git-worktree(1)), as git-ref-gate.sh
-    reads it. The main worktree's state present but unreadable or untrusted is named, as
-    no plan in flight."""
-    if state is not None and not pcc.finished(state, repo):
-        return repo, state
-    try:
-        r = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    except Exception:
-        return repo, state
-    common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
-    if common is None or common.name != ".git" or common.parent.resolve() == repo.resolve():
-        return repo, state  # the main worktree itself, or a bare repository's linked one
-    main = common.parent
-    main_state = pcc.read_state(main)
-    path = main / ".claude" / "plan-progress.json"
-    if (main_state is None and os.path.lexists(path)) or (
-            isinstance(main_state, dict) and main_state.get("state_status") == "state_error"):
-        sys.stderr.write(f"proof-guard: the main worktree's {path} is present but unreadable "
-                         "or untrusted; no plan in flight there\n")
-        return repo, state
-    if main_state is None or pcc.finished(main_state, main):
-        return repo, state
-    return main, main_state
-
-
 def in_flight(repo):
     """True when the repo's state file names a plan, read by the Stop hook's own
     reader (plan_continue_classify.read_state: no symlink below the repo root is
-    followed) — the main worktree's when a linked worktree has none (run_root). Any phase
-    counts, as in git-ref-gate.sh."""
+    followed) — or, with none of its own in flight, when any other worktree's does
+    (pcc.other_runs). What this guards is shared by every worktree, so one run is enough
+    and two need no choosing. Any phase counts, as in git-ref-gate.sh."""
     state = pcc.read_state(repo)
     if isinstance(state, dict) and state.get("state_status") == "state_error":
         sys.stderr.write("proof-guard: state_error; execution snapshot cannot establish a plan\n")
         return False
-    root, state = run_root(repo, state)
-    if pcc.finished(state, root):
-        return False
-    plan = state.get("plan") if isinstance(state, dict) else None
-    return isinstance(plan, str) and bool(plan)
+    if state is not None and not pcc.finished(state, repo):
+        plan = state.get("plan") if isinstance(state, dict) else None
+        return isinstance(plan, str) and bool(plan)
+    runs, unreadable = pcc.other_runs(repo)
+    for path in unreadable:
+        sys.stderr.write(f"proof-guard: {path} is present but unreadable or untrusted; "
+                         "no plan in flight there\n")
+    return bool(runs)
 
 
 gated = [r for r in repos if opted_in(r) and in_flight(r)]

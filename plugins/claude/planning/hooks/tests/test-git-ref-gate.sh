@@ -1054,6 +1054,63 @@ try_commit 'git commit -q -m "Stage 1 green"'
 if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && [ ! -e "$WMAIN/proof" ]; then
     ok "with proof/ local, a linked worktree's Stage 1 green is judged on the reports it holds"
 else bad "local reports must be read from the committing worktree (rc=$rc)" "$err"; fi
+# A run held in a linked worktree, seen from the main worktree or a sibling.
+run_in() { mkdir -p "$1/.claude"; printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$PLAN" > "$1/.claude/plan-progress.json"; }
+# Catches: a sibling's run invisible, so an unproven task commit lands in another linked worktree.
+wt_pair wts; git -C "$WMAIN" worktree add -q -b wts-run "$T/wts-run" 2>/dev/null; run_in "$T/wts-run"
+refused "Stage 1 Task 1.1: from a sibling" "Task 1.1 claim 1" \
+    "an unproven task commit from a linked worktree is refused by a sibling's run"
+# Catches: the same run invisible from the main worktree.
+SIDE="$REPO"; REPO="$WMAIN"
+refused "Stage 1 Task 1.1: from the main worktree" "Task 1.1 claim 1" \
+    "an unproven task commit from the main worktree is refused by a linked worktree's run"
+REPO="$SIDE"
+# Catches: two runs elsewhere resolved by picking one.
+git -C "$WMAIN" worktree add -q -b wts-two "$T/wts-two" 2>/dev/null; run_in "$T/wts-two"
+refused "Stage 1 Task 1.1: two runs" "2 other worktrees" \
+    "a task commit is refused, naming the count, when two other worktrees hold runs"
+refused "Stage 1 green" "2 other worktrees" \
+    "a Stage N green commit is refused when two other worktrees hold runs"
+change; h=$(head_of)
+try_commit 'git commit -q -m "fix a typo"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "with two runs elsewhere, a commit naming no task or stage lands"
+else bad "an unrelated commit must land with two runs elsewhere (rc=$rc)" "$err"; fi
+# Catches: the worktree's own run losing to the ambiguity elsewhere.
+run_in "$REPO"
+refused "Stage 1 Task 1.1: own run first" "Task 1.1 claim 1" \
+    "a worktree's own run judges its commits whatever other worktrees hold"
+# Catches: a sibling's finished run still gating.
+wt_pair wtf; git -C "$WMAIN" worktree add -q -b wtf-run "$T/wtf-run" 2>/dev/null
+v2_finish "$T/wtf-run" "$DONE" || bad "fixture: init/finish in a sibling failed"
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 Task 1.1: sibling finished"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "a sibling's finished run gates nothing"
+else bad "a finished sibling run must not gate (rc=$rc)" "$err"; fi
+# Catches: a worktree whose directory is gone stopping the lookup.
+wt_pair wtg; git -C "$WMAIN" worktree add -q -b wtg-gone "$T/wtg-gone" 2>/dev/null
+git -C "$WMAIN" worktree add -q -b wtg-run "$T/wtg-run" 2>/dev/null; run_in "$T/wtg-run"; rm -rf "$T/wtg-gone"
+refused "Stage 1 Task 1.1: one worktree gone" "Task 1.1 claim 1" \
+    "a worktree whose directory is gone is skipped, and the sibling's run still judges"
+# Catches: a worktree left with unreadable state (a detached one reads that way for good)
+# hiding a readable run, so an unproven task commit lands.
+wt_pair wtm; git -C "$WMAIN" worktree add -q -b wtm-bad "$T/wtm-bad" 2>/dev/null
+git -C "$WMAIN" worktree add -q -b wtm-run "$T/wtm-run" 2>/dev/null; run_in "$T/wtm-run"
+mkdir -p "$T/wtm-bad/.claude"; printf 'not json\n' > "$T/wtm-bad/.claude/plan-progress.json"
+refused "Stage 1 Task 1.1: one run, one unreadable" "Task 1.1 claim 1" \
+    "a readable run judges even when another worktree's state is unreadable"
+# Catches: a sibling's relative plan path resolved against the committing worktree.
+wt_pair wtr; git -C "$WMAIN" worktree add -q -b wtr-run "$T/wtr-run" 2>/dev/null
+cp "$PLAN" "$T/wtr-run/$(basename "$PLAN")"; mkdir -p "$T/wtr-run/.claude"
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$(basename "$PLAN")" > "$T/wtr-run/.claude/plan-progress.json"
+refused "Stage 1 Task 1.1: relative plan" "Task 1.1 claim 1" \
+    "a sibling's relative plan path is read from the sibling"
+# Catches: a sibling's untrusted state read as "no plan" in silence.
+wt_pair wtb; git -C "$WMAIN" worktree add -q -b wtb-bad "$T/wtb-bad" 2>/dev/null
+mkdir -p "$T/wtb-bad/.claude"; printf 'not json\n' > "$T/wtb-bad/.claude/plan-progress.json"
+refused "Stage 1 green" "$T/wtb-bad/.claude/plan-progress.json" \
+    "an unreadable state file in a sibling refuses a Stage N green commit, naming it"
 REPO="$SAVED_REPO"
 
 # A shim whose plugin is gone fails open — and says so, so the gate is never off

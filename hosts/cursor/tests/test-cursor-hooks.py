@@ -410,6 +410,31 @@ try:
     check(not os.path.exists(os.path.join(main, ".claude", "dispatch-log.jsonl"))
           and not os.path.exists(os.path.join(linked, ".claude")),
           "with no state in either worktree a linked worktree's Task launch writes nothing")
+    # A run held in a sibling linked worktree.
+    main, linked = wt_pair("wt-sib", plan=False)
+    sib = os.path.join(tmp, "wt-sib-run")
+    git(main, "worktree", "add", "-q", "-b", "wt-sib-run", sib)
+    os.makedirs(os.path.join(sib, ".claude"))
+    state_doc = json.dumps({"plan": "plan.md", "phase": "task", "stage": 1, "task": "1.1"})
+    with open(os.path.join(sib, ".claude", "plan-progress.json"), "w") as fh:
+        fh.write(state_doc)
+    run("dispatch-log.sh", task_payload(linked, "wt-s1"))
+    slog = os.path.join(sib, ".claude", "dispatch-log.jsonl")
+    check(os.path.exists(slog) and len(open(slog).read().splitlines()) == 1,
+          "a Task launch from a linked worktree is logged to a sibling's run")
+    check(gate("git status", linked)[0] == "deny",
+          "with a sibling's plan in flight and no shim, git in a linked worktree is denied")
+    check(gate("git status", main)[0] == "deny",
+          "with a linked worktree's plan in flight and no shim, git in the main worktree is denied")
+    two = os.path.join(tmp, "wt-sib-two")
+    git(main, "worktree", "add", "-q", "-b", "wt-sib-two", two)
+    os.makedirs(os.path.join(two, ".claude"))
+    with open(os.path.join(two, ".claude", "plan-progress.json"), "w") as fh:
+        fh.write(state_doc)
+    run("dispatch-log.sh", task_payload(linked, "wt-s2"))
+    check(len(open(slog).read().splitlines()) == 1
+          and not os.path.exists(os.path.join(two, ".claude", "dispatch-log.jsonl")),
+          "with two runs elsewhere a Task launch goes in neither log")
     main, linked = wt_pair("wt-cg")
     perm, r = gate("git status", linked)
     check(perm == "deny" and "--install --repo" in json.loads(r.stdout).get("agent_message", ""),

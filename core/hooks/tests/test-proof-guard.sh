@@ -283,6 +283,21 @@ printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$T/plan.m
 got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
 if [ "$got" = deny ]; then ok "a hooksPath command in a linked worktree is denied while the main worktree has a plan in flight"
 else bad "the main worktree's run must gate a linked worktree, got $got" "$(cat "$T/err")"; fi
+# Catches: a run in a sibling, or in a linked worktree seen from the main one, unseen.
+wt_pair gs; git -C "$WMAIN" worktree add -q -b gs-run "$T/gs-run" 2>/dev/null; mkdir -p "$T/gs-run/.claude"
+printf '{"plan": "%s", "phase": "task", "stage": 1, "task": "1.1"}\n' "$T/plan.md" > "$T/gs-run/.claude/plan-progress.json"
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
+if [ "$got" = deny ]; then ok "a hooksPath command in a linked worktree is denied while a sibling has a plan in flight"
+else bad "a sibling's run must gate a linked worktree, got $got" "$(cat "$T/err")"; fi
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WMAIN" | decide)"
+if [ "$got" = deny ]; then ok "a hooksPath command in the main worktree is denied while a linked worktree has a plan in flight"
+else bad "a linked worktree's run must gate the main worktree, got $got" "$(cat "$T/err")"; fi
+# Catches: two runs elsewhere read as none. The rule protects shared config, so either one counts.
+git -C "$WMAIN" worktree add -q -b gs-two "$T/gs-two" 2>/dev/null; mkdir -p "$T/gs-two/.claude"
+cp "$T/gs-run/.claude/plan-progress.json" "$T/gs-two/.claude/plan-progress.json"
+got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"
+if [ "$got" = deny ]; then ok "a hooksPath command is denied while two other worktrees have plans in flight"
+else bad "two runs elsewhere must still gate, got $got" "$(cat "$T/err")"; fi
 # Catches: a main-worktree lookup that strays into deciding where no plan is in flight.
 wt_pair gn
 got="$(payload 'git -c core.hooksPath=/x commit -m x' "$WLINK" | decide)"

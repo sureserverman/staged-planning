@@ -12,7 +12,7 @@
 # It parses no commands: a parse of shell text has holes (a quoted `;` splits a message
 # and hides what follows). While a plan is in flight (.claude/plan-progress.json, read by
 # plan_continue_classify.read_state: no symlink below the repo root is followed; in a
-# linked worktree with none, the main worktree's — run_root) in any
+# worktree with none, another worktree's — run_root) in any
 # repo the command can reach — each `git -C <dir>`, each `cd <dir>`, the payload's `cwd`
 # and `workspace_roots` — it denies:
 #   - a command whose text mentions `hooksPath`, in any case, anywhere: the key must be
@@ -149,43 +149,35 @@ if pcc.mentions_git_commit(command):
                  f"This command was denied because it commits in {r}, and {live}")
 
 
-UNREADABLE = []  # main worktrees' state files present but unreadable, named in the deny
+UNREADABLE = []  # other worktrees' state files present but unreadable, named in the deny
 
 
 def run_root(repo):
-    """The worktree whose run gates `repo`, its state, and whether that state is the main
+    """The worktree whose run gates `repo`, its state, and whether that state is another
     worktree's unreadable one. .claude/plan-progress.json is git-ignored, so each worktree
     has its own: the repo's own run first, and only when it has none in flight (no state, or
-    a finished run) the main worktree's — the parent of the common git directory when that
-    is named `.git` (git-worktree(1)), as git-ref-gate.sh reads it."""
+    a finished run) one in flight among the others (pcc.other_runs). What this gate denies
+    without a shim is shared by every worktree, so any one of them gates; two need no
+    choosing."""
     state = pcc.read_state(repo)
     if isinstance(state, dict) and state.get("state_status") == "state_error":
         return repo, state, False
     if state is not None and not pcc.finished(state, repo):
         return repo, state, False
-    try:
-        r = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    except Exception:
-        return repo, state, False
-    common = Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
-    if common is None or common.name != ".git" or common.parent.resolve() == repo.resolve():
-        return repo, state, False  # the main worktree itself, or a bare repository's linked one
-    main = common.parent
-    main_state = pcc.read_state(main)
-    path = main / ".claude" / "plan-progress.json"
-    if (main_state is None and os.path.lexists(path)) or (
-            isinstance(main_state, dict) and main_state.get("state_status") == "state_error"):
-        if str(path) not in UNREADABLE:
-            UNREADABLE.append(str(path))
+    runs, unreadable = pcc.other_runs(repo)
+    if runs:
+        return runs[0][0], runs[0][1], False
+    if unreadable:
+        for path in unreadable:
+            if path not in UNREADABLE:
+                UNREADABLE.append(path)
         return repo, None, True
-    if main_state is None or pcc.finished(main_state, main):
-        return repo, state, False
-    return main, main_state, False
+    return repo, state, False
 
 
 def in_flight(repo):
-    """True when the repo's state file names a plan that is not finished — the main
-    worktree's when a linked worktree has none (run_root). Any phase counts, as in
+    """True when the repo's state file names a plan that is not finished — another
+    worktree's when this one has none (run_root). Any phase counts, as in
     git-ref-gate.sh."""
     root, state, _ = run_root(repo)
     if isinstance(state, dict) and state.get("state_status") == "state_error":
@@ -198,8 +190,8 @@ def in_flight(repo):
 
 def unstated(repo):
     """True when no execution state names a plan: none, an untrusted one, no plan named,
-    or the named plan gone — or the main worktree's state, read for a linked worktree with
-    none, present but unreadable. A state_error and a finished plan are not this case."""
+    or the named plan gone — or another worktree's state, read for a worktree with none,
+    present but unreadable. A state_error and a finished plan are not this case."""
     root, state, unreadable = run_root(repo)
     if unreadable:
         return True

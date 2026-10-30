@@ -10,7 +10,7 @@
 #
 # INERT UNLESS A PLAN IS IN FLIGHT. It runs on every Agent call of every user who
 # enables the plugin, so it does nothing — no Python, no write — unless
-# $CLAUDE_PROJECT_DIR/.claude/plan-progress.json, or the main worktree's (below), exists.
+# $CLAUDE_PROJECT_DIR/.claude/plan-progress.json exists or the repo has other worktrees (below).
 # A `.claude` or log that is a symlink is never written through.
 #
 # ONE LINE PER EVENT, appended to $CLAUDE_PROJECT_DIR/.claude/dispatch-log.jsonl:
@@ -26,25 +26,16 @@
 # its payload carries a top-level `cursor_version` key. The Cursor build of this plugin
 # logs its own dispatches, so a payload with that key is left alone: exit 0, no line.
 #
-# A LINKED WORKTREE. .claude/plan-progress.json is git-ignored, so each worktree has its
-# own. With no run in flight in $CLAUDE_PROJECT_DIR (no state, or a finished run), the run
-# is the main worktree's — the parent of the common git directory when that is named `.git`
-# (git-worktree(1)) — and the line goes to the main worktree's log.
+# ANY WORKTREE. .claude/plan-progress.json is git-ignored, so each worktree has its own.
+# With no run in flight in $CLAUDE_PROJECT_DIR (no state, or a finished run), the line goes
+# to the log of the one run in flight among the others, and with two or more to neither: a
+# line in the wrong run's log would pass that run's review check.
 D="${CLAUDE_PROJECT_DIR:-}"
-logs_here() {  # $1 = worktree: a state file to read, and a log that is not a symlink
-    [ -d "$1/.claude" ] && [ ! -L "$1/.claude" ] \
-        && [ -f "$1/.claude/plan-progress.json" ] && [ ! -L "$1/.claude/dispatch-log.jsonl" ]
-}
-M=""
-if [ -n "$D" ]; then
-    M="$(git -C "$D" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
-    case "$M" in */.git) M="${M%/.git}" ;; *) M="" ;; esac
-    { [ -n "$M" ] && [ "$M" != "$D" ] && logs_here "$M"; } || M=""
-fi
-[ -n "$D" ] && { logs_here "$D" || [ -n "$M" ]; } \
+[ -n "$D" ] && { [ -f "$D/.claude/plan-progress.json" ] \
+    || [ "$(git -C "$D" worktree list --porcelain 2>/dev/null | grep -c '^worktree ')" -gt 1 ]; } \
     || { cat >/dev/null 2>&1; exit 0; }  # drain stdin: the caller's write must not hit EPIPE
 DISPATCH_HOOKS="${BASH_SOURCE[0]%/*}" \
-DISPATCH_REPO="$D" DISPATCH_MAIN="$M" python3 -I -c '
+DISPATCH_REPO="$D" python3 -I -c '
 import datetime, importlib.util, json, os, sys
 from pathlib import Path
 try:
@@ -62,9 +53,11 @@ try:
     state = reader.read_state(root)
     if isinstance(state, dict) and state.get("state_status") == "state_error":
         sys.exit(0)
-    if (state is None or reader.finished(state, root)) and os.environ["DISPATCH_MAIN"]:
-        root = Path(os.environ["DISPATCH_MAIN"])
-        state = reader.read_state(root)
+    if state is None or reader.finished(state, root):
+        runs, _ = reader.other_runs(root)
+        if len(runs) != 1:
+            sys.exit(0)
+        root, state = runs[0]
     if not isinstance(state, dict) or state.get("state_status") == "state_error":
         sys.exit(0)
     if reader.finished(state, root):

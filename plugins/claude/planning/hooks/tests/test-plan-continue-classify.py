@@ -574,5 +574,50 @@ msg = pcc.promise_reason({"plan": "p.md", "phase": "task", "task": "1.1"}, "task
 ok("the guard names plan-state.py set-blocker for a documented stop",
    "plan-state.py set-blocker" in msg, msg[-300:])
 
+# ---- other_runs: the run a hook with none of its own answers to.
+wr = tempfile.mkdtemp()
+wmain = os.path.join(wr, "main")
+gitw = lambda *a: subprocess.run(["git", "-C", wmain, "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a],
+                                 check=True, capture_output=True)
+subprocess.run(["git", "init", "-q", "--template=", wmain], check=True)
+gitw("commit", "-q", "--allow-empty", "-m", "base")
+for name in ("empty", "held", "bad"):
+    gitw("worktree", "add", "-q", "-b", name, os.path.join(wr, name))
+for name, body in (("held", json.dumps({"plan": "p.md", "phase": "task"})), ("bad", "not json\n")):
+    os.makedirs(os.path.join(wr, name, ".claude"))
+    with open(os.path.join(wr, name, ".claude", "plan-progress.json"), "w") as fh:
+        fh.write(body)
+# Catches: read_state's lone-pointer fallback (about six git processes) run per worktree.
+reads, real_read = [], pcc.read_state
+pcc.read_state = lambda root: (reads.append(os.path.basename(str(root))), real_read(root))[1]
+runs, unreadable = pcc.other_runs(wmain)
+pcc.read_state = real_read
+ok("other_runs reads no state for a worktree with no state file",
+   "empty" not in reads and "main" not in reads, repr(reads))
+ok("other_runs lists the run and the unreadable state",
+   [os.path.basename(str(w)) for w, _ in runs] == ["held"]
+   and [os.path.basename(os.path.dirname(os.path.dirname(u))) for u in unreadable] == ["bad"],
+   repr((runs, unreadable)))
+# Catches: a caller's own worktree counted as "other" when it starts from a subfolder.
+os.makedirs(os.path.join(wr, "held", "sub"))
+ok("other_runs knows its own worktree from a subfolder",
+   not pcc.other_runs(os.path.join(wr, "held", "sub"))[0], repr(pcc.other_runs(os.path.join(wr, "held", "sub"))))
+# Catches: one worktree's surprise ending the scan, which the git hook's excepthook allows.
+real_finished = pcc.finished
+def raising(state, root):
+    raise ValueError("embedded null byte")
+pcc.finished = raising
+runs, unreadable = pcc.other_runs(wmain)
+pcc.finished = real_finished
+ok("a worktree that raises is named as unreadable, and the scan goes on",
+   not runs and sorted(os.path.basename(os.path.dirname(os.path.dirname(u))) for u in unreadable) == ["bad", "held"],
+   repr((runs, unreadable)))
+# Catches: the caller's git identity left in, or lost from, the environment.
+os.environ["GIT_DIR"] = os.path.join(wmain, ".git")
+runs, _ = pcc.other_runs(os.path.join(wr, "empty"))
+ok("other_runs ignores GIT_DIR while it reads, and restores it",
+   len(runs) == 1 and os.environ.get("GIT_DIR") == os.path.join(wmain, ".git"), repr(runs))
+del os.environ["GIT_DIR"]
+
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(0 if failed == 0 else 1)

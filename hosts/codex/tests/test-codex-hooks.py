@@ -188,6 +188,32 @@ try:
     subagent("SubagentStop", repo)
     with open(os.path.join(real, ".claude", "dispatch-log.jsonl")) as fh:
         check(len(fh.readlines()) == 2, "nothing is written through a symlinked .claude")
+
+    # A run held in a sibling linked worktree.
+    main = os.path.join(tmp, "wt-main")
+    os.makedirs(main)
+    wt = lambda *a: subprocess.run(["git", "-C", main, *a], capture_output=True, check=True)
+    subprocess.run(["git", "init", "-q", "--template=", main], check=True)
+    wt("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "base")
+    side, sib, two = (os.path.join(tmp, n) for n in ("wt-side", "wt-sib", "wt-two"))
+    for path in (side, sib):
+        wt("worktree", "add", "-q", "-b", os.path.basename(path), path)
+    doc = json.dumps({"plan": "plan.md", "phase": "task", "stage": 1, "task": "1.1"})
+    os.makedirs(os.path.join(sib, ".claude"))
+    with open(os.path.join(sib, ".claude", "plan-progress.json"), "w") as fh:
+        fh.write(doc)
+    subagent("SubagentStart", side)
+    slog = os.path.join(sib, ".claude", "dispatch-log.jsonl")
+    check(os.path.exists(slog) and len(open(slog).readlines()) == 1,
+          "a subagent from a linked worktree is logged to a sibling's run")
+    wt("worktree", "add", "-q", "-b", "wt-two", two)
+    os.makedirs(os.path.join(two, ".claude"))
+    with open(os.path.join(two, ".claude", "plan-progress.json"), "w") as fh:
+        fh.write(doc)
+    subagent("SubagentStart", side)
+    check(len(open(slog).readlines()) == 1
+          and not os.path.exists(os.path.join(two, ".claude", "dispatch-log.jsonl")),
+          "with two runs elsewhere a subagent goes in neither log")
 finally:
     shutil.rmtree(tmp)
 

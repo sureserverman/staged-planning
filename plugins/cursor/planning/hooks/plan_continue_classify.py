@@ -51,6 +51,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 import unicodedata
 
@@ -375,6 +376,55 @@ def live_proof_break(repo):
                 "check the files it names by hand (git status, git diff) and delete the "
                 "journal. Then commit.")
     return None
+
+
+# git sets these for a hook run in a linked worktree; read there, another worktree's owned
+# snapshot would be checked against this worktree's git identity.
+GIT_IDENTITY = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+
+
+def other_runs(root):
+    """([(worktree, state)], [unreadable state path]) of every OTHER worktree of root's repo.
+
+    .claude/plan-progress.json is git-ignored, so each worktree has its own, and a hook
+    holding no run of its own has no plan name to look one up by. So the run that judges
+    it is the one in flight among all worktrees, and each hook decides what two of them
+    mean. A run names a plan and is not finished. A worktree whose directory is gone, or
+    is on a mount that is down, holds nothing. Never raises: a repo git cannot list has
+    no other worktrees."""
+    saved = {k: os.environ.pop(k) for k in GIT_IDENTITY if k in os.environ}
+    runs, unreadable = [], []
+    try:
+        top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, errors="replace", timeout=10)
+        own = Path(top.stdout.strip() if top.returncode == 0 and top.stdout.strip() else root).resolve()
+        r = subprocess.run(["git", "-C", str(root), "worktree", "list", "--porcelain"],
+                           capture_output=True, text=True, errors="replace", timeout=10)
+        for block in r.stdout.split("\n\n") if r.returncode == 0 else ():
+            lines = block.splitlines()
+            if not lines or not lines[0].startswith("worktree ") or "bare" in lines:
+                continue
+            wt = Path(lines[0][len("worktree "):])
+            path = wt / ".claude" / "plan-progress.json"
+            try:
+                # No state file, no run: read_state's fallback for a lone pointer spawns
+                # about six git processes per worktree, on every commit and dispatch.
+                if wt.resolve() == own or not wt.is_dir() or not os.path.lexists(path):
+                    continue
+                state = read_state(wt)
+                if state is None or (isinstance(state, dict)
+                                     and state.get("state_status") == "state_error"):
+                    unreadable.append(str(path))
+                elif isinstance(state, dict) and isinstance(state.get("plan"), str) \
+                        and state["plan"] and not finished(state, wt):
+                    runs.append((wt, state))
+            except Exception:
+                unreadable.append(str(path))    # one bad worktree must not end the scan
+    except (OSError, subprocess.SubprocessError):
+        pass
+    finally:
+        os.environ.update(saved)
+    return runs, unreadable
 
 
 def read_state(root):

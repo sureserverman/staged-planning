@@ -1,15 +1,15 @@
 README.md:
-  base_sha256: 26ec04f1941659085d9dd99364b42df83aafb19e9c476c62b531885ee1723fde
+  base_sha256: 5258af45f598d9e41d811df48e18838242b5ce68fdb4d08066c98922f4dec8e5
 hooks/dispatch-log.sh:
-  base_sha256: cad2fc046172932a548b2e475cc9a647fad3be8bb2db8f9c52d2577c405c3ca9
+  base_sha256: 84d74a452f78bf8c8c8b1528e3019852942acef9b373318ab2a26c2791d1fc5f
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
   depends_on:
-    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
 hooks/plan-continue.sh:
   base_sha256: 43113fb2ba0eaa385c941e242696bf64b86118fce0d408bb774c0a35d8aa6fe2
   host_fact: A final message ends a Codex turn and nothing resumes it (there is no task notification), so the Stop fork, opt-in per session with CODEX_PLAN_CONTINUE=1, continues every final stop of a plan in flight that the state does not record as a stop, reading Codex's last_assistant_message.
   depends_on:
-    hooks/plan_continue_classify.py: f2e8ce2900708edce30c093e2d94fb7b4d9f20139ef44c3955d455517af3bbed
+    hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
 skills/applying-design-handoff/SKILL.md:
   base_sha256: 28a0e74ad72a982e1ed4753a56b0d13d64fa9c39bc8da73671583eb7088dd84c
 skills/applying-design-handoff/references/handoff-pack-format.md:
