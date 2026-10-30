@@ -28,6 +28,11 @@ DISPOSITIONS = ('working', 'repairing', 'waiting_external', 'awaiting_owner_deci
 # The id handoff-envelope.py new-id mints; a handoff blocker may record it.
 HANDOFF_ID = re.compile(r'h-[0-9a-f]{20}')
 PHASES = ('preflight', 'task', 'gate', 'blocked', 'handoff', 'closeout')
+# What a lost snapshot took with it and no recovery can bring back.
+RECOVERY_MISSING = ['receipts', 'verifications', 'revision_continuity', 'unlisted_gate_accounts']
+# While a recovered history is unresolved, every other operation is refused.
+RECOVERY_ALLOWED = ('record-verification', 'strategy-review', 'set-blocker', 'authorize',
+                    'resolve-recovery')
 
 
 class StateError(Exception):
@@ -121,13 +126,76 @@ def handoff_id_valid(disposition,blocker):
              'handoff_id must be a minted id (h- and 20 hex) on a handoff')
 
 
+def is_sha256(value):
+    return isinstance(value,str) and len(value)==64 and all(c in '0123456789abcdef' for c in value)
+
+
+def citation_valid(citation,evidence_count):
+    """A claim's source: where in which cited file. It ties the claim to a hashed file."""
+    fields(citation,('evidence','at'))
+    need(integer(citation['evidence']) and citation['evidence']<evidence_count
+         and text_field(citation['at']),'a recovered claim must cite its source evidence')
+
+
+def round_evidence_valid(rows,completed,evidence_count):
+    # Length first: `completed` is caller input and may be any size.
+    need(isinstance(rows,list) and len(rows)==completed
+         and [r.get('round') if isinstance(r,dict) else None for r in rows]==list(range(1,completed+1)),
+         'every spent round, and only those, needs evidence')
+    for row in rows:
+        fields(row,('round','verdict','source'))
+        need(row['verdict'] in ('passed','failed','unknown'),'round evidence needs a verdict or unknown')
+        citation_valid(row['source'],evidence_count)
+
+
+def known_ids_valid(ids):
+    need(isinstance(ids,list) and 1<=len(ids)<=MAX_RECEIPTS and all(text_field(v) for v in ids),
+         'recovery must name the operation ids known to have run')
+
+
+def recovery_valid(state):
+    record=state['recovery']
+    fields(record,('source_evidence','last_known','known_operation_ids','round_evidence',
+                   'budget_source','reservation_source','account_sources','missing_history',
+                   'recovered_under','resolution'))
+    need(record['missing_history']==RECOVERY_MISSING,'recovery must name its missing history')
+    need(text_field(record['recovered_under']),'recovery must keep the source it was made under')
+    evidence=record['source_evidence']
+    need(isinstance(evidence,list) and evidence,'recovery needs source evidence')
+    for item in evidence:
+        fields(item,('path','sha256'))
+        need(text_field(item['path']) and is_sha256(item['sha256']),'invalid source evidence')
+    last=record['last_known']
+    fields(last,('revision','operation','source'))
+    need(integer(last['revision'],1) and text_field(last['operation']),'invalid last known point')
+    citation_valid(last['source'],len(evidence))
+    known_ids_valid(record['known_operation_ids'])
+    round_evidence_valid(record['round_evidence'],len(record['round_evidence']),len(evidence))
+    citation_valid(record['budget_source'],len(evidence))
+    if record['reservation_source'] is not None:
+        citation_valid(record['reservation_source'],len(evidence))
+    sources=record['account_sources']
+    need(isinstance(sources,dict),'invalid saved account sources')
+    for citation in sources.values():
+        citation_valid(citation,len(evidence))
+    resolution=record['resolution']
+    if resolution is None:
+        need(state['disposition'] in ('waiting_external','awaiting_owner_decision','handoff')
+             and state['qualification']=='blocked','unresolved recovery must stay blocked')
+    else:
+        fields(resolution,('source','evidence'))
+        need(text_field(resolution['source']) and text_field(resolution['evidence']),
+             'invalid recovery resolution')
+
+
 def validate(state):
     need(isinstance(state,dict) and state.get('schema_version') == VERSION, 'unsupported schema; migrate legacy explicitly')
     required={'schema_version','run_id','revision','owner','plan','phase','stage','task','task_desc',
               'updated','gate','rounds','gate_accounts','authorization','disposition',
               'qualification','blocker','strategy','receipts','integrity',
               'remediation_round','remediation_budget'}
-    need(set(state)==required, 'invalid snapshot fields')
+    # `recovery` is optional, so a snapshot written before the field existed stays valid.
+    need(set(state)-{'recovery'}==required, 'invalid snapshot fields')
     need(state['integrity']==digest({k:v for k,v in state.items() if k!='integrity'}), 'snapshot integrity mismatch')
     need(integer(state['revision'],1) and str(uuid.UUID(state['run_id']))==state['run_id'], 'invalid run/revision')
     need(isinstance(state['owner'],dict) and set(state['owner'])=={'root','common','git_dir','branch'}, 'invalid owner')
@@ -135,6 +203,8 @@ def validate(state):
     need(text_field(state['plan']) and state['phase'] in PHASES and state['disposition'] in DISPOSITIONS, 'invalid projection')
     need(state['qualification'] in ('pending','pass','no_go','blocked'), 'invalid qualification')
     blocker_valid(state)
+    if 'recovery' in state:
+        recovery_valid(state)
     need(integer(state['stage']) and isinstance(state['task'],str) and isinstance(state['task_desc'],str), 'invalid task projection')
     stamp=datetime.datetime.fromisoformat(state['updated'].replace('Z','+00:00'))
     need(stamp.tzinfo is not None, 'UTC timestamp required')
@@ -163,7 +233,8 @@ def validate(state):
         gate_valid(state['gate'])
     if active is not None:
         need(set(active) in ({'number','authorization_id','verification'},
-                            {'number','authorization_id','verification','migration_source'}), 'invalid active-round fields')
+                            {'number','authorization_id','verification','migration_source'},
+                            {'number','authorization_id','verification','recovery_source'}), 'invalid active-round fields')
         need(state['gate'] is not None and active['number']==rounds['completed']+1
              and isinstance(active['authorization_id'],str) and len(active['authorization_id'])==64,
              'invalid active-round identity')
@@ -294,15 +365,16 @@ def publish_pointer(owner,run_id):
         replace_json(fd,pointer_name(owner),{'owner':owner,'run_id':run_id})
 
 
-def read_owned(owner, directory, legacy=False):
+def read_owned(owner, directory, legacy=False, lost_ok=False):
     """The validated owned snapshot, or None when idle. Init and migrate write the
     snapshot before the pointer, so an interruption between them leaves a valid snapshot
     with no pointer: that is accepted here, and the next mutation republishes the pointer
-    (execute). A pointer with no snapshot is never left by an interruption."""
+    (execute). A pointer with no snapshot is never left by an interruption; only `recover`,
+    which exists for that loss, passes lost_ok."""
     pointer=read_pointer(owner)
     state=read_json(directory,'plan-progress.json')
     if state is None:
-        need(pointer is None, 'owned active run has no snapshot')
+        need(pointer is None or lost_ok, 'owned active run has no snapshot')
         return None
     if legacy and isinstance(state,dict) and 'schema_version' not in state:
         need(pointer is None, 'legacy snapshot conflicts with v2 pointer')
@@ -545,6 +617,104 @@ def migrate(owner,legacy,payload):
     return state
 
 
+def evidence_identity(item):
+    """The caller's hash, checked against the file now, so a record cannot name evidence
+    that is not there. It proves which bytes were cited, not that they are true."""
+    fields(item,('path','sha256'))
+    need(text_field(item['path']) and os.path.isabs(item['path']) and is_sha256(item['sha256']),
+         'source evidence needs an absolute path and a sha256')
+    fd=os.open(item['path'],os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd,'rb') as f:
+        need(stat.S_ISREG(os.fstat(f.fileno()).st_mode),'source evidence must be a regular file')
+        content=hashlib.sha256()
+        for chunk in iter(lambda:f.read(65536),b''):
+            content.update(chunk)
+    need(content.hexdigest()==item['sha256'],'source evidence differs from its recorded hash','conflict')
+    return {'path':item['path'],'sha256':item['sha256']}
+
+
+def only_pointer_to(owner,run_id):
+    with own_directory(owner['common'],'plan-state-runs') as fd:
+        for name in os.listdir(fd):
+            if name.endswith('.json') and name!=pointer_name(owner):
+                other=read_json(fd,name)
+                need(isinstance(other,dict) and other.get('run_id')!=run_id,
+                     'another worktree also claims this run, or its pointer is invalid; recovery is ambiguous')
+
+
+def recover(owner,pointer,state,payload,operation_id):
+    """Rebuild a lost snapshot from evidence, keeping the run's identity and spent work.
+    It starts blocked and names what it cannot know; it grants nothing."""
+    need(state is None,'run has a snapshot; recovery never replaces one','conflict')
+    need(pointer is not None,'no owned run to recover')
+    fields(payload,('run_id','plan','source','scope','gate','rounds','round_evidence','last_known',
+                    'known_operation_ids','source_evidence','budget_source','gate_accounts'),
+           ('reservation_source','stage','task','task_desc','remaining_work'))
+    need(payload['run_id']==pointer['run_id'],'recovery names another run','conflict')
+    only_pointer_to(owner,pointer['run_id'])
+    counts=payload['rounds']
+    fields(counts,('completed','budget','reserved'))
+    completed=counts['completed'];reserved=counts['reserved']
+    need(integer(completed) and integer(counts['budget'],1) and type(reserved) is bool
+         and completed+reserved<=counts['budget'],'recovered round counts required, within the ceiling')
+    need(isinstance(payload['source_evidence'],list),'source evidence must be a list')
+    count=len(payload['source_evidence'])
+    round_evidence_valid(payload['round_evidence'],completed,count)
+    citation_valid(payload['budget_source'],count)
+    gate_valid(payload['gate'])
+    known_ids_valid(payload['known_operation_ids'])
+    need(operation_id not in payload['known_operation_ids'],'recovery reuses a pre-loss operation id','conflict')
+    source=payload.get('reservation_source')
+    need(reserved==('reservation_source' in payload),'a reserved round, and only one, needs its source')
+    if reserved:
+        citation_valid(source,count)
+    sources=[evidence_identity(item) for item in payload['source_evidence']]
+    state=new_state(owner,{k:payload[k] for k in ('plan','source','scope','stage','task','task_desc')
+                           if k in payload}|{'budget':counts['budget']})
+    state['run_id']=payload['run_id'];state['gate']=payload['gate']
+    state['rounds']['completed']=completed
+    if reserved:
+        state['rounds']['active']={'number':completed+1,'authorization_id':state['authorization']['id'],
+                                   'verification':None,'recovery_source':source}
+    accounts=payload['gate_accounts']
+    need(isinstance(accounts,dict) and payload['gate']['id'] not in accounts,
+         'a saved account is for another gate')
+    account_sources={}
+    for gate_id,account in accounts.items():
+        fields(account,('completed','budget','source'))
+        citation_valid(account['source'],count)
+        state['gate_accounts'][gate_id]={'completed':account['completed'],'budget':account['budget'],'active':None}
+        account_sources[gate_id]=account['source']
+    set_blocker(state,{'disposition':'awaiting_owner_decision',
+                       'prevented_operation':'new rounds, round completion, finish and runnable work',
+                       'evidence':'owned snapshot lost; this run was rebuilt from the recovery record',
+                       'dependency':'owner review of the recovered history (resolve-recovery)',
+                       'remaining_work':payload.get('remaining_work',[])})
+    state['qualification']='blocked'
+    state['recovery']={'source_evidence':sources,'last_known':payload['last_known'],
+                       'known_operation_ids':payload['known_operation_ids'],
+                       'round_evidence':payload['round_evidence'],'budget_source':payload['budget_source'],
+                       'reservation_source':source,
+                       'account_sources':account_sources,'missing_history':list(RECOVERY_MISSING),
+                       'recovered_under':payload['source'],
+                       'resolution':None}
+    return state
+
+
+def resolve_recovery(state,payload):
+    fields(payload,('source','scope','evidence'))
+    record=state.get('recovery')
+    need(record is not None and record['resolution'] is None,'no unresolved recovery','conflict')
+    need(authority(payload)['scope']==state['authorization']['scope'],
+         'owner source applies to another scope','conflict')
+    # Against the record, not the current authorization: `authorize` may have replaced that.
+    need(payload['source']!=record['recovered_under'],
+         'the review needs its own owner source, not the one the recovery cited','conflict')
+    need(text_field(payload['evidence']),'resolving a recovery needs evidence of the review')
+    record['resolution']={'source':payload['source'],'evidence':payload['evidence']}
+    return {'resolution':record['resolution']}
+
+
 def strategy_valid(payload):
     fields(payload,('gate_id','checkpoint','observations','assessment','alternatives'))
     need(text_field(payload['gate_id']),'strategy gate identity required')
@@ -622,6 +792,13 @@ def strategy_review(state,payload):
 
 def mutate(state,operation,payload):
     need(state['disposition']!='complete','terminal run cannot be mutated','conflict')
+    record=state.get('recovery')
+    if record is not None and record['resolution'] is None:
+        need(operation in RECOVERY_ALLOWED,'recovered history is unresolved: '+operation+' refused','conflict')
+        need(operation!='set-blocker' or payload.get('disposition') not in ('working','repairing'),
+             'recovered history is unresolved: runnable work refused','conflict')
+        need(operation!='authorize' or payload.get('budget',state['rounds']['budget'])<=state['rounds']['budget'],
+             'recovered history is unresolved: no ceiling increase','conflict')
     if operation=='transition':
         transition(state,payload)
     elif operation in ('begin-round','record-verification','complete-round'):
@@ -632,6 +809,8 @@ def mutate(state,operation,payload):
         return set_blocker(state,payload)
     elif operation=='strategy-review':
         return strategy_review(state,payload)
+    elif operation=='resolve-recovery':
+        return resolve_recovery(state,payload)
     elif operation=='finish':
         fields(payload,('evidence',))
         need(text_field(payload['evidence']) and state['rounds']['active'] is None,
@@ -666,7 +845,7 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
                  and stat.S_IMODE(st.st_mode)==0o600,
                  'unsafe lock')
             fcntl.flock(lock,fcntl.LOCK_EX)
-            state=read_owned(owner,directory,legacy=operation=='migrate')
+            state=read_owned(owner,directory,legacy=operation=='migrate',lost_ok=operation=='recover')
             if state and state.get('schema_version')==VERSION and read_pointer(owner) is None:
                 # An init or migrate interrupted after its snapshot and before its pointer.
                 publish_pointer(owner,state['run_id'])
@@ -675,6 +854,8 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
                 old=state['receipts'][operation_id]
                 need(old['request']==request,'operation id reused with changed payload','conflict')
                 return old['receipt']
+            if state and operation_id in state.get('recovery',{}).get('known_operation_ids',()):
+                raise StateError('operation id ran before the snapshot was lost','conflict')
             revision=state.get('revision',0) if state else 0
             need(revision==expected,'expected revision is stale','conflict')
             if operation=='strategy-review' and payload=={}:
@@ -689,12 +870,15 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
                 state=migrate(owner,state,payload)
                 details={'legacy_evidence':payload.get('legacy_evidence'),
                          'legacy_blocker':payload.get('legacy_blocker')}
+            elif operation=='recover':
+                state=recover(owner,read_pointer(owner),state,payload,operation_id)
             else:
                 need(state is not None,'no active plan to mutate','state_error')
                 completing_active=(state['rounds']['active'] is not None and
                                    operation in ('record-verification','complete-round'))
                 need(len(state['receipts'])<MAX_RECEIPTS
-                     or operation in ('finish','set-blocker','authorize','strategy-review') or completing_active,
+                     or operation in ('finish','set-blocker','authorize','strategy-review','resolve-recovery')
+                     or completing_active,
                      'receipt capacity reached; finish/archive before another run','conflict')
                 details=mutate(state,operation,payload)
             state['revision']=revision+1
@@ -733,6 +917,9 @@ def budget_result(repo):
     if outcome['status']!='ok':
         return outcome
     state=outcome['state'];rounds=state['rounds']
+    record=state.get('recovery')
+    if record is not None and record['resolution'] is None:
+        return {'status':'conflict','message':'recovered history is unresolved: no round may start or finish'}
     if rounds['active'] is not None:
         return {'status':'ok','message':'active authorized round may finish'}
     if rounds['completed']>=rounds['budget']:

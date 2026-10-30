@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0 — 2026-10-30
+
+- **A run can come back from a lost snapshot.** `plan-state.py recover` rebuilds a snapshot lost
+  from under its pointer, from cited evidence. The run keeps its id and spent rounds, starts
+  blocked with qualification `blocked`, and names what it cannot know. It refuses when any
+  snapshot exists, valid or not. It grants no round.
+- **The owner reviews the history before work resumes.** `plan-state.py resolve-recovery` records
+  that review, from a different source than the recovery's. Until then no round starts or
+  finishes, the ceiling cannot rise, the run cannot finish, and `--budget-check` reports
+  `conflict`.
+- **Known limits.** A citation binds a claim to hashed bytes; it does not prove the claim. Owner
+  sources are recorded text, not authentication. An operation id from before the loss is refused
+  only if the recovery lists it. A gate the recovery does not list reads as fresh. The status
+  display does not mark a recovered run. A reader older than 1.3.0 refuses a recovered snapshot.
+
 ## 1.2.1 — 2026-10-30
 
 - **The hooks see a run held in another worktree.** With no run of its own, a worktree

@@ -12,7 +12,8 @@ from plan_state import EXITS, MAX_BYTES, result
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('operation',choices=('init','show','transition','begin-round',
-        'record-verification','complete-round','authorize','set-blocker','strategy-review','migrate','finish'))
+        'record-verification','complete-round','authorize','set-blocker','strategy-review','migrate','finish',
+        'recover','resolve-recovery'))
     parser.add_argument('--repo',type=Path,default=Path.cwd())
     parser.add_argument('--expected-revision',type=int)
     parser.add_argument('--operation-id')

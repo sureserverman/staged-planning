@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 5258af45f598d9e41d811df48e18838242b5ce68fdb4d08066c98922f4dec8e5
+  base_sha256: 3196764da7912f854c1d549e6d5897e908be3793c472e8fb29691d24fd11d9e2
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -57,5 +57,5 @@ skills/executing-plans/scripts/plan-progress.py:
   host_fact: OpenCode has no status line a plugin or a command can feed, so the status-line renderer and its --json model can never run; the fork ships the budget, stage-order and dispatch checks byte-identical and exits 64 on any other argument.
   depends_on:
     lib/plan_parser.py: 657fd27d6289af4d507616a9ba24c57041db547e5350a1438ee0478db6eed73b
-    skills/executing-plans/scripts/plan_state.py: f4055568483b3a6fd5da9498593dbb5a07c6f05ce9c9849a505018e58c7e3c18
+    skills/executing-plans/scripts/plan_state.py: 998966a71141850096a7a2e83ad799152b0ba9a8beed164aff6c00482ca63c74
     skills/planning-projects/scripts/validate-dispatch.py: c30f005300c83639de0d5a3df3462870a6e6cba4012689c1789c66e6cc582404

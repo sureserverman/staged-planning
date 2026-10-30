@@ -34,7 +34,8 @@ shared 8 MiB snapshot bound; the earlier 256 KiB bound remains for legacy input.
 Required keys: `schema_version: 2`, UUID `run_id`, integer `revision`, `owner`
 (canonical root, git-common-dir, git-dir, branch), `plan`, `phase`, `stage`, `task`,
 `task_desc`, UTC `updated`, `gate`, `rounds`, `authorization`, `disposition`,
-`qualification`, `blocker`, `strategy`, `receipts` and an integrity digest.
+`qualification`, `blocker`, `strategy`, `receipts` and an integrity digest. A recovered
+run also holds `recovery`; a reader older than that field refuses the snapshot.
 `rounds` contains `completed`, `budget` and nullable `active`. `gate` contains
 `id`, `repair_revision` and nonempty declared `checks` while repairing.
 A detached HEAD has no branch and owns no run: `show` there reports `no_active_plan`,
@@ -59,7 +60,8 @@ Init and migrate write the snapshot first and the pointer second. An interruptio
 between them leaves a valid owned snapshot with no pointer: readers accept it, and the
 next mutation, under the lock, republishes the pointer from that snapshot's validated
 owner and run id, so a retried init returns its original receipt. A pointer without a
-snapshot is never left by an interruption; it is a diagnosable state error. A deeply
+snapshot is never left by an interruption; it is a diagnosable state error that only
+`recover` acts on. A deeply
 nested payload or snapshot is a `state_error`, like any other unparseable input. `finish` retains the terminal snapshot/receipts until
 explicit archival, and marks the run complete; no ambiguous counter is reset.
 
@@ -149,6 +151,34 @@ charging work or replacing the snapshot. Limits are published by the module.
   validate blocker shape and disposition/phase agreement even when integrity matches.
 - `finish`: evidence of plan close-out; require no active round and explicit
   completion disposition. Publish terminal `complete`; leave qualification separate.
+- `recover`: rebuilds a snapshot lost from under its pointer, at `--expected-revision 0`.
+  Payload: `run_id` (the pointer's), plan, source, scope, gate, `rounds: {completed, budget,
+  reserved}`, `source_evidence: [{path, sha256}]`, each hash checked against its file,
+  `round_evidence: [{round, verdict, source}]` with one row for each completed round and
+  verdict passed/failed/unknown, `budget_source`, `gate_accounts: {id: {completed, budget,
+  source}}` (may be empty), `last_known: {revision, operation, source}` and
+  `known_operation_ids`, the ids known to have run. Every `source` is a citation
+  `{evidence, at}`: an index into `source_evidence` and a place in that file. Optional:
+  `reservation_source` (required exactly when `reserved`), stage, task, task_desc,
+  remaining_work. A citation binds a claim to hashed bytes; it does not prove the claim.
+  It refuses a present snapshot of any age or validity, no pointer, another run id, and any
+  other pointer to the same run; an unreadable pointer in that scan also refuses. It never
+  changes the pointer. The run keeps its id and spent work, starts at revision 1 with this
+  operation's receipt alone, and is `awaiting_owner_decision` with qualification `blocked`.
+  Its `recovery` record holds the evidence, `recovered_under` (the source it was made under)
+  and `missing_history`, always receipts, verifications, revision_continuity and
+  unlisted_gate_accounts, whichever gates were listed. No later operation clears that list. An
+  operation id in `known_operation_ids` is refused; any other id from before the loss is not
+  deduplicated. A gate not listed in `gate_accounts` reads as fresh when entered. A reserved
+  round returns with no verification, under the authority the recovery names.
+  Until `resolve-recovery`, only record-verification, strategy-review, authorize with no
+  ceiling increase, and set-blocker to a stopped disposition are accepted, and
+  `--budget-check` reports `conflict`.
+- `resolve-recovery`: actual owner source, different from `recovered_under`, the
+  run's scope, and evidence of the review. Records the resolution once. The run stays blocked
+  until `set-blocker` resumes it, and the ceiling is unchanged, so resolving grants no round.
+  Both sources are recorded text, not authentication. A later qualification `pass` rests on
+  fresh checks and the owner's review; the lost history stays named as missing.
 
 ## Authority, experiments and premises
 
