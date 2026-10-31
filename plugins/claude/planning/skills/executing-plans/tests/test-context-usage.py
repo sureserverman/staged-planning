@@ -52,7 +52,8 @@ def check(cond, msg):
 
 def env_for(home, **extra):
     env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDE_CODE_SESSION_ID", "ANTHROPIC_MODEL", "PLANNING_SUPERVISOR_ID_CMD")}
+           if k not in ("CLAUDE_CODE_SESSION_ID", "ANTHROPIC_MODEL", "PLANNING_SUPERVISOR_ID_CMD",
+                        "PLANNING_HANDOFF_VERSIONS")}
     env["HOME"] = str(home)
     env.update(extra)
     return env
@@ -554,6 +555,55 @@ try:
                         PLANNING_HANDOFF_VERSIONS="1,2")
     check(j.get("verdict") == "handoff",
           f"the rule needs no measurement: an unreadable transcript still hands off ({j})")
+
+    NOT_CHECKED = "was not checked"
+    def boundary_reason(name, args, cwd=None, versions="1,2"):
+        transcript = rows_transcript(tmp, name, [turn(10000), turn(12000, C1), turn(20000)])
+        env = {} if versions is None else {"PLANNING_HANDOFF_VERSIONS": versions}
+        rc, j, _ = run_json(["--transcript", str(transcript), "--window", "100000",
+                             "--sub-plan-boundary", *args], home, cwd or roots["alder"], **env)
+        return j.get("verdict"), j.get("reason") or ""
+    one = cross_plans(roots["birch"])
+    verdict_x, reason = boundary_reason("x9.jsonl", [])
+    check(verdict_x == "continue" and "no --plan" in reason and NOT_CHECKED in reason,
+          f"--plan omitted under a v2 reader -> the floor rules and says so ({reason})")
+    verdict_x, reason = boundary_reason("x10.jsonl", [], versions="1")
+    check(NOT_CHECKED not in reason, f"--plan omitted with no v2 reader -> nothing to say ({reason})")
+    verdict_x, reason = boundary_reason("x11.jsonl", ["--plan", str(records / "m-master-plan.md")])
+    check(verdict_x == "continue" and "current-subplan" in reason and NOT_CHECKED in reason,
+          f"the master as --plan -> the floor rules and names the refusal ({reason})")
+    master = records / "m-master-plan.md"
+    text = master.read_text()
+    (records / "three-plan.md").write_text((records / "two-plan.md").read_text())
+    master.write_text(text + "### Sub-plan 3: C\n- **Status:** [ ]\n- **Plan:** ./three-plan.md\n"
+                      "- **Depends on:** Sub-plan 1\n**Gate:**\n- [ ] later\n")
+    verdict_x, reason = boundary_reason("x12.jsonl", ["--plan", one])
+    check(verdict_x == "continue" and "ambiguous-destination" in reason,
+          f"two possible next sub-plans -> the floor rules and names the refusal ({reason})")
+    one = cross_plans(roots["birch"])
+    (records / "three-plan.md").unlink()
+    text = (records / "m-master-plan.md").read_text()
+    (records / "m-master-plan.md").write_text(
+        text.replace("- **Status:** [ ]", "- **Status:** [x]").replace("- [ ] later", "- [x] later"))
+    two = (records / "two-plan.md").read_text()
+    (records / "two-plan.md").write_text(
+        two.replace("[ ]", "[x]") + "**Completed:** 2026-10-31 — done\n")
+    verdict_x, reason = boundary_reason("x13.jsonl", ["--plan", one])
+    check(verdict_x == "continue" and NOT_CHECKED not in reason,
+          f"the last sub-plan -> no next root and nothing to say ({reason})")
+    one = cross_plans(roots["birch"])
+    no_helper = cross / "no-helper"
+    no_helper.mkdir()
+    shutil.copy(SCRIPT, no_helper / "context-usage.py")
+    transcript = rows_transcript(tmp, "x14.jsonl", [turn(10000), turn(12000, C1), turn(20000)])
+    r = subprocess.run([sys.executable, str(no_helper / "context-usage.py"), "--format", "json",
+                        "--transcript", str(transcript), "--window", "100000",
+                        "--sub-plan-boundary", "--plan", one], capture_output=True, text=True,
+                       env=env_for(home, PLANNING_HANDOFF_VERSIONS="1,2"), cwd=str(roots["alder"]))
+    j = json.loads(r.stdout or "{}")
+    check(r.returncode == 0 and j.get("verdict") == "continue" and NOT_CHECKED in j.get("reason", "")
+          and "cannot check the next sub-plan" in r.stderr,
+          f"a helper that cannot load -> exit 0, the floor rules, said on stderr ({r.returncode})")
 
     print("group 15 — live-window sidecar <state root>/.claude/plan-context.json")
     LSID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"

@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: b112e8dd552c4690289b005bf87d5d4fc2c39551eb8894dc46a4404a041bfa11
+  base_sha256: e13517243bfc6e935cf438e12befc7561ca79b1dd23777b4feb4ac727bd85f46
 hooks/dispatch-log.sh:
   base_sha256: 84d74a452f78bf8c8c8b1528e3019852942acef9b373318ab2a26c2791d1fc5f
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
@@ -45,13 +45,13 @@ skills/executing-plans/references/plan-continue-hook.md:
 skills/executing-plans/references/progress-state-file.md:
   base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
 skills/executing-plans/references/session-handoff.md:
-  base_sha256: d3578698a91f27432d2d43b10716b3fdba414dc7098d26a4d7bcb50394775fda
+  base_sha256: 6d60b324a24d068d1b74a22827c20911c9fca774710350db5ae9c8dc0144f3ae
 skills/executing-plans/references/stage-gate.md:
   base_sha256: e191d6c94a13b15b8b1483f6df4b5388157f91dfb6cb1634b541776d57f98d25
 skills/executing-plans/references/task-execution.md:
   base_sha256: 55a766681eacf67e4416a06ce8216c13900497f86962529a213836110b72ea9e
 skills/executing-plans/scripts/context-usage.py:
-  base_sha256: 2da61ba72d542b30b81f0f3cb08393d6cfabcffde6792b221072438df34561f1
+  base_sha256: 755db0df2246a40855c1176608db336acb4a556ebb3be8f72da9e78467e91535
   host_fact: Codex records each turn's token use and the context window in its session rollout under $CODEX_HOME/sessions, not in a Claude Code transcript, so the fork reads the rollout.
   depends_on:
     skills/executing-plans/scripts/handoff-envelope.py: 16d820c6cbb5a649eac464c784e3261734d7fa50237585f7b6455f16fbcdb7fc

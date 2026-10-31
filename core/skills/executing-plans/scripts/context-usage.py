@@ -613,12 +613,30 @@ def verdict(result):
 
 
 def other_root(args, env, cwd):
-    """Where the next sub-plan runs, when that is another repository a reader can carry it to."""
-    if not (args.sub_plan_boundary and args.plan):
-        return None
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import handoff_destination
-    return handoff_destination.other_root(args.plan, cwd, env)
+    """(root, why) for a sub-plan boundary: where the next sub-plan runs when that is another
+    repository a reader can carry it to, and why that could not be decided, if so. A helper
+    that cannot be loaded is said on stderr, then the measured rules decide."""
+    if not args.sub_plan_boundary:
+        return None, None
+    if not args.plan:
+        if "2" in env.get("PLANNING_HANDOFF_VERSIONS", "1").split(","):
+            return None, "no --plan"
+        return None, None
+    here = str(pathlib.Path(__file__).resolve().parent)
+    prior = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location(
+            "handoff_destination", os.path.join(here, "handoff_destination.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.other_root(args.plan, cwd, env)
+    except Exception as e:  # noqa: BLE001 — reported, then the measured rules decide
+        print(f"context-usage: cannot check the next sub-plan's repository "
+              f"({type(e).__name__}: {e})", file=sys.stderr)
+        return None, type(e).__name__
+    finally:
+        sys.dont_write_bytecode = prior
 
 
 def build(args, env, cwd, home):
@@ -627,7 +645,8 @@ def build(args, env, cwd, home):
            "model": None, "transcript": None, "compactions": None, "disjoint": None,
            "_sub_plan_boundary": args.sub_plan_boundary,
            "_requested": owner_requested(env, cwd),
-           "_other_root": other_root(args, env, cwd)}
+           "_other_root": None, "_other_root_why": None}
+    res["_other_root"], res["_other_root_why"] = other_root(args, env, cwd)
     path, why = locate_transcript(args.transcript, env, home)
     res["transcript"] = path
     if path is None:
@@ -705,6 +724,9 @@ def main(argv=None):
 
     res = build(args, os.environ, os.getcwd(), os.path.expanduser("~"))
     res["verdict"], res["reason"] = verdict(res)
+    if res["_other_root_why"] and res["verdict"] != "handoff":
+        res["reason"] += (f"; the next sub-plan's repository was not checked "
+                          f"({res['_other_root_why']}), so another repository may be next")
     for k in [k for k in res if k.startswith("_")]:
         res.pop(k)
 

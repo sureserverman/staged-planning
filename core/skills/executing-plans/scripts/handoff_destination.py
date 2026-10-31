@@ -284,20 +284,23 @@ def resolve_destination(plan, source_root, locator, *, boundary=False, selection
 
 
 def other_root(plan, cwd, env):
-    """The next sub-plan's execution root when a v2 reader can carry the work there, else None.
+    """(root, why): the next sub-plan's root when a v2 reader can carry the work there.
 
-    None also answers anything that cannot be resolved here: the handoff or the next session
-    meets the same named refusal, and a measurement must never stop a run.
+    root is None when the work stays here. why names a refusal when this could not be decided,
+    for the caller to say out loud: the handoff or the next session meets the same refusal, and
+    a measurement must never stop a run.
     """
     if '2' not in env.get('PLANNING_HANDOFF_VERSIONS', '1').split(','):
-        return None
+        return None, None
     try:
         p = subprocess.run(['git', '-C', str(cwd), 'rev-parse', '--show-toplevel'],
                            capture_output=True, text=True, timeout=10)
         if p.returncode != 0:
-            return None
+            return None, 'destination-unavailable'
         here = str(Path(p.stdout.strip()).resolve())
         found = resolve_destination(plan, here, ANY_TASK, boundary=True)
-    except (DestinationError, OSError, ValueError, subprocess.SubprocessError):
-        return None
-    return found['root'] if found and found['root'] != here else None
+    except DestinationError as exc:
+        return None, str(exc)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        return None, type(exc).__name__
+    return (found['root'], None) if found and found['root'] != here else (None, None)

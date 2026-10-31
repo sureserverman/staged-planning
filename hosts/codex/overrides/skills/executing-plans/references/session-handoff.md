@@ -55,7 +55,8 @@ Evaluated in this order; the script names the rule that fired and its numbers in
    sub-plan runs in another repository** and a version-2 reader is advertised: pass the sub-plan
    that just closed as `--plan`, and the verdict is `handoff` at any percentage, so the work is
    listed under the project it belongs to and meets that folder's own trust. With no such reader
-   the floor rules as before.
+   the floor rules as before. Without `--plan`, or with one that cannot be resolved, the floor
+   also rules and the `reason:` says the repository was not checked: read it before continuing.
 3. **Context**: handoff when `now > 50` percent of the window, or when now plus
    `last_stage_cost` would pass 50%. Exactly 50% continues. **The first stage of a session
    always runs** — with no `Stage N green` commit in this session there is no cost history,

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.2 — 2026-10-31
+
+- **A skipped repository check says so.** If a sub-plan boundary under a version-2 reader cannot
+  tell where the next sub-plan runs, because `--plan` is missing or names the master, or more
+  than one sub-plan could run next, the reason now names why. A helper that cannot load is said
+  on stderr, and the measured rules decide, instead of a crash. The Codex fork's rule has tests.
+
 ## 1.4.1 — 2026-10-31
 
 - **A sub-plan in another repository gets its own session.** Under a version-2 reader, a master

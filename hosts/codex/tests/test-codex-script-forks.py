@@ -55,6 +55,60 @@ try:
     check("verdict=unknown" in r.stdout, f"a rollout with no token_count row is unknown "
           f"({r.stdout.strip()[-120:]})")
 
+    # The cross-repository boundary rule, through the fork, which has its own copy of it.
+    def git_root(name):
+        root = os.path.join(tmp, name)
+        subprocess.run(["git", "init", "-q", "--template=", "-b", "feature", root], check=True)
+        subprocess.run(["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@t", "-c",
+                        "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-q",
+                        "--allow-empty", "-m", "t"], check=True)
+        return root
+    alder, birch = git_root("alder"), git_root("birch")
+    records = os.path.join(tmp, "records")
+    os.makedirs(records)
+    def write(name, text):
+        with open(os.path.join(records, name), "w") as fh:
+            fh.write(text)
+    write("m-master-plan.md",
+          "# Master Plan: m\n## Sub-plans\n"
+          "### Sub-plan 1: A\n- **Status:** [x]\n- **Plan:** ./one-plan.md\n"
+          "- **Depends on:** none\n**Gate:**\n- [x] done\n"
+          "### Sub-plan 2: B\n- **Status:** [ ]\n- **Plan:** ./two-plan.md\n"
+          "- **Depends on:** Sub-plan 1\n**Gate:**\n- [ ] later\n")
+    write("one-plan.md",
+          f"# Project Plan: one\nMaster: ./m-master-plan.md\nExecution root: `{alder}`\n"
+          "Execution branch: `feature`\n## Stage 1: W\n### Task 1.1: W\n- **Status:** [x]\n"
+          "### Stage 1 Gate\n- [x] done\n**Completed:** 2026-10-31 — done\n")
+    write("two-plan.md",
+          f"# Project Plan: two\nMaster: ./m-master-plan.md\nExecution root: `{birch}`\n"
+          "Execution branch: `feature`\n## Stage 1: W\n### Task 1.1: W\n- **Status:** [ ]\n"
+          "### Stage 1 Gate\n- [ ] later\n")
+    with open(rollout, "w") as fh:
+        fh.write("\n".join(json.dumps(x) for x in
+                           [dict(rows[0], payload={"id": "thread-1", "cwd": alder}), rows[1]]) + "\n")
+    def boundary(versions, *more):
+        env = {k: v for k, v in os.environ.items() if k != "PLANNING_HANDOFF_VERSIONS"}
+        if versions:
+            env["PLANNING_HANDOFF_VERSIONS"] = versions
+        return subprocess.run([sys.executable, os.path.join(scripts, "context-usage.py"),
+                               "--transcript", rollout, "--sub-plan-boundary", *more], cwd=alder,
+                              capture_output=True, text=True, env=env)
+    one = os.path.join(records, "one-plan.md")
+    r = boundary("1,2", "--plan", one)
+    check("verdict=handoff" in r.stdout and birch in r.stdout,
+          f"Codex: next sub-plan in another root at 12% -> handoff ({r.stdout.strip()[-160:]})")
+    r = boundary("1", "--plan", one)
+    check("verdict=continue" in r.stdout,
+          f"Codex: no version 2 reader -> the floor rules ({r.stdout.strip()[-160:]})")
+    r = boundary("1,2")
+    check("verdict=continue" in r.stdout and "was not checked" in r.stdout,
+          f"Codex: --plan omitted -> the floor rules and says so ({r.stdout.strip()[-200:]})")
+    os.remove(os.path.join(scripts, "handoff_destination.py"))
+    r = boundary("1,2", "--plan", one)
+    check(r.returncode == 0 and "verdict=continue" in r.stdout
+          and "cannot check the next sub-plan" in r.stderr,
+          f"Codex: a helper that cannot load -> exit 0, said on stderr ({r.returncode})")
+
     pp = os.path.join(scripts, "plan-progress.py")
     r = subprocess.run([sys.executable, pp], cwd=repo, capture_output=True, text=True)
     check(r.returncode == 64, f"a bare plan-progress call exits 64 ({r.returncode})")

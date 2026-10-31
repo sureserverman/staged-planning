@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: b112e8dd552c4690289b005bf87d5d4fc2c39551eb8894dc46a4404a041bfa11
+  base_sha256: e13517243bfc6e935cf438e12befc7561ca79b1dd23777b4feb4ac727bd85f46
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -44,13 +44,13 @@ skills/executing-plans/references/preflight-checks.md:
 skills/executing-plans/references/progress-state-file.md:
   base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
 skills/executing-plans/references/session-handoff.md:
-  base_sha256: d3578698a91f27432d2d43b10716b3fdba414dc7098d26a4d7bcb50394775fda
+  base_sha256: 6d60b324a24d068d1b74a22827c20911c9fca774710350db5ae9c8dc0144f3ae
 skills/executing-plans/references/stage-gate.md:
   base_sha256: e191d6c94a13b15b8b1483f6df4b5388157f91dfb6cb1634b541776d57f98d25
 skills/executing-plans/references/task-execution.md:
   base_sha256: 55a766681eacf67e4416a06ce8216c13900497f86962529a213836110b72ea9e
 skills/executing-plans/scripts/context-usage.py:
-  base_sha256: 2da61ba72d542b30b81f0f3cb08393d6cfabcffde6792b221072438df34561f1
+  base_sha256: 755db0df2246a40855c1176608db336acb4a556ebb3be8f72da9e78467e91535
   host_fact: 'OpenCode keeps no transcript file and sets no session id in a shell''s environment: it records each model call''s token use in its SQLite session store (opencode.db in its data directory) and each model''s context limit in its models cache, so the fork reads those, newest top-level session for the working directory unless --session names one; the rollover-request rule and the sidecar writer go with the handoff envelope and the planning mod, which OpenCode does not ship.'
 skills/executing-plans/scripts/plan-progress.py:
   base_sha256: 729dd773531953328579f7241cc8316c42bad39bb2062b7c3f8d25d910784387
