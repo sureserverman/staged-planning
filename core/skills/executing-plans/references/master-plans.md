@@ -30,10 +30,11 @@ gate and surfaces only at the master close-out — the most expensive place to f
    gate evaluator is also briefed with its master register Goal, beside the sub-plan's own
    goal (`stage-gate.md` § Independent evaluator for non-command checks): the register Goal
    is what the next sub-plan reads the output against.
-2. **A sub-plan boundary hands off unless context is under 25%.** Each sub-plan is a
+2. **A sub-plan boundary hands off unless context is under 25%, and always when the next
+   sub-plan runs in another repository under a version-2 reader.** Each sub-plan is a
    natural context-reset boundary (the trunk's Context resets at stage boundaries, scaled
    up): after the `"Sub-plan N green"` commit (item 3), run `../scripts/context-usage.py
-   --sub-plan-boundary` in the next Bash call. `handoff` → run session-handoff.md § On `handoff`
+   --sub-plan-boundary --plan <the sub-plan that closed>` in the next Bash call. `handoff` → run session-handoff.md § On `handoff`
    (its id, `RESUME HERE` block and envelope), writing the block under the register entry, and stop, naming the master path for the fresh session; `continue` →
    open the next sub-plan now (`session-handoff.md`). The master
    file — register `Status` flips plus its handoff notes — is the cross-session handoff

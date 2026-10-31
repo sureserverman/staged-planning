@@ -63,10 +63,10 @@ Paths are relative to this skill's directory; from a dispatch use
 ## Master plans
 
 A `*-master-plan.md` (or `# Master Plan:` heading) links 2–7 sub-plans through a
-`## Sub-plans` register. It deliberately has no Preflight, Stages or Tasks — do not reject
+`## Sub-plans` register. It has no Preflight, Stages or Tasks — do not reject
 it. Execute sub-plans in register dependency order; on each sub-plan's close-out flip its
 register `Status`, run that entry's `**Gate:**` checks, append a handoff note, commit
-`"Sub-plan N green"`, then hand off unless `context-usage.py --sub-plan-boundary` says
+`"Sub-plan N green"`, hand off unless `context-usage.py --sub-plan-boundary --plan <sub-plan>` says
 `continue`. **Version bumps defer to the master
 close-out** — one feature landing across five sub-plans is one release event, not five.
 

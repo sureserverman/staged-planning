@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1 — 2026-10-31
+
+- **A sub-plan in another repository gets its own session.** Under a version-2 reader, a master
+  plan's boundary now hands off whenever the next sub-plan runs elsewhere, at any context use.
+  Before, a short plan under 25% stayed in one session: all its repositories ran under the first
+  project, without their own folder trust. Pass the closed sub-plan as `--plan` beside
+  `--sub-plan-boundary`. With no version-2 reader, or a plan that cannot be resolved, the 25%
+  floor rules as before.
+
 ## 1.4.0 — 2026-10-30
 
 - **A handoff can name where the work continues.** Destination-aware version 2 envelopes carry

@@ -13,6 +13,8 @@ import subprocess
 from pathlib import Path
 
 MAX_PLAN_BYTES = 8 * 1024 * 1024
+# A locator for a caller asking only where the next sub-plan runs, never for publishing.
+ANY_TASK = object()
 _SPEC = importlib.util.spec_from_file_location(
     'handoff_plan_parser', Path(__file__).resolve().parents[3] / 'lib' / 'plan_parser.py')
 PARSER = importlib.util.module_from_spec(_SPEC)
@@ -275,6 +277,27 @@ def resolve_destination(plan, source_root, locator, *, boundary=False, selection
     require(not declared or not entry_meta or declared == entry_meta, 'destination-metadata')
     declared = declared or entry_meta
     root, branch = git_identity(declared.get('root', source_root), declared.get('branch'))
-    locator_valid(text, locator)
+    if locator is not ANY_TASK:
+        locator_valid(text, locator)
     return {'root': root, 'branch': branch, 'plan': str(plan), 'locator': locator,
             'master_plan': str(master) if master else None}
+
+
+def other_root(plan, cwd, env):
+    """The next sub-plan's execution root when a v2 reader can carry the work there, else None.
+
+    None also answers anything that cannot be resolved here: the handoff or the next session
+    meets the same named refusal, and a measurement must never stop a run.
+    """
+    if '2' not in env.get('PLANNING_HANDOFF_VERSIONS', '1').split(','):
+        return None
+    try:
+        p = subprocess.run(['git', '-C', str(cwd), 'rev-parse', '--show-toplevel'],
+                           capture_output=True, text=True, timeout=10)
+        if p.returncode != 0:
+            return None
+        here = str(Path(p.stdout.strip()).resolve())
+        found = resolve_destination(plan, here, ANY_TASK, boundary=True)
+    except (DestinationError, OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return found['root'] if found and found['root'] != here else None

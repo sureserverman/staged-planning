@@ -491,6 +491,70 @@ try:
         check(str(j.get("pct")) in r and ("rule" in r or "unknown" in r),
               f"reason names the rule and the numbers ({r})")
 
+    print("group 14b — a next sub-plan in another repository always hands off")
+    cross = pathlib.Path(tmp) / "cross"
+    roots = {name: cross / name for name in ("alder", "birch")}
+    for root in roots.values():
+        root.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", "-b", "feature", str(root)], check=True)
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t",
+                        "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+                        "commit", "-q", "--allow-empty", "-m", "t"], check=True)
+    records = cross / "records"
+    records.mkdir()
+    def cross_plans(next_root):
+        (records / "m-master-plan.md").write_text(
+            "# Master Plan: m\n## Sub-plans\n"
+            "### Sub-plan 1: A\n- **Status:** [x]\n- **Plan:** ./one-plan.md\n"
+            "- **Depends on:** none\n**Gate:**\n- [x] done\n"
+            "### Sub-plan 2: B\n- **Status:** [ ]\n- **Plan:** ./two-plan.md\n"
+            "- **Depends on:** Sub-plan 1\n**Gate:**\n- [ ] later\n")
+        (records / "one-plan.md").write_text(
+            f"# Project Plan: one\nMaster: ./m-master-plan.md\nExecution root: `{roots['alder']}`\n"
+            "Execution branch: `feature`\n## Stage 1: W\n### Task 1.1: W\n- **Status:** [x]\n"
+            "### Stage 1 Gate\n- [x] done\n**Completed:** 2026-10-31 — done\n")
+        (records / "two-plan.md").write_text(
+            f"# Project Plan: two\nMaster: ./m-master-plan.md\nExecution root: `{next_root}`\n"
+            "Execution branch: `feature`\n## Stage 1: W\n### Task 1.1: W\n- **Status:** [ ]\n"
+            "### Stage 1 Gate\n- [ ] later\n")
+        return str(records / "one-plan.md")
+    def at_boundary(name, plan, cwd=None, versions="1,2", extra=("--sub-plan-boundary",)):
+        transcript = rows_transcript(tmp, name, [turn(10000), turn(12000, C1), turn(20000)])
+        env = {} if versions is None else {"PLANNING_HANDOFF_VERSIONS": versions}
+        return run_json(["--transcript", str(transcript), "--window", "100000", *extra,
+                         "--plan", plan], home, cwd or roots["alder"], **env)
+    one = cross_plans(roots["birch"])
+    rc, j, _ = at_boundary("x1.jsonl", one)
+    check(j.get("pct", 100) < 25 and j.get("verdict") == "handoff"
+          and str(roots["birch"]) in (j.get("reason") or ""),
+          f"next sub-plan in another root, under 25%, v2 reader -> handoff ({j})")
+    rc, j, _ = at_boundary("x2.jsonl", one, versions="1")
+    check(j.get("verdict") == "continue", f"no version 2 reader -> the floor still rules ({j})")
+    rc, j, _ = at_boundary("x3.jsonl", one, versions=None)
+    check(j.get("verdict") == "continue", f"no advertisement -> the floor still rules ({j})")
+    rc, j, _ = at_boundary("x4.jsonl", one, extra=())
+    check("another repository" not in (j.get("reason") or ""),
+          f"not at a sub-plan boundary -> the rule does not fire ({j})")
+    rc, j, _ = at_boundary("x5.jsonl", cross_plans(roots["alder"]))
+    check(j.get("verdict") == "continue", f"next sub-plan in this root -> the floor rules ({j})")
+    (roots["alder"] / "sub").mkdir()
+    rc, j, _ = at_boundary("x6.jsonl", cross_plans(roots["alder"]), cwd=roots["alder"] / "sub")
+    check(j.get("verdict") == "continue", f"a subfolder of the same root is this root ({j})")
+    rc, j, _ = at_boundary("x7.jsonl", str(records / "nope.md"))
+    check(rc == 0 and j.get("verdict") == "continue",
+          f"an unreadable plan -> the floor rules, exit 0, never a crash ({j})")
+    one = cross_plans(roots["birch"])
+    (records / "two-plan.md").unlink()
+    rc, j, _ = at_boundary("x8.jsonl", one)
+    check(rc == 0 and j.get("verdict") == "continue",
+          f"a next plan that cannot be read -> the floor rules ({j})")
+    one = cross_plans(roots["birch"])
+    rc, j, _ = run_json(["--transcript", str(pathlib.Path(tmp) / "absent.jsonl"),
+                         "--sub-plan-boundary", "--plan", one], home, roots["alder"],
+                        PLANNING_HANDOFF_VERSIONS="1,2")
+    check(j.get("verdict") == "handoff",
+          f"the rule needs no measurement: an unreadable transcript still hands off ({j})")
+
     print("group 15 — live-window sidecar <state root>/.claude/plan-context.json")
     LSID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     live = pathlib.Path(tmp) / "live"

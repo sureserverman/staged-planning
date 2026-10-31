@@ -422,6 +422,7 @@ def verdict(result):
 
     Rules, in order — each reason names its rule and the numbers:
       requested          owner's rollover request for this session -> handoff, always
+      other repository   next sub-plan runs elsewhere and a v2 reader is advertised -> handoff
       sub-plan boundary  handoff unless pct < 25
       first stage        no stage committed green this session -> continue, always
       context            pct > 50, or pct + last_stage_cost_pct > 50 -> handoff
@@ -430,6 +431,9 @@ def verdict(result):
     """
     if result.get("_requested"):
         return "handoff", "rule requested: owner asked for a rollover"
+    if result.get("_other_root"):
+        return "handoff", (f"rule sub-plan boundary: the next sub-plan runs in another "
+                           f"repository, {result['_other_root']}")
     if result.get("_unknown"):
         return "unknown", result["_unknown"]
     pct, proj = result["pct"], result["projected_pct"]
@@ -455,12 +459,22 @@ def verdict(result):
     return "continue", (f"rule context: {nums}, projected {proj}% <= {HANDOFF_PCT:g}%{tail}")
 
 
+def other_root(args, env, cwd):
+    """Where the next sub-plan runs, when that is another repository a reader can carry it to."""
+    if not (args.sub_plan_boundary and args.plan):
+        return None
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import handoff_destination
+    return handoff_destination.other_root(args.plan, cwd, env)
+
+
 def build(args, env, cwd, home):
     res = {"now": None, "window": None, "window_source": None, "pct": None,
            "stage_costs": [], "last_stage_cost": None, "projected_pct": None,
            "model": None, "transcript": None, "compactions": None, "disjoint": None,
            "_sub_plan_boundary": args.sub_plan_boundary,
-           "_requested": owner_requested(env, cwd)}
+           "_requested": owner_requested(env, cwd),
+           "_other_root": other_root(args, env, cwd)}
     path, why = locate_transcript(args.transcript, env, home, cwd)
     res["transcript"] = path
     if path is None:
@@ -523,7 +537,8 @@ def main(argv=None):
     ap.add_argument("--next-stage", type=positive_int,
                     help="stage about to open (default: last stage green here + 1)")
     ap.add_argument("--sub-plan-boundary", action="store_true",
-                    help="a master plan's sub-plan just closed: handoff unless pct < 25")
+                    help="a master plan's sub-plan just closed: handoff unless pct < 25, "
+                         "or always when --plan's next sub-plan runs in another repository")
     args = ap.parse_args(argv)
 
     res = build(args, os.environ, os.getcwd(), os.path.expanduser("~"))
