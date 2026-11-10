@@ -8,7 +8,9 @@
   scope, so a plan for a full app came out as a bare first release. `planning-projects` on Codex
   now treats its scope and owner-decision questions as required. While one is open it only
   reads; with no reply it ends the turn and repeats the questions. No reply is not a decline, and
-  a list of features does not cap how complete the product should be. Other hosts are unchanged.
+  a list of features does not cap how complete the product should be. `brainstorming` on Codex
+  follows the same rule for its questions, its section checks and the design's approval. Other
+  hosts are unchanged.
 
 ## 1.4.2 — 2026-10-31
 

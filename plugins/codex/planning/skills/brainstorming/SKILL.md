@@ -62,6 +62,15 @@ Ask only what you cannot infer. For each question:
 - **One question per message.** A wall of questions gets a wall of shallow answers
 - **Stop asking when you have enough to design** — not when you have everything you'd ever want
 
+### On Codex: wait for the answers
+
+On Codex, `request_user_input_async` returns `{"accepted":true}` at once. That is not an answer. The owner replies later, in a user message that holds `<send_user_message_question_reply>`. Every question in this skill waits for that reply: each Phase 2 question, each Phase 5 check that a section matches, and the approval of the design.
+
+- Ask with `request_user_input` when this turn lists it (Plan mode): it waits for the reply. Otherwise ask with `request_user_input_async` and treat each question as required.
+- While a question is open, do only the work its answer cannot change: read the repo, the records and the docs. Do not move to the next phase, write the design document or hand off.
+- Elapsed time is not an answer, and no reply is not a yes. If that work is done and no reply has come, end the turn. The final message repeats the open question and says the design waits on it. Never design on assumed answers.
+- An open scope question is never settled by its narrowest option. A list of features says what the product must do, not how complete it should be.
+
 ### What to clarify (5W1H framing)
 
 - **Why** — what is the underlying problem? What happens if we do nothing?
