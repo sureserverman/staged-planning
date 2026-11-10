@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.3 — 2026-11-10
+
+- **On Codex, a plan waits for the owner's answers.** Outside Plan mode, Codex asks through
+  `request_user_input_async`, which returns at once with no answer. Planning sessions took that
+  as leave to go on: they wrote the plan seconds later on guessed answers, always the narrowest
+  scope, so a plan for a full app came out as a bare first release. `planning-projects` on Codex
+  now treats its scope and owner-decision questions as required. While one is open it only
+  reads; with no reply it ends the turn and repeats the questions. No reply is not a decline, and
+  a list of features does not cap how complete the product should be. Other hosts are unchanged.
+
 ## 1.4.2 — 2026-10-31
 
 - **A skipped repository check says so.** If a sub-plan boundary under a version-2 reader cannot

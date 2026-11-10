@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: e13517243bfc6e935cf438e12befc7561ca79b1dd23777b4feb4ac727bd85f46
+  base_sha256: f376ef01bf8fb4c46435dae78f4c80bd337ee7e391683bd0ec8d09896b39aa60
 hooks/dispatch-log.sh:
   base_sha256: 84d74a452f78bf8c8c8b1528e3019852942acef9b373318ab2a26c2791d1fc5f
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.

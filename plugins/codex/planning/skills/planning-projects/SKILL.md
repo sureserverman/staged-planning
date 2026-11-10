@@ -69,6 +69,16 @@ case it covers. A declined question is recorded `ask at execution`; a plan that 
 point records `none`. An entry covers only the case it names; execution still stops on
 anything else (`../executing-plans/SKILL.md` § Stop conditions).
 
+### On Codex: wait for the answers
+
+On Codex, `request_user_input_async` returns `{"accepted":true}` at once. That is not an answer. The owner replies later, in a user message that holds `<send_user_message_question_reply>`. Every question this phase asks, and every question of § Ask execution's questions now, waits for that reply:
+
+- Ask with `request_user_input` when this turn lists it (Plan mode): it waits for the reply. Otherwise ask with `request_user_input_async` and treat each question as required.
+- While a question is open, do only the work its answer cannot change: read the repo, the records and the docs. Do not pick the format, set the scope or write the draft.
+- Elapsed time is not an answer. If that work is done and no reply has come, end the turn. The final message repeats the open questions and says the plan waits on them. Never write a plan on assumed answers.
+- No reply is not a decline: do not record it `ask at execution`.
+- An open scope question is never settled by its narrowest option. A list of features says what the product must do, not how complete it should be.
+
 ### When NOT to ask
 
 If the prompt is specific enough to plan against (names a technology, describes the goal, implies the scope), skip straight to Phase -0.5. Don't ask questions for the sake of being thorough — ask because the answer would change the plan.
