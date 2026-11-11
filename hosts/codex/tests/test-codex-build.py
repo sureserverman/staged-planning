@@ -44,7 +44,9 @@ try:
                         "--out", out], cwd=REPO, capture_output=True, text=True)
     check(r.returncode == 0, f"the codex build succeeds ({r.stderr.strip()[-200:]})")
     skills = sorted(d for d in os.listdir(os.path.join(out, "skills")))
-    check(len(skills) >= 11, f"the skills ship ({len(skills)})")
+    core_skills = sorted(d for d in os.listdir(os.path.join(REPO, "core", "skills"))
+                         if os.path.isfile(os.path.join(REPO, "core", "skills", d, "SKILL.md")))
+    check(sorted(skills) == core_skills, f"the build ships core's skills, no more and no fewer ({len(skills)} of {len(core_skills)})")
     for name in skills:
         with open(os.path.join(out, "skills", name, "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
@@ -73,7 +75,7 @@ try:
     md_agents = sorted(f for f in os.listdir(os.path.join(out, "agents")) if f.endswith(".md"))
     check(not md_agents, f"no Claude Markdown agent ships ({md_agents})")
     r = subprocess.run([sys.executable, "-B", os.path.join(
-        out, "skills/dispatching-parallel-agents/scripts/validate-stack-routing.py")],
+        out, "skills/executing-plans/scripts/validate-stack-routing.py")],
         capture_output=True, text=True)
     check(r.returncode == 0, f"the stack-routing validator finds the TOML roles "
           f"({(r.stdout + r.stderr).strip()[-160:]})")

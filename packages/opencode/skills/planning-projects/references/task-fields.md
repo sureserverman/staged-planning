@@ -160,7 +160,7 @@ The retired spelling of this field is `Parallel:`; parsers accept both.
 > | here | how to mark the field when authoring |
 > | `../../executing-plans/references/dispatch-fidelity.md` | an ignored directive leaves no trace in the diff, so nothing later reveals it |
 > | `../../executing-plans/references/task-execution.md` | a sibling touching the same file does not withdraw the directive |
-> | `../../dispatching-parallel-agents/SKILL.md` | approval came with the plan, so do not re-confirm; and `|S| = 1` still dispatches |
+> | `../../executing-plans/references/dispatch.md` | approval came with the plan, so do not re-confirm; and `|S| = 1` still dispatches |
 >
 > Six sites, six different consequences. What would NOT belong: a seventh site restating
 > the distinction and drawing nothing new from it, or one that states it without citing

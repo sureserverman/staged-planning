@@ -1,6 +1,6 @@
 # planning (Codex)
 
-An eleven-skill pipeline that turns a vague idea into executed work and keeps each
+A ten-skill pipeline that turns a vague idea into executed work and keeps each
 project's contracts and records honest: brainstorm a design, write a plan whose stages end
 in runnable checks, execute it Red-Green with honest gates and code review, and keep a
 backlog and decisions. This is the Codex build of the plugin; the skills are invoked as
@@ -38,7 +38,6 @@ Trust the hooks. Plugin hooks start untrusted on Codex; review and trust the fou
 | `$planning:architecting-projects` | researched architecture options and an approved choice |
 | `$planning:planning-projects` | a plan of the right size: Direct, Light, Standard or Master |
 | `$planning:executing-plans` | running a plan through Red-Green loops and stage gates |
-| `$planning:dispatching-parallel-agents` | spawning a plan's independent tasks at once |
 | `$planning:applying-design-handoff` | reproducing a local design handoff pack |
 | `$planning:honest-gates` | integrity rules for any check, gate or done claim |
 | `$planning:backlog` | the deferred-work register |

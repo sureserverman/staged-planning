@@ -1,6 +1,6 @@
 # opencode-staged-planning
 
-An eleven-skill pipeline that turns a vague idea into executed work and keeps each
+A ten-skill pipeline that turns a vague idea into executed work and keeps each
 project's contracts and records honest: brainstorm a design, write a plan whose stages end
 in runnable checks, execute it Red-Green with honest gates and code review, and keep a
 backlog and decisions. This is the OpenCode build of the planning plugin, one npm package.
@@ -40,7 +40,6 @@ OpenCode's matching of a request to a skill description is unreliable, so name t
 | `architecting-projects` | researched architecture options and an approved choice |
 | `planning-projects` | a plan of the right size: Direct, Light, Standard or Master |
 | `executing-plans` | running a plan through Red-Green loops and stage gates |
-| `dispatching-parallel-agents` | dispatching a plan's independent tasks at once |
 | `applying-design-handoff` | reproducing a local design handoff pack |
 | `honest-gates` | integrity rules for any check, gate or done claim |
 | `backlog` | the deferred-work register |

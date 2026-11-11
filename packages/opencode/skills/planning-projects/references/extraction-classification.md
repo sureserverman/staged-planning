@@ -1,7 +1,7 @@
 # Extraction classification — `../SKILL.md`
 
 What each `../SKILL.md` section keeps in the trunk and where its elaboration lives.
-The trunk is **40499 B** across **38 headings**, of which 787 B is scaffolding
+The trunk is **39472 B** across **35 headings**, of which 787 B is scaffolding
 (frontmatter, title, and the preamble that precedes the first heading). Every `bytes`
 figure is re-taken by
 `python3 scripts/trunk-sections.py --all-levels core/skills/planning-projects/SKILL.md`;
@@ -51,7 +51,7 @@ short by compressing justification, not by relocating procedure.
 `bytes` is the section's current size in the trunk. `elaboration` names the file in
 this directory that holds what the trunk does not, or `—` where the section has none.
 
-### unconditional — 15 sections, 10626 B
+### unconditional — 14 sections, 10747 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
@@ -61,23 +61,22 @@ this directory that holds what the trunk does not, or `—` where the section ha
 | 1156 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
 | 468 | `plan-document-template.md` | Plan Document Format | a pointer at the template fixture |
 | 646 | `task-fields.md` | Phase 3 — The Red-Green Loop | a pointer plus its five obligations: a runnable test, a cycle budget, a test of the promised outcome, a claim that goes red when false, and a preparing task testing that it prepared |
-| 277 | — | Phase -1 — Clarification | phase header; runs before every plan |
+| 660 | — | Phase -1 — Clarification | the clarification rule in one paragraph: ask only what would change the plan and the repo cannot answer, state an inferred answer as an assumption, batch the questions; runs before every plan |
 | 271 | — | Research summary | every task must trace back to it |
-| 267 | — | When NOT to ask | the off-ramp rule; small and unconditional |
-| 916 | `owner-decisions.md` | Ask execution's questions now | binds every plan at the moment it is presented: the batched round of execution's questions and the `## Owner decisions` record; a pointer followed after presenting is the same as no rule |
+| 921 | `owner-decisions.md` | Ask execution's questions now | binds every plan at the moment it is presented: the batched round of execution's questions and the `## Owner decisions` record; a pointer followed after presenting is the same as no rule |
 | 243 | — | Phase 4 — Stage Gates | phase header |
 | 233 | — | Phase 0 — Research | phase header |
 | 230 | — | Stage sizing | the >7-tasks rule; one sentence, binds every stage |
 | 1003 | — | Phase 2 — Stage Breakdown | phase header plus the write-Outcomes-first rule, which binds every stage |
 | 198 | — | Phase 1 — Preflight | phase header |
 
-### rule+elaboration — 22 sections, 28880 B
+### rule+elaboration — 20 sections, 27732 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
 | 3181 | `format-triage.md` | Phase -0.5 — Format triage | keeps the format table, the size-each-request rule, round-up and record-the-call; the per-format prose and the batch worked example are elaboration |
 | 2304 | `authoring-checklist.md` | Checklist — Before Presenting the Plan | keeps the imperative to run every item, with the items that restate no other trunk section (the validator commands, the records-home save item, the master addendum); the full item list restates rules stated in their own sections |
-| 2680 | `test-scope-tiers.md` | Preflight checklist | keeps the checklist bullets, which ARE the rule, the test-scope declaration among them; the rationale is elaboration |
+| 2668 | `test-scope-tiers.md` | Preflight checklist | keeps the checklist bullets, which ARE the rule, the test-scope declaration among them; the rationale is elaboration |
 | 1671 | `gate-authoring.md` | A plan that adds an obligation names what it removes | keeps Removes/Replaces/Adds-net, the has-it-caught-a-defect test and the name-the-tier rule; the accretion argument and the measured example are elaboration |
 | 1710 | `research-scans.md` | Decisions scan | keeps call `relevant`, contradiction-is-a-planning-bug, record-what-was-consulted and the new-project rule; the sample block and the why are elaboration |
 | 2038 | `master-plan-format.md` | Phase 2.5 — Decomposition decision (master plan + sub-plans) | keeps the decompose-when triggers and the 2–7 split rule — this is the sole authority on Standard→Master; the how-to-split detail is branch-taken |
@@ -90,12 +89,10 @@ this directory that holds what the trunk does not, or `—` where the section ha
 | 703 | `gate-authoring.md` | When a stage gate fails | keeps class-sampled-once and the do-not-restate deferral to executing-plans; the deferral detail is elaboration |
 | 1791 | `test-scope-tiers.md` | What a stage gate checks | keeps the five check kinds; the regressions bullet's scope policy is owned by test-scope-tiers.md |
 | 571 | — | Status marking (per-task done-state) | keeps the exact `- **Status:** [ ]` form and the close-out line |
-| 651 | — | Phase 5 — Dispatch | keeps the mark-YES-when rule, stated once |
-| 575 | — | When to ask | the six ambiguity axes are the rule and stay; the framing is compressed |
+| 653 | — | Phase 5 — Dispatch | keeps the mark-YES-when rule, stated once |
 | 590 | `research-scans.md` | Backlog scan | keeps fold-in-with-`Closes BL-NNN` and duplicate-is-a-planning-bug |
 | 486 | — | Online sources | keeps check version-specific behavior and use context7; the category list is compressed |
 | 419 | — | Linked notes | keeps search-the-linked-notes and the plans-path fallback |
-| 563 | — | How to ask | keeps one-question-at-a-time (for scope; execution's questions wait for the batched round) and state-your-assumption |
 | 423 | — | Project context | keeps the four read-before-planning axes |
 
 ### conditional — 1 section, 206 B
@@ -125,12 +122,12 @@ that must survive verbatim, it is quoted from the trunk.
 |---|---|
 | Reference map | The trunk carries the authoring decisions |
 | Phase -1 — Clarification | make sure you understand what the user actually wants |
-| When to ask | Success criteria |
-| When to ask | Target environment |
-| How to ask | One question at a time |
+| Phase -1 — Clarification | ask only what would change the plan and the repo cannot answer |
+| Phase -1 — Clarification | State an inferred answer as an assumption |
+| Phase -1 — Clarification | Batch the questions in the host's question tool |
+| Phase -1 — Clarification | skip straight to Phase -0.5 |
 | Ask execution's questions now | one batched round |
 | Ask execution's questions now | An entry covers only the case it names |
-| When NOT to ask | ask because the answer would change the plan |
 | Phase -0.5 — Format triage | Size each request, not the batch |
 | Phase -0.5 — Format triage | Direct is the off-ramp |
 | Phase -0.5 — Format triage | Record the call |

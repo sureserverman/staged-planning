@@ -259,7 +259,7 @@ is silent. Put the reason in the body; keep the trailer bare.
 agent's `permission:` map can deny it edits or shell commands, so such an agent does the
 work it may and reports, this session runs the `Test:` and writes the commit, and **the trailer
 still names the agent** — it records who did the work, not who typed `git commit`
-(`../../dispatching-parallel-agents/references/stack-routing.md` § *Not every routed agent can
+(`stack-routing.md` § *Not every routed agent can
 commit*).
 
 Name the actual agent that ran the work — the name the task tool was given, written

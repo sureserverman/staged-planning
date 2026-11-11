@@ -23,7 +23,7 @@ The resolution: the caution is **conditional, not absolute**. Approving a plan w
 execution model mandates dispatch **is** the request the caution is waiting for — the
 confirmation already happened at plan approval. So a `Dispatch: YES` task, a
 tier-mandated review, an evaluator, and the Preflight probe itself are dispatched without
-a further confirmation turn: `../../dispatching-parallel-agents/references/stack-routing.md` § "Not
+a further confirmation turn: `stack-routing.md` § "Not
 every routed agent can commit" states the same precedence for the handoff side of this rule.
 
 The bound, stated with equal weight: with no plan in play and no mandate — a question
@@ -66,7 +66,7 @@ hard stop.
 
 1. **Enumerate the roster.** Sweep **every task in the plan**, across all stages, and
    list in the Preflight report each task whose `Dispatch:` field reads `YES`, with the
-   route it takes per `../../dispatching-parallel-agents/references/stack-routing.md` — the
+   route it takes per `stack-routing.md` — the
    role where the table names one, or the table-routed inline where it names none:
 
    ```

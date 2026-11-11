@@ -64,7 +64,7 @@ plugin-root path, not a path relative to the code you are reviewing:
 `<planning-plugin>/references/review-catalogs.md` — § Structural principles (Protocol 3)
 · § Fowler smell catalog (Protocol 4) · § Security checklist, the
 injection/authz/crypto/deserialization floor with its OWASP and CWE ids (Protocol 5) ·
-§ Test-review vocabulary (Protocol 6) · § Sources, cited whenever you name a source.
+§ Test-review vocabulary (Protocol 6).
 
 
 <!-- read-only-contract -->
@@ -178,7 +178,7 @@ Does a test exist for each change, and if not, is the reason a real one? Is the 
 8. **Plan deviations require the author's acknowledgment.** Surface them; the caller decides whether to update the plan or revert the code.
 9. **Recommend specialists.** When a change needs depth this review cannot give — a language's idioms, game feel, UX — name the installed agent whose description matches that stack, or say none is installed. Code-reviewer covers breadth, not all depths.
 10. **Small changes get small reviews.** A 2000-line change gets a "split this" response before any deep review.
-11. **Name a source, cite it.** When a finding leans on a named authority — an OWASP or CWE id, a Fowler smell, a SOLID principle — **Read** `<planning-plugin>/references/review-catalogs.md` § Sources and cite the entry from there rather than from memory.
+11. **Name a source, cite it.** When a finding leans on a named authority — an OWASP or CWE id, a Fowler smell, a SOLID principle — **Read** `<planning-plugin>/references/review-catalogs.md` — the section that names it (§ Structural principles, § Fowler smell catalog, § Security checklist) — and cite the entry from there rather than from memory.
 
 ## Triage thresholds
 

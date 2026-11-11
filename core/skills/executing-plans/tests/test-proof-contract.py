@@ -24,7 +24,7 @@ What it pins in executing-plans:
      blocking finding fails the gate.
 
 What it pins in the two skills that must say the same:
-  5. dispatching-parallel-agents' prompt template tells the dispatched task to
+  5. The dispatch reference's prompt template tells the dispatched task to
      run `prove-claim.py claim` and `git add proof/` before it commits — a
      dispatched task that may hand-write its proof is the gap rule 4a closes for
      inline tasks.
@@ -40,7 +40,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SKILLS = HERE.parents[1]
 EP = SKILLS / "executing-plans" / "SKILL.md"
-DPA = SKILLS / "dispatching-parallel-agents" / "SKILL.md"
+DPA = SKILLS / "executing-plans" / "references" / "dispatch.md"
 HG = SKILLS / "honest-gates" / "SKILL.md"
 
 
@@ -131,8 +131,8 @@ def main():
           and affirms_claim(gate, r"`advisory` finding \(exit 4\)"))
 
 
-    print("dispatching-parallel-agents and honest-gates say the same:")
-    brief = section(DPA.read_text(), r"### Prompt template", r"\*\*Prompt discipline:", "prompt template")
+    print("the dispatch reference and honest-gates say the same:")
+    brief = section(DPA.read_text(), r"## Brief each agent", r"\n## Dispatch\n", "prompt template")
     check("the dispatch brief tells the task to run `prove-claim.py claim` before committing",
           affirms_claim(brief, r"prove-claim\.py claim"))
     check("the dispatch brief stages the records (`git add proof/`)",

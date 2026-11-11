@@ -1,11 +1,11 @@
 README.md:
-  base_sha256: f376ef01bf8fb4c46435dae78f4c80bd337ee7e391683bd0ec8d09896b39aa60
+  base_sha256: 90eda47b189c7b5cd83d9fae10c8858cd0365082719016edb827321839ea7d75
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
   base_sha256: f326ddd1557c18ecd3fd45032cd9c9ea1b42b810c2ef5edb935fd8de33335622
 agents/code-reviewer.md:
-  base_sha256: ec42002dbfae3a4eaf821b41f0f9a4bac791444820bf4266e1839c66f3f0d0d2
+  base_sha256: d0562cc8f98065d7ae05959115eda0135a84e90a3c58e5e10326f2a5db9693fe
 agents/design-handoff-reproducer.md:
   base_sha256: 73089a291824b2d23d08bdd2a3ddaa6bdd45722c4973cf921fe2b33522c2d334
 hooks/dispatch-log.sh:
@@ -25,28 +25,23 @@ hooks/plan-continue.sh:
   depends_on:
     hooks/plan_continue_classify.py: b99ff822dfac794dfd7d1bec974e99ddf2ade350e509ecf3748cda57f4a6aaa4
 skills/applying-design-handoff/SKILL.md:
-  base_sha256: 28a0e74ad72a982e1ed4753a56b0d13d64fa9c39bc8da73671583eb7088dd84c
+  base_sha256: c94c04775c62656d3edfb09817343e4779f0969dcb33f78ba4044be507d643d2
 skills/applying-design-handoff/references/handoff-pack-format.md:
   base_sha256: f7b0a89982bed0c7859956b6e9ebb2157d4747825420a4a304b1cfd002e463c1
 skills/applying-design-handoff/references/playwright-capture.md:
   base_sha256: 744f361cebb7be0c7c047be7e0f0a5d2183cab5927938f063e72b2cc5ffd62c3
 skills/architecting-projects/SKILL.md:
-  base_sha256: f0c19bb8157098f3fb902aed4784d7e1daf5b757892387dc9203cbd14436ac05
+  base_sha256: ed3ebb1b9a9b8f98802f1c5722aa1b45c0d46aafe2fe1329bbce35fcb1c3cbb5
 skills/brainstorming/SKILL.md:
-  base_sha256: 0cc581ff8e4d1982e5d584126198a31f8e99a04125a641aec077c53ac504e8a7
-skills/dispatching-parallel-agents/SKILL.md:
-  base_sha256: 4d712fba06806607d855cd2243ca29dede60ad40dd1d9621de45a298b20ae493
-skills/dispatching-parallel-agents/references/stack-routing.md:
-  base_sha256: 2ff9d8580192a9a94cd0a2f41a18c58f61104f58b75cb9470ed2b3e54347c418
-skills/dispatching-parallel-agents/scripts/validate-stack-routing.py:
-  base_sha256: d001f6e5fbbf274d24ee13407463ce6f4098b943b227296f7a5f21cd78409027
-  host_fact: 'Cursor has no plugin namespace: a plugin agent asked for by name ran as its bare file name, and its built-in agents are generalPurpose and explore, so the validator fails any <plugin>:<name> id and accepts bare names and those built-ins.'
+  base_sha256: f28b9bd84399f7ea7776b9ad0dfc87c4cf5af4e653d26ec916b75f0545e90365
 skills/executing-plans/SKILL.md:
-  base_sha256: c7fcae0ffc22bf458c74116ccbfca9c6209b6c69d3fd2a6df6649eb0fafb8ef0
+  base_sha256: a9590a2179b13dbfa191ce6bd9c358060fde3719b31f833f904e8f524b542c7b
 skills/executing-plans/references/close-out.md:
   base_sha256: 0f6c703028c2c2e5f76a66070e6d610c0d67ce339028f71457ce2f79878f98f0
+skills/executing-plans/references/dispatch.md:
+  base_sha256: e3d4399f69b3c376aa81dffdecdb3fdf25bc014abe172b81da8e1bc316e3f6eb
 skills/executing-plans/references/light-plans.md:
-  base_sha256: 746269d2e2bb8c318fd0c09ab13ad698de19164bc56d4acd2017172910874767
+  base_sha256: 7a982185187eb54f80d4bfd62fa81dfd0086770cdc620d003ee2790c5a7b145f
 skills/executing-plans/references/master-plans.md:
   base_sha256: a3c299e02a6b03029e2edc46a36111c8927d4824608449496e6d931b3dd6c576
 skills/executing-plans/references/plan-continue-hook.md:
@@ -59,10 +54,12 @@ skills/executing-plans/references/review-scope.md:
   base_sha256: ab1060b4c86442377d6c8196515a26c00069d28a30ad65bf45c6a81cae842747
 skills/executing-plans/references/session-handoff.md:
   base_sha256: 6d60b324a24d068d1b74a22827c20911c9fca774710350db5ae9c8dc0144f3ae
+skills/executing-plans/references/stack-routing.md:
+  base_sha256: 0916fcc1be50cf86fde0dbe717266ab4978b8a4c2fed8675c10bda4b43f93962
 skills/executing-plans/references/stage-gate.md:
   base_sha256: e191d6c94a13b15b8b1483f6df4b5388157f91dfb6cb1634b541776d57f98d25
 skills/executing-plans/references/task-execution.md:
-  base_sha256: 55a766681eacf67e4416a06ce8216c13900497f86962529a213836110b72ea9e
+  base_sha256: cffa3caf1c533bcf88b02dded5f7b0e7d8638a7fa326dab3e2802107efdf1dbd
 skills/executing-plans/scripts/plan-flip-audit.py:
   base_sha256: d099abceee8c18882c38587520eeb2951a4af2d121c6789cd9262ef9da904d1a
   host_fact: 'The Cursor proof model of the hooks/git-ref-gate.sh fork (every claim, once per stage at the gate): findings 8 and 9 hold every claim of a ticked task to a record and skip the tasks of the stage still in flight, read through the hooks'' state reader, so the audit and the Cursor commit gate count the same set. It also carries unrecorded_gate(), which core has none of: the Cursor stop hook asks it whether a stage claimed done (stage-complete, closeout, or ticked gate boxes) lacks its Stage N green commit.'
@@ -78,9 +75,12 @@ skills/executing-plans/scripts/statusline-chain.sh:
 skills/executing-plans/scripts/statusline-install.py:
   base_sha256: 879e0e5ed07808911d8597d1e5d2086c18616e627244e0b5af7096b4cdc3c80d
   host_fact: The Cursor CLI reads statusLine from ~/.cursor/cli-config.json, not from Claude Code's settings.json, a plugin cannot contribute it, and a local install is not a versioned cache, so the fork writes, repairs and removes that one key there, pointing at the sibling statusline-chain.sh.
+skills/executing-plans/scripts/validate-stack-routing.py:
+  base_sha256: 25b8f76e828df535a7e1270559709e367fec4068668665e8886cdaf9581d7bb2
+  host_fact: 'Cursor has no plugin namespace: a plugin agent asked for by name ran as its bare file name, and its built-in agents are generalPurpose and explore, so the validator fails any <plugin>:<name> id and accepts bare names and those built-ins.'
 skills/honest-gates/SKILL.md:
   base_sha256: 7b00a13103068f95b1e7ce5a8cfd23fb1c58c1b733659543b577c882f9ae94db
 skills/planning-projects/SKILL.md:
-  base_sha256: e5f851e4253e4878e0598e456aa1fa38ac42b8f5ab77b43da5ed55c1ffc7f400
+  base_sha256: 4b9cc17071c43974cf8fda82041b24b75bef0dbbd6dfddb235b1c94a46feab4c
 skills/project-maturity/SKILL.md:
   base_sha256: 40a8ab78a2515420f8ed3184e8f004936eff894399a56615911219bc26e9caff

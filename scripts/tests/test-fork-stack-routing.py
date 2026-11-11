@@ -19,8 +19,8 @@ import sys
 import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REL = "skills/dispatching-parallel-agents/scripts/validate-stack-routing.py"
-TABLE = "skills/dispatching-parallel-agents/references/stack-routing.md"
+REL = "skills/executing-plans/scripts/validate-stack-routing.py"
+TABLE = "skills/executing-plans/references/stack-routing.md"
 COVERED_ELSEWHERE = {"codex"}
 FAILS = []
 

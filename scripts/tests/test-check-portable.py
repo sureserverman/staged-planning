@@ -179,9 +179,10 @@ def main():
 
     print("bare is strict, and a stray baseline is refused")
     def every_tree(text):
-        files = {f"{t}/x.md": "clean\n" for t in ("core", "hosts", "build", "scripts", "docs",
-                                                   "plugins")}
-        files["README.md"] = "clean\n"
+        # Read from the script, so a tree added to the bare run is in the fixture too.
+        names = json.loads(re.search(r"^DEFAULT_TREES = (\[.*?\])$",
+                                     open(SCRIPT, encoding="utf-8").read(), re.M).group(1))
+        files = {(n if n.endswith((".md", ".json")) else f"{n}/x.md"): "clean\n" for n in names}
         files["core/a.md"] = text
         return tree(files)
     root = every_tree("clean\n")
@@ -203,6 +204,7 @@ def main():
     check(out.splitlines() == ["home-path core/a.md:1"], f"--list output ({out!r})")
 
     new_cases()
+    default_trees_cover_repo()
 
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURE(S)")
@@ -373,6 +375,27 @@ def new_cases():
                         os.path.join("scripts", "tests", "test-check-portable.py")],
                        capture_output=True, text=True, cwd=repo)
     check(p.returncode == 0 and p.stdout == "", f"self-check is clean (rc={p.returncode}, {p.stdout!r})")
+
+
+def default_trees_cover_repo():
+    """A bare run scans every tracked top-level path. A path the default list leaves out is
+    never checked by anything, so a leak added there passes silently (evals/ and packages/
+    did, until 2.0.0). The skip list names the files that carry no prose or paths."""
+    print("the bare run scans every tracked top-level path")
+    repo = os.path.dirname(os.path.dirname(HERE))
+    p = subprocess.run(["git", "-C", repo, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True)
+    if p.returncode != 0:
+        print("  NOT RUN: not a git checkout")
+        return
+    src = open(SCRIPT, encoding="utf-8").read()
+    m = re.search(r"^DEFAULT_TREES = (\[.*?\])$", src, re.M)
+    check(m is not None, "check-portable.py defines DEFAULT_TREES on one line")
+    if m is None:
+        return
+    scanned = set(json.loads(m.group(1)))
+    skipped = {".gitignore", "LICENSE", "VERSION"}
+    missing = sorted(set(p.stdout.split()) - scanned - skipped)
+    check(not missing, f"every tracked top-level path is in DEFAULT_TREES or the skip list (missing: {missing})")
 
 
 if __name__ == "__main__":

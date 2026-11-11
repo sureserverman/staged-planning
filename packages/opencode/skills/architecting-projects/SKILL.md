@@ -106,7 +106,7 @@ or codebase file behind it does not enter the matrix. Then:
 Present a **comparison matrix** — one row per surviving candidate, columns: fit
 against each named constraint, complexity, evolution paths, migration surface (for
 existing code), evidence quality. Below it, a **named recommendation with a specific
-reason**, exactly like `brainstorming` Phase 3.
+reason**, exactly like `../brainstorming/SKILL.md` § Propose alternatives.
 
 Then the **approval gate** (the HARD-GATE above):
 

@@ -73,7 +73,7 @@ import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_TREES = ["core", "hosts", "build", "scripts", "docs", "plugins", "README.md"]
+DEFAULT_TREES = ["core", "hosts", "build", "scripts", "docs", "plugins", "packages", "evals", ".agents", ".claude-plugin", ".cursor-plugin", ".github", "README.md", "CHANGELOG.md", "capability-index.json"]
 DEFAULT_BASELINE = os.path.join("scripts", "portable-baseline.txt")
 CLASSES = ["home-path", "email", "ip-address", "plugin-id", "unregistered-id", "vault-word"]
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv"}

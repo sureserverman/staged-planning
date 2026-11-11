@@ -14,7 +14,7 @@ running at full weight:
    is green before Stage 1. Nothing else to verify.
 2. **No parallel dispatch.** Every task runs **inline in the main session**, in listed
    order, through the normal Red-Green loop. A light plan has no `Dispatch` field and no
-   fan-out — do not invoke `dispatching-parallel-agents`. (A task may carry an optional
+   fan-out — `dispatch.md` does not apply. (A task may carry an optional
    `Depends on`; honor it as ordering.)
 3. **One review, not per-task.** **Skip the Tier-1 per-task review** — unless the declared
    tier is `high`, which runs Tier-1 in every format for the **risk-listed tasks its

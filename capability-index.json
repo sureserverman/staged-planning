@@ -81,7 +81,7 @@
       "requires_enablement": true
     },
     {
-      "description": "Use before any non-trivial creative or implementation work \u2014 new features, components, services, migrations, or behavior changes \u2014 to turn a vague idea into a validated design, one question at a time. Triggers on \"I want to build\", \"let's design\", \"brainstorm\", \"help me think through\".",
+      "description": "Use before any non-trivial creative or implementation work \u2014 new features, components, services, migrations, or behavior changes \u2014 to turn a vague idea into a design the user has approved. Triggers on \"I want to build\", \"let's design\", \"brainstorm\", \"help me think through\".",
       "disable_model_invocation": false,
       "kind": "skill",
       "model": null,
@@ -97,16 +97,6 @@
       "model": null,
       "name": "decisions",
       "path": "core/skills/decisions/SKILL.md",
-      "plugin": "planning",
-      "requires_enablement": true
-    },
-    {
-      "description": "Use when executing-plans has Dispatch YES tasks from a planning-projects plan whose dependencies are green. Triggers on \"dispatch these tasks in parallel\", \"run these Dispatch YES tasks\", \"fan out these independent fixes\".",
-      "disable_model_invocation": false,
-      "kind": "skill",
-      "model": null,
-      "name": "dispatching-parallel-agents",
-      "path": "core/skills/dispatching-parallel-agents/SKILL.md",
       "plugin": "planning",
       "requires_enablement": true
     },

@@ -2,7 +2,7 @@
 
 The `planning` plugin for coding agents. It turns a vague idea into executed work:
 
-- **brainstorming** asks one question at a time until the design holds;
+- **brainstorming** asks only what it cannot infer, in batches, until the design holds;
 - **architecting-projects** compares researched architecture options;
 - **planning-projects** writes a staged plan, and every stage ends in a gate of runnable checks;
 - **executing-plans** drives each task Red-Green, runs the gates, and dispatches reviews;

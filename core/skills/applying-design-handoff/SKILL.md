@@ -29,7 +29,7 @@ allowed to change functionality to fit the design.
   otherwise the reproducer's own standard-components-first judgment. Say which case you
   are in when you brief it — do not imply a skill that isn't there. Routing
   is the shared table at
-  [../dispatching-parallel-agents/references/stack-routing.md](../dispatching-parallel-agents/references/stack-routing.md).
+  [../executing-plans/references/stack-routing.md](../executing-plans/references/stack-routing.md).
 
 ## Reference map
 
@@ -41,7 +41,7 @@ allowed to change functionality to fit the design.
 - [references/playwright-capture.md](references/playwright-capture.md) — how to render the
   running app (and the pack's reference renders) with Playwright and capture deterministic
   screenshots for browser-renderable stacks (Phases 6–7).
-- [../dispatching-parallel-agents/references/stack-routing.md](../dispatching-parallel-agents/references/stack-routing.md)
+- [../executing-plans/references/stack-routing.md](../executing-plans/references/stack-routing.md)
   — which subagent and stack skill a stack routes to (Phase 6).
 - `scripts/validate-handoff-pack.py` — the deterministic local-pack linter (Phase 1).
 
@@ -138,7 +138,7 @@ Apply the design in code, standard-components-first within each platform.
 
 1. **Find the stack skill.** The subagent this skill dispatches is always
    `planning:design-handoff-reproducer` (the *Reproduce a Claude Design handoff pack* row
-   of [../dispatching-parallel-agents/references/stack-routing.md](../dispatching-parallel-agents/references/stack-routing.md)).
+   of [../executing-plans/references/stack-routing.md](../executing-plans/references/stack-routing.md)).
    The stack skill is the table's generic stack rule: the stack's design or UI skill, if
    one is installed. Find it by reading the descriptions of the skills the session lists
    and picking the one that matches the target stack's UI work. When none matches, the
@@ -260,20 +260,9 @@ lives. Delegate:
   reconciles against those declarations.
 - **workflow-spec** — the gate for behavior changes (`Changes`/`Removes` declarations,
   close-out audit).
-- **dispatching-parallel-agents** — the shared `stack-routing.md` picks the reproducer
+- **executing-plans** — its `stack-routing.md` picks the reproducer
   subagent and the stack skill it loads.
 - **DesignSync tool** — the live input path (read-only here).
 - **Playwright** — the render/capture path for browser-renderable stacks (Phases 6–7),
   via a Playwright MCP server, if one is installed, or a headless `npx playwright`
   script; see `references/playwright-capture.md`.
-
-## Sources
-
-- Claude Design handoff = spec bundle (tokens + components + layout + assets) for direct
-  consumption, not a PNG/Figma URL — claudefa.st "Claude Design to Claude Code";
-  Anthropic Claude Design overhaul coverage (VentureBeat).
-- Separate-evaluator visual verification + weighted rubric + capped iterate loop —
-  a generator–evaluator loop (four weighted dimensions, a pass threshold, a capped
-  iterate loop) in which the generator never grades itself.
-- Independent evaluator (generators grade their own work too generously) — Anthropic
-  Engineering, "Harness design for long-running application development".

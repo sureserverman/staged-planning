@@ -3,7 +3,7 @@
 Classifies every trunk heading for extraction: what stays in the trunk, and what may move
 to a reference file. The `bytes` column is each section's size in the trunk, measured with
 `python3 scripts/trunk-sections.py --all-levels core/skills/executing-plans/SKILL.md`:
-**55913 B** across **32 headings**, plus 664 B of scaffolding (title, preamble, and rules
+**55762 B** across **31 headings**, plus 664 B of scaffolding (title, preamble, and rules
 sitting outside any heading); the two sum to the file size exactly. The `markers` column
 counts the section's rows in the retention-marker table. Both are re-taken from the current
 tree, and a figure here that disagrees with the command is stale. The command reads the source trunk; a host build may rewrite
@@ -58,33 +58,33 @@ enforces set equality against the trunk's real headings.
 `bytes` is the section's size in the trunk and `markers` its retention-marker count, both
 measured as stated at the top of this file.
 
-### unconditional — 14 sections, 18981 B
+### unconditional — 14 sections, 19011 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
 | 2543 | 3 | Phase 1 — Load and critique | runs on every plan |
 | 2249 | 3 | The plan is the authorization — dispatch without a confirmation turn | dispatch-bound obligation; binds every dispatch decision |
-| 1848 | 1 | Reference map | the index — without it no reference is reachable |
+| 1883 | 1 | Reference map | the index — without it no reference is reachable |
 | 1412 | 3 | Phase 2 — Preflight | phase header + the check list itself |
 | 3168 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all |
 | 1165 | 3 | Run to completion — don't stop until you have to | governs every turn of every run |
 | 951 | 2 | What this skill expects | the format contract; every run validates against it |
 | 1329 | 3 | Safety rails | branch/destructive/secrets/shared-infra — every run |
-| 609 | 1 | Checklist | the four-step loop every execution follows |
+| 604 | 1 | Checklist | the four-step loop every execution follows |
 | 604 | 2 | When to revisit earlier steps | small, unconditional |
 | 2547 | 4 | Step 3.0 — Test the stage's premise first, in the real environment | every stage start: the stage-order check, Outcomes, and the premise worksheet the green commit needs |
 | 270 | 1 | Step 3.1 — Identify what can run now | every stage start |
 | 228 | 1 | Step 3.4 — Propagate unblock | every green task |
 | 58 | 1 | Phase 3 — Stage execution | phase header |
 
-### rule+elaboration — 14 sections, 35299 B
+### rule+elaboration — 14 sections, 35268 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
 | 12699 | 16 | Step 3.5 — Stage gate | exit criterion + gate order stay; the two verify hooks (Android, redesign), evaluator briefing, Tier-2 shape, decisions sweep and failure procedure are each branch-taken |
 | 7696 | 10 | Step 3.3 — Red-Green loop (per task) | loop rules 1-7 stay; Tier-1 machinery is tier-gated and the test-first rationale is elaboration |
 | 2026 | 3 | Step 3.2 — Split by parallelism | the YES-obligates-dispatch rule stays; the no-third-mode rationale is elaboration |
-| 1971 | 3 | Dispatch roster and capability probe | fires every Preflight; rationale already in references/dispatch-fidelity.md |
+| 1940 | 3 | Dispatch roster and capability probe | fires every Preflight; rationale already in references/dispatch-fidelity.md |
 | 1939 | 3 | A bug found during execution is a class — sweep it, fix every instance | rule is one paragraph; the worked reasoning is elaboration |
 | 1820 | 3 | Context resets at stage boundaries | the handoff-note requirement fires at every gate; the rest is guidance |
 | 1736 | 2 | Review scope — the machinery scales to the change | tier declaration is unconditional; the table is RESTATED from references/review-scope.md, which the trunk already calls the authority |
@@ -96,14 +96,13 @@ measured as stated at the top of this file.
 | 646 | 1 | Git bootstrap (hard prerequisite for commit-per-task) | fires every Preflight; the decision tree is mechanical detail |
 | 493 | 1 | Decisions re-check (the plan's snapshot can be stale) | fires every Preflight; the why is elaboration |
 
-### conditional — 4 sections, 1633 B
+### conditional — 3 sections, 1483 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
 | 706 | 1 | Phase Close-out — After the last stage | a phase reached once, at the end; nothing before it needs the text |
-| 437 | 1 | Integration | per-skill descriptions consulted only when routing to one |
+| 377 | 1 | Integration | per-skill descriptions consulted only when routing to one |
 | 400 | 2 | Amending authored ceremony | only when an amendment is actually needed; the three legality conditions stay because a pointer is not a rule |
-| 90 | 1 | Sources and rationale | already a pointer at references/sources.md |
 
 ## Where the conditional material went
 
@@ -226,7 +225,6 @@ for a rule that is present. Pick a marker that sits on one physical line.
 | Safety rails | Never start on `main` / `master` without explicit user consent |
 | Safety rails | Destructive commands |
 | Safety rails | routes or DNS to reach a device under test |
-| Sources and rationale | references/sources.md |
 | Integration | references/integration.md |
 
 The progress-state retention marker pins owned v2 terminal evidence. Deleting the

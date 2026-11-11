@@ -827,14 +827,14 @@ def main():
           "stops a dispatch, which reads as 'dispatch unconditionally'")
 
     # 11c — the rule must appear in both files that decide a dispatch, checked as a SET.
-    # dispatching-parallel-agents launches a fan-out; dispatch-fidelity holds the
+    # The dispatch reference launches a fan-out; dispatch-fidelity holds the
     # reasoning. A rule stated only in the trunk never reaches the dispatch path.
     DISPATCH_SITES = [
         # A sentence pattern, not a bare substring: "without asking" on its own also
         # matches "do not fan out without asking the user", the over-correction the
         # rule forbids.
-        ("dispatching-parallel-agents", SKILLS_ROOT / "dispatching-parallel-agents"
-         / "SKILL.md", r"[Dd]ispatch on invocation[\s\S]{0,80}?without asking"),
+        ("dispatch reference", SKILLS_ROOT / "executing-plans" / "references"
+         / "dispatch.md", r"already authorized\. Dispatch \*\*without asking\*\*"),
         ("dispatch-fidelity rationale", SKILLS_ROOT / "executing-plans" / "references"
          / "dispatch-fidelity.md", r"conditional"),
     ]
@@ -1064,7 +1064,7 @@ def main():
     # ---- 11 — dispatch fidelity. One assertion per rule; see the docstring for why
     # this group is deliberately small. Each names the rule it would lose.
     pp = (SKILLS_ROOT / "planning-projects" / "SKILL.md").read_text(encoding="utf-8")
-    dpa = (SKILLS_ROOT / "dispatching-parallel-agents" / "SKILL.md").read_text(
+    dpa = (SKILLS_ROOT / "executing-plans" / "references" / "dispatch.md").read_text(
         encoding="utf-8")
 
     # Anchored past the `YES | NO` field gloss: that `NO` is a FIELD VALUE in a fenced

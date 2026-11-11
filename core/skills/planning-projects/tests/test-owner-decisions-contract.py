@@ -194,13 +194,74 @@ def part4_planning_asks_the_round():
               body.strip() != "", "missing")
         for needle in ("references/owner-decisions.md", "one batched round", "## Owner decisions"):
             check(f"4 {rel(path)}: the section names {needle}", needle in body, "missing")
-        how = section(phase, "### How to ask")
-        check(f"4 {rel(path)}: the one-at-a-time rule sends execution questions to the round",
-              re.search(r"One question at a time[^\n]*\n?[^\n]*Ask execution's questions now", how) is not None,
-              how[:200])
         check(f"4 {rel(path)}: the reference map routes to the catalog",
               re.search(r"(?m)^\| `references/owner-decisions\.md` \|", section(text, "## Reference map")) is not None,
               "no row")
+
+
+# sha256 of `### Ask execution's questions now` as the 2026-11-10 trim found it (commit
+# 1d6eaaf). A digest rather than a `git show` of that commit, so the check runs in a
+# shallow clone; a deliberate edit to the section updates this line with it.
+ASK_NOW_SHA256 = "7c25bc8d9bb672101dc3e2fd64d6e09e1c2d5dc0ba3317419023c128c6a9ffe3"
+ASK_NOW = "### Ask execution's questions now"
+PHASE_1 = "## Phase -1 — Clarification"
+PHASE_1_RULES = ("ask only what would change the plan and the repo cannot answer",
+                 "state an inferred answer as an assumption",
+                 "batch the questions in the host's question tool")
+
+
+def raw_section(text, heading):
+    """The heading line and its body, byte for byte, to the next heading of the same or a
+    higher level or a `---` rule, whichever comes first."""
+    level = len(heading) - len(heading.lstrip("#"))
+    m = re.search(r"(?m)^" + re.escape(heading) + r"\n", text)
+    if not m:
+        return ""
+    end = re.compile(r"(?m)^(?:#{1,%d}\s|---$)" % level).search(text, m.end())
+    return text[m.start():end.start() if end else len(text)]
+
+
+def part4b_phase_minus_1_is_one_paragraph():
+    """Catches: Phase -1 growing back into a method tutorial, or asking one question at a
+    time. The rule is one paragraph above `### Ask execution's questions now`, which is the
+    only subsection left and is never touched by the trim. Pinned on the source trunk; a
+    host fork follows it through the build check."""
+    path = os.path.join(PP, "SKILL.md")
+    text = read(path)
+    phase = raw_section(text, PHASE_1)
+    # From the heading to `### Ask execution's questions now`, less a host's own `### On
+    # <host>:` insert (a built Codex copy carries one there).
+    head = phase.split("\n" + ASK_NOW + "\n", 1)[0]
+    head = re.sub(r"(?ms)^### On [^\n]*:.*", "", head)
+    size = len(head.encode("utf-8"))
+    check(f"4b {rel(path)}: Phase -1 above `{ASK_NOW}` is at most 900 bytes", size <= 900, f"{size} B")
+    flat = " ".join(plain(head).split()).lower()
+    for rule in PHASE_1_RULES:
+        check(f"4b {rel(path)}: Phase -1 says to {rule}", rule in flat, "missing")
+    check(f"4b {rel(path)}: Phase -1 no longer says `One question at a time`",
+          "one question at a time" not in flat, "still there")
+    if ROOT is not None:
+        subs = re.findall(r"(?m)^### .*$", phase)
+        check(f"4b {rel(path)}: `{ASK_NOW}` is Phase -1's only subsection", subs == [ASK_NOW], f"{subs}")
+        import hashlib
+        now = raw_section(text, ASK_NOW)
+        digest = hashlib.sha256(now.encode("utf-8")).hexdigest()
+        check(f"4b {rel(path)}: `{ASK_NOW}` is byte-identical to the section the trim found",
+              now != "" and digest == ASK_NOW_SHA256, f"sha256 {digest[:12]}…, {len(now)} B")
+    # Every marker the classification table pins for Phase -1 or a heading under it (the
+    # removed ones included, so a row left naming deleted text fails here).
+    table = read(os.path.join(REF, "extraction-classification.md"))
+    names = {"Phase -1 — Clarification", "When to ask", "How to ask", "When NOT to ask"}
+    names |= {s[4:] for s in re.findall(r"(?m)^### .*$", phase)}
+    markers = section(table, "## Retention markers")
+    rows = []
+    for line in markers.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if line.startswith("|") and len(cells) == 2 and cells[0] in names:
+            rows.append(cells)
+    check("4b the classification table pins Phase -1 markers", len(rows) >= 1, "none")
+    for sec, marker in rows:
+        check(f"4b marker `{marker}` ({sec}) is in Phase -1 of the trunk", marker in phase, "missing")
 
 
 def copies(skill, rel_path):
@@ -393,6 +454,7 @@ def main():
     part2_templates_carry_the_section()
     part3_checklists_carry_the_item()
     part4_planning_asks_the_round()
+    part4b_phase_minus_1_is_one_paragraph()
     part5_execution_reads_the_answers()
     part6_an_entry_is_never_stretched_to_fit()
     part7_the_script_decides()

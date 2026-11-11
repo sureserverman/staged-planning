@@ -1,0 +1,33 @@
+{
+  "source": "plugins/claude/planning",
+  "cases": "evals/behaviour-rules/cases",
+  "rules": [
+    {
+      "id": "R1",
+      "name": "honest-gates",
+      "mentions": ["honest-gates", "honest gates"],
+      "strip": [
+        {"path": "skills/honest-gates", "remove": "folder"},
+        {"path": ".claude-plugin/plugin.json", "json_array_item": {"key": "skills", "value": "./skills/honest-gates"}}
+      ]
+    },
+    {
+      "id": "R2",
+      "name": "run-to-completion",
+      "mentions": ["Run to completion", "run-to-completion", "plan-continue"],
+      "strip": [
+        {"path": "skills/executing-plans/SKILL.md", "section": "## Run to completion — don't stop until you have to"}
+      ]
+    },
+    {
+      "id": "R3",
+      "name": "dispatch-without-asking",
+      "mentions": ["without asking", "confirmation turn"],
+      "strip": [
+        {"path": "skills/executing-plans/SKILL.md", "section": "## The plan is the authorization — dispatch without a confirmation turn"},
+        {"path": "skills/executing-plans/references/dispatch.md", "paragraph": "**These five preconditions are the whole check.**"},
+        {"path": "skills/executing-plans/references/dispatch.md", "paragraph": "Tasks that cleared the preconditions are already authorized.", "in_section": "## Dispatch"}
+      ]
+    }
+  ]
+}

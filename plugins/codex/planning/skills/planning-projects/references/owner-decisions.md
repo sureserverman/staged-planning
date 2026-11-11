@@ -73,7 +73,7 @@ checkboxes: a raw `- [ ]` there would read as deferred work to the plan parser.
   option makes the run do. "Other" stays open for the owner's own words.
 - **A follow-up round only for what the answers raise** — a new branch name, a command the
   owner narrowed.
-- **Scope questions are not in this round.** They come first, one at a time, in `../SKILL.md` § Phase -1
+- **Scope questions are not in this round.** They come first, batched, in `../SKILL.md` § Phase -1
   — the plan cannot be drafted without them.
 
 ## The catalog

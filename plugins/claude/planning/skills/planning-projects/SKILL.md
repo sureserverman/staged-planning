@@ -33,26 +33,14 @@ The trunk carries the authoring decisions. These load when their condition is me
 
 ## Phase -1 — Clarification
 
-Before researching or planning anything, make sure you understand what the user actually wants. Ambiguous or underspecified prompts produce plans that solve the wrong problem — and a wrong plan executed perfectly is worse than no plan at all.
-
-### When to ask
-
-Ask clarifying questions if any of these are unclear:
-
-- **Scope**: What's included and what's explicitly out of scope?
-- **Target environment**: What platform, language, framework, or infrastructure?
-- **Constraints**: Performance, compatibility, security needs, deadlines?
-- **Existing state**: Greenfield, or integrating with an existing system — and where's the code?
-- **Success criteria**: How will the user know the project is done? What does "working" look like?
-- **Audience**: Who uses the end result — the user, their team, end users, CI/CD?
-
-### How to ask
-
-- One question at a time. Don't dump a wall of questions. This is for scope; the questions
-  execution would stop for wait for § Ask execution's questions now, which batches them
-- Prefer multiple-choice when the options are finite ("Are you targeting A, B, or C?")
-- If you can infer an answer from the codebase or context, state your assumption and ask for confirmation rather than asking open-ended
-- Stop asking once you have enough to produce a meaningful plan — you need enough to avoid building the wrong thing, not perfect information
+Before researching or planning anything, make sure you understand what the user actually wants.
+Read the repo first.
+Then ask only what would change the plan and the repo cannot answer: scope, target environment, constraints, success criteria.
+State an inferred answer as an assumption, and do not ask it.
+Batch the questions in the host's question tool, each multiple choice with the recommended option first.
+Stop once you know enough not to build the wrong thing.
+If the prompt is specific enough to plan against, skip straight to Phase -0.5.
+The questions execution would stop for wait for § Ask execution's questions now.
 
 ### Ask execution's questions now
 
@@ -66,10 +54,6 @@ the plan's `## Owner decisions` as `OD-N`: the owner's words quoted and dated, n
 case it covers. A declined question is recorded `ask at execution`; a plan that reaches no
 point records `none`. An entry covers only the case it names; execution still stops on
 anything else (`../executing-plans/SKILL.md` § Stop conditions).
-
-### When NOT to ask
-
-If the prompt is specific enough to plan against (names a technology, describes the goal, implies the scope), skip straight to Phase -0.5. Don't ask questions for the sake of being thorough — ask because the answer would change the plan.
 
 ---
 
@@ -286,7 +270,7 @@ Verify each of these and report the result:
 - [ ] **Baseline**: Existing tests pass before any changes begin (don't build on a broken foundation)
 - [ ] **Review scope**: the tier this plan's cumulative diff warrants — `none` / `light` / `standard` / `high` — stated with its reason, and declared once from the plan's **cumulative** diff rather than per task. Undeclared means `standard`; touching a risk-listed area sets `high` regardless of size. **A `high` declaration names the risk-listed tasks it binds** (`review-scope: high — tasks 1.1, 1.3 (schema migration)`), because Tier-1 attaches to the **risk-listed task**, not the plan — an unnamed `high` conservatively binds every task (`../executing-plans/references/review-scope.md`)
 - [ ] **Dispatch probe**: A throwaway subagent returns a fixed string — dispatch works in this session (skipped on an empty roster, or below tier `standard`)
-- [ ] **Dispatch roster**: Every `Dispatch: YES` task in the plan is listed with the subagent type it routes to (`../dispatching-parallel-agents/references/stack-routing.md`), or `0 tasks` when there are none. It must cover **every stage, not the first** — a partial roster is the instance-shaped check this skill rejects everywhere else
+- [ ] **Dispatch roster**: Every `Dispatch: YES` task in the plan is listed with the subagent type it routes to (`../executing-plans/references/stack-routing.md`), or `0 tasks` when there are none. It must cover **every stage, not the first** — a partial roster is the instance-shaped check this skill rejects everywhere else
 - [ ] **Test-scope commands**: for a project whose full test suite is expensive (`references/test-scope-tiers.md`), the plan's stage-scope and plan-scope commands are declared here in Preflight, so executors run known-good invocations instead of improvising scope mid-execution
 
 If any preflight check fails, stop. Fix it or flag it to the user before proceeding.
@@ -574,7 +558,7 @@ sweep that proves it).
 
 Mark a task `Dispatch: YES` when its `Depends on` are satisfiable independently and it
 shares no file with a sibling. The dispatch procedure belongs to
-`../dispatching-parallel-agents/SKILL.md` and `executing-plans` Step 3.2; what the *plan*
+`../executing-plans/references/dispatch.md` and `executing-plans` Step 3.2; what the *plan*
 owes them is accurate `Depends on` / `Blocks` / `Dispatch` fields and a file-conflict-free set.
 `python3 scripts/validate-dispatch.py <plan>` checks exactly that before presenting: it fails a
 YES task that depends on a same-stage sibling, two YES siblings sharing a `Scope` path, a YES

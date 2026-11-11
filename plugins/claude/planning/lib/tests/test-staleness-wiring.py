@@ -55,7 +55,7 @@ NOT_WIRED = {
         "reads the session transcript; its stdout is parsed JSON at every gate",
     ("planning-projects", "validate-gate-checks.py"): "validator over the plan paths it is given",
     ("planning-projects", "validate-dispatch.py"): "validator over the plan paths it is given",
-    ("dispatching-parallel-agents", "validate-stack-routing.py"): "validator over in-repo tables",
+    ("executing-plans", "validate-stack-routing.py"): "validator over in-repo tables",
     ("applying-design-handoff", "validate-handoff-pack.py"): "validator over a handoff pack path",
     ("project-maturity", "audit-detectors.py"): "detector library run against a repo path",
 }

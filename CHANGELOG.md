@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.0.0 — 2026-11-11
+
+- **Breaking: the `dispatching-parallel-agents` skill is gone.** Its rules now live in
+  `executing-plans`, the one skill that dispatches. The procedure is
+  `executing-plans/references/dispatch.md`, and the routing table and its validator are
+  `executing-plans/references/stack-routing.md` and `executing-plans/scripts/validate-stack-routing.py`.
+  Every host lists ten planning skills; Cursor lists its own two besides. A plan whose roster
+  line cites the old routing path no longer resolves it; cite
+  `planning/skills/executing-plans/references/stack-routing.md`.
+- **brainstorming keeps its gate and drops its ceremony.** It asks only what it cannot infer,
+  in batches, through the host's question tool, and states the rest as assumptions. It presents
+  the design once, and only an explicit yes approves it. It no longer claims every project:
+  work that `planning-projects` would triage as Direct needs no brainstorm.
+- **planning-projects' Phase -1 is one paragraph.** Ask only what would change the plan and the
+  repo cannot answer; state an inferred answer as an assumption; batch the questions.
+- **Shipped skills carry no Sources sections.** The citations moved to `docs/sources.md`.
+- **On Codex, both skills still wait for the answers.** A new test builds the Codex host and
+  fails if either rewrite pattern stops matching.
+- **New, on demand only: `evals/behaviour-rules/`.** Three `claude plugin eval` cases, each with
+  a sabotage control, plus `scripts/eval-variants.py` (a with/without build per rule) and
+  `scripts/eval-report.py` (pilot, matrix, table and tool-used checks). It does not run in
+  `scripts/run-tests.sh` or any gate. The measurement itself has not been taken: an eval case
+  needs Bash under the OS sandbox, and the release machine could not create its namespaces.
+
 ## 1.4.3 — 2026-11-10
 
 - **On Codex, a plan waits for the owner's answers.** Outside Plan mode, Codex asks through

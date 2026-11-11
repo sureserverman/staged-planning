@@ -52,7 +52,7 @@ becomes a visible, reconciled dispatch instead of an invisible one.
 
 **If the matched stack skill isn't installed**, don't silently substitute a different one —
 do the work without it and say so in the result
-(`../../dispatching-parallel-agents/references/stack-routing.md` § *Resolving a capability that
+(`stack-routing.md` § *Resolving a capability that
 is not installed*). Codex has no plugin-enablement switch and no capability index, so there
 is nothing to resolve from disk. A routed role the installer never wrote cannot be spawned:
 that is the dispatch Stop condition, not an inline run.
@@ -254,7 +254,7 @@ is silent. Put the reason in the body; keep the trailer bare.
 **A routed agent that does not commit does not become an inline task.** When a spawned
 agent does the work and reports without committing, this session runs the `Test:` and writes
 the commit, and **the trailer still names the agent** — it records who did the work, not who
-typed `git commit` (`../../dispatching-parallel-agents/references/stack-routing.md` § *Not
+typed `git commit` (`stack-routing.md` § *Not
 every routed agent can commit*).
 
 Name the actual role that ran the work (`planning:<agent>`), not the routing table's

@@ -49,7 +49,7 @@ becomes a visible, reconciled dispatch instead of an invisible one.
 
 **If the matched capability's plugin isn't installed**, don't fall through to `generalPurpose`
 with no domain knowledge — resolve it from disk per
-`../../dispatching-parallel-agents/references/stack-routing.md` § *Resolving a capability
+`stack-routing.md` § *Resolving a capability
 whose plugin isn't enabled*. A Cursor install copies only the plugin folder, so no
 `capability-index.json` is on disk beside it: the component's path comes from the routing
 table's plugin and name (`../SKILL.md` § Step 3.2 — Split by parallelism carries the full
@@ -258,7 +258,7 @@ is silent. Put the reason in the body; keep the trailer bare.
 agent cannot commit (an installed stack agent marked `readonly: true`, for one), the agent
 does the work and reports, this session runs the `Test:` and writes the commit, and **the
 trailer still names the agent** — it records who did the work, not who typed `git commit`
-(`../../dispatching-parallel-agents/references/stack-routing.md` § *Not every routed agent
+(`stack-routing.md` § *Not every routed agent
 can commit*).
 
 Name the actual agent name that ran the work, not the routing table's suggestion, and

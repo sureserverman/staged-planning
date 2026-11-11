@@ -49,7 +49,7 @@ becomes a visible, reconciled dispatch instead of an invisible one.
 
 **If the matched capability's plugin isn't enabled**, don't fall through to `general-purpose`
 with no domain knowledge — resolve it from disk per
-`../../dispatching-parallel-agents/references/stack-routing.md` § *Resolving a capability
+`stack-routing.md` § *Resolving a capability
 whose plugin isn't enabled*. A component flagged `requires_enablement` (hooks / MCP) can't be
 lazy-loaded: stop and ask the user to enable that plugin.
 
@@ -246,7 +246,7 @@ is silent. Put the reason in the body; keep the trailer bare.
 agent's tool grant has no `git commit` (an installed stack agent with a read-only git grant,
 for one), the agent does the work and reports, this session runs the `Test:` and writes the
 commit, and **the trailer still names the agent** — it records who did the work, not who
-typed `git commit` (`../../dispatching-parallel-agents/references/stack-routing.md` § *Not
+typed `git commit` (`stack-routing.md` § *Not
 every routed agent can commit*).
 
 Name the actual `subagent_type` that ran the work, not the routing table's suggestion, and

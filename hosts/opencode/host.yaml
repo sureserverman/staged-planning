@@ -8,7 +8,7 @@ install_shape:
   # Measured with the built package loaded by local path, no model: its config hook's
   # additions take effect. `opencode debug config` shows the package's skills path under
   # skills.paths and its external_directory allow merged after the user's rules;
-  # `opencode debug skill` lists the 11 skills; `opencode debug agent` lists the allow for
+  # `opencode debug skill` lists the package's skills; `opencode debug agent` lists the allow for
   # the package folder after the default `* ask`; `opencode agent list` shows the 4 agents.
   # A skill root named in the global config's `skills` array loads: `opencode debug config`
   # shows it normalized to skills.paths, `opencode debug skill` lists the skill, and a
@@ -115,7 +115,7 @@ rewrites:
 features:
   - id: skills
     status: native
-    note: 'the package''s config hook adds its skills folder under skills.paths and `opencode debug skill` listed the 11 skills (probe); each is invoked by its bare name (the names ruling), since natural-language auto-trigger is unreliable on OpenCode; the hook also allows reads across the package folder under permission.external_directory, which opencode run otherwise auto-rejects'
+    note: 'the package''s config hook adds its skills folder under skills.paths and `opencode debug skill` listed every skill the package ships (probe); each is invoked by its bare name (the names ruling), since natural-language auto-trigger is unreliable on OpenCode; the hook also allows reads across the package folder under permission.external_directory, which opencode run otherwise auto-rejects'
   - id: agents
     status: equivalent
     note: 'no plugin manifest ships agents: the package''s config hook adds the four to cfg.agent, each named by its file name, with mode subagent, a permission map and no model; `opencode agent list` showed them and an injected subagent ran through the task tool (probe). Lost: the per-agent model and effort pins core agents carry, as the hook sets neither; reopen if OpenCode gains a provider-neutral per-agent model or effort setting a package can ship'

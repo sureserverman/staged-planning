@@ -1,6 +1,6 @@
 # planning
 
-An eleven-skill pipeline (v1.4.3) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
+A ten-skill pipeline (v2.0.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
 
 ## Highlights
 
@@ -32,7 +32,7 @@ vague idea
     │
     ▼
 brainstorming           ── validate the design via Q&A: purpose, constraints,
-    │                      alternatives, risks. One question at a time.
+    │                      alternatives, risks. Batched questions.
     ▼
 architecting-projects   ── (designs with a structural surface) research 2–4
     │                      architecture candidates via parallel researcher
@@ -43,11 +43,8 @@ planning-projects       ── triage a format first (Direct / Light / Standard 
     │                      Blocks / Dispatch fields, Red-Green cycles, gates.
     ▼
 executing-plans         ── drive the plan: Red-Green loops, tiered test-scope
-    │                      gates, fan independent tasks out for parallel run.
-    ▼
-dispatching-parallel-agents  ── one agent per task marked Dispatch YES whose
-                               dependencies are all green; integrate results
-                               respecting the dependency graph.
+                           gates, one agent per task marked Dispatch YES whose
+                           dependencies are all green.
 
   ┌─ cross-cutting, no fixed position in the flow ────────────────────────┐
   │ honest-gates       ── the integrity contract every gate above obeys.  │
@@ -58,7 +55,7 @@ dispatching-parallel-agents  ── one agent per task marked Dispatch YES whose
 
 ### `brainstorming`
 
-Use **before** any non-trivial creative or implementation work — new features, refactors, migrations, behavior changes. Turns a vague idea into a validated design by exploring purpose, constraints, alternatives, and risks one question at a time. Terminal handoff is to `architecting-projects` (designs with a structural surface) or straight to `planning-projects`.
+Use **before** any non-trivial creative or implementation work — new features, refactors, migrations, behavior changes. Turns a vague idea into a validated design by exploring purpose, constraints, alternatives, and risks, asking only what it cannot infer, in batches. Terminal handoff is to `architecting-projects` (designs with a structural surface) or straight to `planning-projects`.
 
 **Triggers:** "I'm thinking about adding X", "what's the best way to", "should I refactor", "design a new", "let's brainstorm".
 
@@ -89,7 +86,7 @@ For big projects (roughly >6 stages / >25 tasks, or multiple independently shipp
 
 ### `executing-plans`
 
-Takes a plan file produced by `planning-projects` and executes it. The skill is a **trunk plus references**: what fires on every run stays in `SKILL.md`, while the master-plan and light-plan execution models, the review-scope and opt-out rules, the dispatch-fidelity rationale, the gate-failure procedure, the progress-state schema and the sources load from `skills/executing-plans/references/` only when their condition is met. `planning-projects` is split the same way (plan template, task-field specs, set-valued-check rules). Drives Red-Green loops, respects the stage-gate model, and dispatches independent tasks through `dispatching-parallel-agents` — **without a confirmation turn, because approving the plan was the request** (a standing caution against calling the Agent tool is conditional, not absolute; with no plan in play it still applies and you still ask). **A bug found anywhere during a run is treated as a defect class**: diagnose, name the set, enumerate it with a command, and fix every member — the whole project is the search space, not the plan's blast radius, and the sweep costs a command rather than a dispatch, so no review tier gates it. It executes every rung of the format ladder — a **light plan** runs with proportionate machinery (Preflight-lite, inline no-parallel execution, one whole-diff review instead of per-task Tier-1, a single stated version bump; whether an evaluator runs beside that review comes from the review tier, not the format — see the composition rule below). Also executes **master plans** (`*-master-plan.md`): sub-plans run in register dependency order, each via the normal single-plan flow (ideally one per fresh session — the master file is the cross-session handoff artifact); each sub-plan completion flips its register `Status`, runs that entry's cross-plan `**Gate:**` checks, and commits `"Sub-plan N green"`; version bumps are deferred from sub-plan close-outs to the single master close-out.
+Takes a plan file produced by `planning-projects` and executes it. The skill is a **trunk plus references**: what fires on every run stays in `SKILL.md`, while the master-plan and light-plan execution models, the review-scope and opt-out rules, the dispatch-fidelity rationale, the gate-failure procedure, the dispatch procedure and the progress-state schema load from `skills/executing-plans/references/` only when their condition is met. `planning-projects` is split the same way (plan template, task-field specs, set-valued-check rules). Drives Red-Green loops, respects the stage-gate model, and dispatches independent tasks per its `references/dispatch.md` — **without a confirmation turn, because approving the plan was the request** (a standing caution against calling the Agent tool is conditional, not absolute; with no plan in play it still applies and you still ask). **A bug found anywhere during a run is treated as a defect class**: diagnose, name the set, enumerate it with a command, and fix every member — the whole project is the search space, not the plan's blast radius, and the sweep costs a command rather than a dispatch, so no review tier gates it. It executes every rung of the format ladder — a **light plan** runs with proportionate machinery (Preflight-lite, inline no-parallel execution, one whole-diff review instead of per-task Tier-1, a single stated version bump; whether an evaluator runs beside that review comes from the review tier, not the format — see the composition rule below). Also executes **master plans** (`*-master-plan.md`): sub-plans run in register dependency order, each via the normal single-plan flow (ideally one per fresh session — the master file is the cross-session handoff artifact); each sub-plan completion flips its register `Status`, runs that entry's cross-plan `**Gate:**` checks, and commits `"Sub-plan N green"`; version bumps are deferred from sub-plan close-outs to the single master close-out.
 
 Preflight includes a **git bootstrap** — if the project isn't a repo it runs `git init` (and offers a GitHub remote) so the per-task commits have somewhere to land. Execution **runs to completion**: stage gates are checkpoints, not approval gates, so it doesn't pause between green stages to ask permission — only the documented stop conditions halt it. At each stage gate it invokes a matching **platform stage-verify skill**, if one is installed whose description matches the project type (e.g. an Android build-and-smoke-test skill: build the debug APK, and if an adb device is attached, install + smoke-launch + run instrumented tests). At close-out it **bumps versions** for whatever the plan changed, across every mirror of the version string (e.g. a plugin's `plugin.json` and the root `marketplace.json`).
 
@@ -131,19 +128,13 @@ The `light` bar is a size the diff can be measured against, with escalation carr
 
 **Triggers:** "execute this plan", "run the plan", "drive this plan to green", "work the plan in plan.md".
 
+Dispatch routing is table-driven: `skills/executing-plans/references/stack-routing.md` routes each `Dispatch: YES` task to a subagent. This plugin's own work goes to its agents (`planning:design-handoff-reproducer`, `planning:architecture-researcher`, `planning:code-reviewer`); stack work goes to a stack-specialist agent, if one is installed whose description matches the stack, otherwise `general-purpose`, with the stack's skill if one is installed. The table routes nothing else: a `Dispatch: NO` task runs inline. A CI-enforced `validate-stack-routing.py` check reads every cell of the file's tables and fails the build on any agent or skill this plugin does not ship, and on any `<plugin>:<name>` id, backticked or not, from another plugin.
+
 ### `applying-design-handoff`
 
 Redesigns an app to **precisely reproduce a Claude Design handoff pack** (the spec bundle from claude.ai/design — tokens, components, layout, assets), reshaping functionality to fit the design where they conflict. Auto-detects the input (a local exported bundle or a live claude.ai design-system project via the `DesignSync` tool), inventories the app and its `workflow-spec` contracts, builds a design→app fidelity map, and writes a **reconciliation report** — the design wins, but every behavior change is declared via `workflow-spec` (`Changes`/`Removes WF-*`) and destructive changes require user sign-off. Implementation is cross-platform: it delegates to the **`design-handoff-reproducer`** subagent for precise per-slice reproduction, briefed with whatever stack skill the routing table names for the surface, then runs a fidelity verify loop (separate evaluator, rubric-graded, max 3 iterations). `executing-plans` drives it for a design-handoff/redesign task and fires the fidelity loop as a stage-gate hook.
 
 **Triggers:** "reproduce this design", "apply the handoff pack", "redesign to match the design", "implement the Claude Design spec".
-
-### `dispatching-parallel-agents`
-
-Used by `executing-plans` (or directly) when a task is marked `Dispatch YES` and its dependencies are green — one such task or many. Dispatches one agent per task, runs them concurrently, integrates results respecting the plan's dependency graph.
-
-**Triggers:** "dispatch these tasks in parallel", "run these in parallel", "fan out the parallel-marked tasks".
-
-Routing is table-driven: `references/stack-routing.md` routes each `Dispatch: YES` task to a subagent. This plugin's own work goes to its agents (`planning:design-handoff-reproducer`, `planning:architecture-researcher`, `planning:code-reviewer`); stack work goes to a stack-specialist agent, if one is installed whose description matches the stack, otherwise `general-purpose`, with the stack's skill if one is installed. The table routes nothing else: a `Dispatch: NO` task runs inline. A CI-enforced `validate-stack-routing.py` check reads every cell of the file's tables and fails the build on any agent or skill this plugin does not ship, and on any `<plugin>:<name>` id, backticked or not, from another plugin.
 
 ### `honest-gates`
 
@@ -353,7 +344,7 @@ configured, or wherever a configured records resolver says
 "I want to add offline sync"
 ```
 
-`brainstorming` fires and works through purpose, constraints, and alternatives one question at a time. Because the design has a structural surface, it hands off to `architecting-projects`, which fans out `architecture-researcher` agents over 2–4 candidates and presents a comparison matrix for your explicit approval, then writes the `ARCH-NN` doc.
+`brainstorming` fires and works through purpose, constraints, and alternatives, asking only what it cannot infer, in batches. Because the design has a structural surface, it hands off to `architecting-projects`, which fans out `architecture-researcher` agents over 2–4 candidates and presents a comparison matrix for your explicit approval, then writes the `ARCH-NN` doc.
 
 ```text
 "plan it"
@@ -365,11 +356,11 @@ configured, or wherever a configured records resolver says
 "execute the plan"
 ```
 
-`executing-plans` re-checks the decisions for staleness at Preflight, drives Red-Green loops with a commit per green task, fans independent tasks out through `dispatching-parallel-agents`, runs tiered gates with two-tier review, and at close-out bumps versions across every mirror, reconciles the backlog, and records any supersede the plan declared.
+`executing-plans` re-checks the decisions for staleness at Preflight, drives Red-Green loops with a commit per green task, fans independent tasks out to subagents, runs tiered gates with two-tier review, and at close-out bumps versions across every mirror, reconciles the backlog, and records any supersede the plan declared.
 
 ## Why a separate plugin
 
-All eleven skills reference each other by name (handoffs from brainstorming → architecting-projects → planning-projects → executing-plans → dispatching-parallel-agents; executing-plans → applying-design-handoff for redesign tasks; planning-projects/executing-plans ↔ backlog, decisions and workflow-spec; and honest-gates binding every gate the pipeline reports). Splitting them across plugins would break the handoffs. They have no transitive runtime dependencies and can be installed alongside any other plugin without conflict.
+All ten skills reference each other by name (handoffs from brainstorming → architecting-projects → planning-projects → executing-plans; executing-plans → applying-design-handoff for redesign tasks; planning-projects/executing-plans ↔ backlog, decisions and workflow-spec; and honest-gates binding every gate the pipeline reports). Splitting them across plugins would break the handoffs. They have no transitive runtime dependencies and can be installed alongside any other plugin without conflict.
 
 ## Owned execution protocol (development contract)
 

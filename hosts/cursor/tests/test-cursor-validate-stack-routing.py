@@ -27,7 +27,7 @@ import sys
 import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-REL = os.path.join("skills", "dispatching-parallel-agents", "scripts")
+REL = os.path.join("skills", "executing-plans", "scripts")
 FORK = os.path.join(REPO, "hosts", "cursor", "overrides", REL, "validate-stack-routing.py")
 FAILS = []
 HEAD = "| Task | Subagent type | Skill |\n|---|---|---|\n"
@@ -60,7 +60,7 @@ try:
         """The built validator over a throwaway plugin whose stack-routing.md is `doc`."""
         n[0] += 1
         root = os.path.join(tmp, f"plugin-{n[0]}")
-        dpa = os.path.join(root, "skills", "dispatching-parallel-agents")
+        dpa = os.path.join(root, "skills", "executing-plans")
         os.makedirs(os.path.join(dpa, "references"))
         shutil.copytree(os.path.dirname(built), os.path.join(dpa, "scripts"),
                         ignore=shutil.ignore_patterns("__pycache__"))

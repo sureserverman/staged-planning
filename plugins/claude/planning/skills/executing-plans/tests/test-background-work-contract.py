@@ -47,7 +47,7 @@ TASKEXEC = os.path.join(REFS, "task-execution.md")
 CLOSEOUT = os.path.join(REFS, "close-out.md")
 HANDOFF = os.path.join(REFS, "session-handoff.md")
 STAGEGATE = os.path.join(REFS, "stage-gate.md")
-DISPATCH = os.path.join(SKILLS, "dispatching-parallel-agents", "SKILL.md")
+DISPATCH = os.path.join(REFS, "dispatch.md")
 HELPER = os.path.join(HERE, "test-gate-remediation-contract.py")
 REPO = os.path.dirname(os.path.dirname(SKILLS))
 
@@ -57,6 +57,8 @@ DISPATCH_GREP = ["git", "grep", "-l", "-E", "subagent_type|Agent tool|dispatch",
 DISPATCH_EXTRA = (
     # Phase 1 grounding is often handed to a research agent; the grep does not see it.
     "core/skills/brainstorming/SKILL.md",
+    # The dispatch procedure and its brief are a reference, not a trunk.
+    "core/skills/executing-plans/references/dispatch.md",
 )
 # Caught by the grep, yet dispatches no agent. Keyed by the path below core/, so a host
 # override of the same name is exempt for the same reason.
@@ -65,7 +67,7 @@ EXEMPT = {
         "names dispatch only to say its rules cost a command and no agent dispatch",
     "skills/planning-projects/SKILL.md":
         "writes the plan's Dispatch fields and its Preflight probe line; executing-plans and "
-        "dispatching-parallel-agents dispatch and brief the agents",
+        "its dispatch reference dispatch and brief the agents",
 }
 
 spec = importlib.util.spec_from_file_location("_gate_contract", HELPER)
@@ -126,7 +128,8 @@ def dispatching_files():
                              check=True).stdout
         tracked = subprocess.run(
             ["git", "ls-files", "hosts/*/overrides/agents/*",
-             "hosts/*/overrides/skills/*/SKILL.md", "hosts/*/add/agents/*"],
+             "hosts/*/overrides/skills/*/SKILL.md",
+             "hosts/*/overrides/skills/*/references/dispatch.md", "hosts/*/add/agents/*"],
             cwd=REPO, capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError) as exc:
         return [], [], str(exc)

@@ -22,7 +22,7 @@ The resolution: the caution is **conditional, not absolute**. Approving a plan w
 execution model mandates dispatch **is** the request the caution is waiting for — the
 confirmation already happened at plan approval. So a `Dispatch: YES` task, a
 tier-mandated review, an evaluator, and the Preflight probe itself are dispatched without
-a further confirmation turn: `../../dispatching-parallel-agents/references/stack-routing.md` § "Not
+a further confirmation turn: `stack-routing.md` § "Not
 every routed agent can commit" states the same precedence for the handoff side of this rule.
 
 The bound, stated with equal weight: with no plan in play and no mandate — a question
@@ -65,7 +65,7 @@ hard stop.
 1. **Enumerate the roster.** Sweep **every task in the plan**, across all stages, and
    list in the Preflight report each task whose `Dispatch:` field reads `YES`, with the
    agent it routes to — on OpenCode the task tool takes the agent's name — per
-   `../../dispatching-parallel-agents/references/stack-routing.md`:
+   `stack-routing.md`:
 
    ```
    Dispatch roster (Dispatch: YES) — <n> of <total> tasks
@@ -173,7 +173,7 @@ the trunk's authorization rule deletes.
 **On OpenCode the mechanism is the `task` permission, and that sharpens the rule.** "Enable
 dispatch" is one concrete thing the user can grant, so an executor that runs the roster
 inline instead has skipped a decision that took one word to make. Every row of
-`../../dispatching-parallel-agents/references/stack-routing.md` names an agent this session
+`stack-routing.md` names an agent this session
 can dispatch, so "routed inline" is not an outcome here, only an undisclosed substitution
 wearing that name. Both review tiers are dispatches of `code-reviewer`, so a denied `task`
 permission takes the reviews down with the tasks: one Stop condition, raised at Preflight

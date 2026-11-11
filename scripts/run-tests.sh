@@ -36,7 +36,7 @@ cd "$REPO" || exit 1
 # rather than checks. Out-of-tree validators that do not follow the convention are
 # listed explicitly below.
 EXTRA_VALIDATORS=(
-  "core/skills/dispatching-parallel-agents/scripts/validate-stack-routing.py"
+  "core/skills/executing-plans/scripts/validate-stack-routing.py"
 )
 
 # Generated output: plugins/<host>/planning and packages/<host> are copies of core/ +

@@ -44,6 +44,7 @@ the one you need rather than working from memory.
 | `references/preflight-checks.md` | running Preflight — the procedure for each check, and the amendment protocol |
 | `references/dispatch-fidelity.md` | the roster, probe or `Review: skip` snapshot needs justifying rather than just following — **and the authority on this host's table-routed inline and its three-term count** |
 | `references/task-execution.md` | dispatching or inlining a task, writing its test, or running Tier 1 |
+| `references/dispatch.md` | a `Dispatch: YES` task is ready — the procedure and the brief |
 | `references/bug-is-a-class.md` | a bug surfaced and the set it belongs to has to be named |
 | `references/stage-gate.md` | running a stage gate — report shapes, verify hooks, evaluator, Tier 2, dispositions |
 | `references/gate-failure-procedure.md` | a stage gate has failed |
@@ -53,7 +54,6 @@ the one you need rather than working from memory.
 | `references/session-handoff.md` | a stage or sub-plan gate has passed — whether to continue or hand off; or runs with `--adopt-handoff <id>` |
 | `../planning-projects/references/owner-decisions.md` | an owner decision's scope is in doubt — what each catalog point asks |
 | `references/integration.md` | routing to another skill or agent, or citing the opt-out rules |
-| `references/sources.md` | citing why a rule here exists |
 
 Paths are relative to this skill's directory; from a dispatch use
 `references/<file>`.
@@ -105,7 +105,7 @@ Work these in order, tracking them in the plan's `Status:` fields and the execut
 1. **Load and critique the plan** — raise concerns before starting
 2. **Run Preflight** — verify every check; stop on failure
 3. **For each stage, in order:**
-   a. Dispatch `Dispatch: YES` tasks via `dispatching-parallel-agents`; work `Dispatch: NO` tasks in the main session
+   a. Dispatch `Dispatch: YES` tasks per `references/dispatch.md`; work `Dispatch: NO` tasks in the main session
    b. Drive each task through its Red-Green loop
    c. Run the stage gate; stop if it fails
    d. After the gate commit, run `context-usage.py`; hand off only on its `handoff` verdict
@@ -326,7 +326,7 @@ Decision tree: `references/preflight-checks.md`.
 
 1. **Enumerate the roster** — sweep **every task in the plan, across all stages**, and list
    each one whose `Dispatch:` reads `YES` with the route it takes per
-   `../dispatching-parallel-agents/references/stack-routing.md` — the role where the table
+   `references/stack-routing.md` — the role where the table
    names one, or the table-routed inline where it names none:
 
    ```
@@ -441,7 +441,7 @@ Scan the stage's tasks. A task is **dispatchable** when every task in its `Depen
 
 ### Step 3.2 — Split by parallelism
 
-- Tasks with `Dispatch: YES` and no file conflicts with another ready task → hand to `dispatching-parallel-agents`, concurrently (at most 6 spawned at once on Codex — `[agents] max_threads`)
+- Tasks with `Dispatch: YES` and no file conflicts with another ready task → dispatch per `references/dispatch.md`, concurrently (at most 6 spawned at once on Codex — `[agents] max_threads`)
 - Tasks with `Dispatch: YES` that modify files another ready task modifies → still dispatched, one after another
 - Tasks with `Dispatch: NO` → work in the main session, always
 
@@ -853,14 +853,9 @@ Ordered procedure, and what the report must contain: `references/close-out.md`.
 
 ---
 
-## Sources and rationale
-
-What each source is load-bearing for: `references/sources.md`.
-
 ## Integration
 
-This skill routes to `planning-projects` (the plan's author),
-`dispatching-parallel-agents` (every `Dispatch: YES` task), `backlog` and `decisions` (at
+This skill routes to `planning-projects` (the plan's author), `backlog` and `decisions` (at
 close-out), `workflow-spec` (the close-out audit), the `planning:code-reviewer` agent (both
 review tiers) and a fresh agent in the goal-evaluator role (gate and close-out). What each is
 for, when it fires, and the **Review opt-out** rules: `references/integration.md`.
