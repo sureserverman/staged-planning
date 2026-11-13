@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 90eda47b189c7b5cd83d9fae10c8858cd0365082719016edb827321839ea7d75
+  base_sha256: 08786518ff140dfea3c3d42d1b745f369a8ff619484b0e8d2ca686c9d48f0ef8
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -49,7 +49,7 @@ skills/executing-plans/references/plan-continue-hook.md:
 skills/executing-plans/references/preflight-checks.md:
   base_sha256: dce2921011f25d9ec1436da43df755d0a2a23550995ef1c7411627594ab7f7ed
 skills/executing-plans/references/progress-state-file.md:
-  base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
+  base_sha256: 3cf88f8076c323639a20f173f08d513766307636c29ad2699b7d3e6b15d963d5
 skills/executing-plans/references/review-scope.md:
   base_sha256: ab1060b4c86442377d6c8196515a26c00069d28a30ad65bf45c6a81cae842747
 skills/executing-plans/references/session-handoff.md:
@@ -71,7 +71,7 @@ skills/executing-plans/scripts/statusline-chain.sh:
   base_sha256: 930df5bf1e77fdf09366ff3723369e7bfe6aad6980feff674cff2219ad4c1fd2
   host_fact: The Cursor CLI pipes its own payload to the statusLine command, and Cursor writes no status line script of its own, so the fork defaults the base script to ~/.cursor/statusline.sh and passes the payload bytes through unread to the base and to plan-progress.py.
   depends_on:
-    skills/executing-plans/scripts/plan-progress.py: 729dd773531953328579f7241cc8316c42bad39bb2062b7c3f8d25d910784387
+    skills/executing-plans/scripts/plan-progress.py: 74811b125c97b942a9ccd0afc2fe75e93fd7c6d251169741c554c06fa8b937e7
 skills/executing-plans/scripts/statusline-install.py:
   base_sha256: 879e0e5ed07808911d8597d1e5d2086c18616e627244e0b5af7096b4cdc3c80d
   host_fact: The Cursor CLI reads statusLine from ~/.cursor/cli-config.json, not from Claude Code's settings.json, a plugin cannot contribute it, and a local install is not a versioned cache, so the fork writes, repairs and removes that one key there, pointing at the sibling statusline-chain.sh.

@@ -20,7 +20,7 @@ returns the original receipt.
 | When | Operation | Payload |
 |------|-----------|---------|
 | Preflight starts, on the run's branch (after git bootstrap's branch or worktree) | `init` | `{"plan": "<plan path>", "source": "<the owner's request, quoted>", "scope": "plan"}` (optional `budget`, the plan's remediation budget) |
-| A stage opens (Step 3.0, before its first task) | `transition` | `{"phase": "task", "stage": 2}` — no task, so `owner-decision.py match` reads the stage the run is in, not the last gate |
+| A stage opens (Step 3.0, before its first task) | `transition` | `{"phase": "task", "stage": 2}` — no task, so `owner-decision.py match` reads the stage the run is in, not the last gate. A `task` transition naming a `stage` and no `task` empties `task` and `task_desc`, so the bar shows `S2/…` and no task from the stage before. A `gate` transition keeps them, so the status-lag marker still reads the last task at the gate |
 | A task starts | `transition` | `{"phase": "task", "stage": 2, "task": "2.3", "task_desc": "<title>"}` |
 | A stage gate runs | `transition` | `{"phase": "gate", "stage": 2}` |
 | A remediation round starts, is verified, ends | `begin-round`, `record-verification`, `complete-round` | see the contract; the gate must first be named in a `transition` `gate` field |

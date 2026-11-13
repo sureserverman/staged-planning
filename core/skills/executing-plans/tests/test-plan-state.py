@@ -72,6 +72,49 @@ def handoff_id_cases(Case):
     return HandoffId
 
 
+PROGRESS = HERE.parent / 'scripts' / 'plan-progress.py'
+STAGE_PLAN = ('# Plan: fixture\n\n## Stage 1: first\n\n'
+              + ''.join(f'### Task 1.{n}: step {n}\n- **Status:** [x]\n\n' for n in range(1, 5))
+              + '## Stage 2: second\n\n### Task 2.1: next step\n- **Status:** [ ]\n')
+
+
+def stage_open_cases(Case):
+    class StageOpen(Case):
+        """A stage opens with a transition naming no task. The bar must then
+        show the stage alone, not the last stage's task."""
+
+        def test_stage_open_clears_previous_task(self):
+            plan = self.repo/'fixture-plan.md'
+            plan.write_text(STAGE_PLAN)
+            self.call('init', {'plan': str(plan), 'scope': 'fixture',
+                               'source': 'owner: execute the fixture plan'})
+            self.call('transition', {'phase': 'task', 'stage': 1, 'task': '1.4',
+                                     'task_desc': 'step 4'})
+            self.call('transition', {'phase': 'task', 'stage': 2})
+            shown = self.state()
+            self.assertEqual((shown['task'], shown['task_desc']), ('', ''))
+            self.call('transition', {'phase': 'task', 'stage': 2, 'task': '2.1',
+                                     'task_desc': 'next step'})
+            self.assertEqual(self.state()['task'], '2.1')
+            self.call('transition', {'phase': 'task', 'stage': 2})
+            env = {**os.environ, 'STAGED_PLANNING_CONFIG': str(self.repo/'no-config.yaml')}
+            out = subprocess.run([sys.executable, str(PROGRESS)], cwd=self.repo, env=env,
+                                 capture_output=True, text=True, timeout=20).stdout
+            self.assertIn('S2/2', out)
+            self.assertNotIn('T1.4', out)
+            self.assertNotIn('T2.1', out)
+
+        def test_gate_transition_keeps_the_task(self):
+            # The status-lag marker reads the task at the gate, where unticked markers matter.
+            self.init()
+            self.call('transition', {'phase': 'task', 'stage': 1, 'task': '1.4',
+                                     'task_desc': 'step 4'})
+            self.call('transition', {'phase': 'gate', 'stage': 1})
+            shown = self.state()
+            self.assertEqual((shown['task'], shown['task_desc']), ('1.4', 'step 4'))
+    return StageOpen
+
+
 NO_DOCUMENT = ('show',)
 TAKES_DOCUMENT = ('init', 'transition', 'begin-round', 'record-verification', 'complete-round',
                   'authorize', 'set-blocker', 'strategy-review', 'migrate', 'finish', 'recover',
@@ -243,7 +286,8 @@ def suite(group):
     from workflow_state_cases import Case, Storage, Rounds, ProjectionReaders, Dispositions, Strategy
     if group == 'storage':
         return unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(c)
-                                  for c in (Storage, ProjectionReaders, stdin_cases(Case)))
+                                  for c in (Storage, ProjectionReaders, stdin_cases(Case),
+                                            stage_open_cases(Case)))
     if group == 'dispositions':
         return unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(c)
                                   for c in (Dispositions, handoff_id_cases(Case)))

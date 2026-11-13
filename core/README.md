@@ -1,6 +1,6 @@
 # planning
 
-A ten-skill pipeline (v2.0.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
+A ten-skill pipeline (v2.1.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
 
 ## Highlights
 

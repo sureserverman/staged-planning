@@ -349,12 +349,38 @@ def read_sidecar(cwd):
     return data if isinstance(data, dict) else None
 
 
+# The renderer, beside this script: its current_run() is the display's choice of run.
+_PROGRESS = pathlib.Path(__file__).resolve().with_name("plan-progress.py")
+
+
+def displayed_run_root(cwd):
+    """The worktree root of the run plan-progress.py marks as current from cwd, or None.
+
+    current_run() takes this worktree's fresh run, else the one fresh run among the
+    other worktrees (read with the hooks' other_runs), else this worktree's stale run,
+    and skips a finished run. Using it here keeps the sidecar with the run
+    the planning mod pins, which is the run its writer reports on."""
+    try:
+        spec = importlib.util.spec_from_file_location("staged_planning_plan_progress",
+                                                      _PROGRESS)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        state_file = mod.current_run(cwd)["state_file"]
+    except Exception:
+        return None
+    return str(pathlib.Path(state_file).parent.parent) if state_file is not None else None
+
+
 def sidecar_root(cwd, require_state=False):
-    """Where the sidecar lives: the nearest directory at or above cwd holding
+    """Where the sidecar lives: the worktree of the run the display marks as current
+    (displayed_run_root); else the nearest directory at or above cwd holding
     .claude/plan-progress.json, found as plan-progress.py's find_state() finds it;
     else cwd, or None with `require_state`. The executor may run this script from
     below the repo root, and the writer (--write-sidecar) uses this same function,
     so the two cannot disagree about where the file is."""
+    pinned = displayed_run_root(cwd)
+    if pinned is not None:
+        return pinned
     try:
         start = pathlib.Path(cwd).resolve()
         for d in (start, *start.parents):

@@ -149,8 +149,12 @@ def _records_home():
         return None
 
 
-def records_plans_dir(repo_root):
+def records_plans_dir(repo_root, in_tree_root=None):
     """The `plans/` directory of this repo's records home, or None.
+
+    One resolver call, for `repo_root`. On exit 3 the in-tree default is
+    `<in_tree_root>/docs` when `in_tree_root` is given: a linked worktree asks for the
+    main worktree's path (a managed home is shared) but keeps its own in-tree records.
 
     The records home comes from lib/records_home.py, read-only: exit 0 is a configured
     resolver's home, exit 3 is the repo default `<repo>/docs`. Exit 2 (a resolver that
@@ -174,6 +178,8 @@ def records_plans_dir(repo_root):
         return None
     if code not in (0, 3) or not home:
         return None
+    if code == 3 and in_tree_root is not None:
+        home = Path(in_tree_root) / "docs"
     plans = Path(home) / "plans"
     try:
         return plans if plans.is_dir() else None
@@ -1538,6 +1544,102 @@ def projection_state(state_file):
     return state
 
 
+# The hooks' run reader, at <plugin root>/hooks/ (owner-decision.py loads it the same way).
+_CLASSIFY = Path(__file__).resolve().parents[3] / "hooks" / "plan_continue_classify.py"
+
+
+_CLASSIFY_MODULE = None
+
+
+def classify_module():
+    """hooks/plan_continue_classify.py, loaded once per process."""
+    global _CLASSIFY_MODULE
+    if _CLASSIFY_MODULE is None:
+        spec = importlib.util.spec_from_file_location("plan_continue_classify", _CLASSIFY)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _CLASSIFY_MODULE = module
+    return _CLASSIFY_MODULE
+
+
+def plan_closed_out(text, path=None):
+    """plan_is_eligible()'s close-out rule alone: **Abandoned:**, or **Completed:**
+    with no gate check blocked."""
+    if pu.ABANDONED_RE.search(text):
+        return True
+    return bool(pu.COMPLETED_RE.search(text)) and not pu.plan_blocked(text, path)[0]
+
+
+def run_finished(state, root, plan_path):
+    """True when a state file's run is over, so it pins nothing.
+
+    Over is either the hooks' own rule (a `complete` owned run whose plan has no open
+    task) or a plan closed out while the state is not in `closeout`: close-out writes
+    the **Completed:** line before `finish`, and that run is still live."""
+    try:
+        if classify_module().finished(state, root):
+            return True
+    except Exception:
+        pass    # no hooks reader: the plan's own close-out line still decides
+    if state.get("phase") == "closeout" and stale_hours(state) is None:
+        return False    # a stale closeout over a closed-out plan is a leftover
+    try:
+        return plan_closed_out(_read_plan(plan_path), plan_path)
+    except Exception:
+        return False    # an unreadable plan is not shown finished
+
+
+GIT_IDENTITY = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+
+
+def fresh_runs_elsewhere(root):
+    """[(state file, state)] for each fresh run in the repo's OTHER worktrees.
+
+    Read with the hooks' other_runs(), then held to the display's own
+    rule: a finished run (run_finished) or a stale one (not updated for STALE_AFTER_H)
+    does not compete. A worktree that is gone or unreadable holds nothing."""
+    runs, _ = classify_module().other_runs(root)
+    fresh = []
+    for wt, state in runs:
+        state_file = Path(wt) / ".claude" / "plan-progress.json"
+        try:
+            plan = pinned_plan_path(state, state_file)
+            if stale_hours(state) is None and not run_finished(state, Path(wt), plan):
+                fresh.append((state_file, state))
+        except Exception:
+            continue
+    return fresh
+
+
+def records_root(root):
+    """The path to resolve the records home for: the main worktree's when `root` is
+    in a linked worktree, which the resolver would give a home of its own; else
+    `root` unchanged. Costs no process unless the nearest `.git` is a file."""
+    try:
+        start = Path(root).resolve()
+        for d in [start, *start.parents]:
+            marker = d / ".git"
+            if marker.is_dir():
+                return root
+            if marker.is_file():
+                break
+        else:
+            return root
+        env = {k: v for k, v in os.environ.items() if k not in GIT_IDENTITY}
+        r = subprocess.run(["git", "-C", str(d), "worktree", "list", "--porcelain"],
+                           capture_output=True, text=True, errors="replace", timeout=10,
+                           env=env)
+        if r.returncode != 0:
+            return root
+        first = r.stdout.split("\n\n", 1)[0].splitlines()
+        if not first or not first[0].startswith("worktree ") or "bare" in first:
+            return root
+        main = Path(first[0][len("worktree "):])
+        return root if main.resolve() == d.resolve() else main
+    except Exception:
+        return root
+
+
 def missing_projection_error(cwd):
     """A run pointer survives snapshot loss; no Git run remains ordinary idle."""
     try:
@@ -1639,8 +1741,11 @@ def other_row(plan_path, width=0, label=None, text=None):
     gate_mark = blocked_gate_marker(text, plan_path)
     role = "master" if pu.is_master_plan(text, plan_path) else "other"
     fields = _group_fields(name, plan_path, done, total, role, gate_mark)
-    fields["tail"], fields["tail_spans"] = tail_parts(gate_mark)
-    return {"line": _bar_line(name, done, total, DIM, width) + gate_mark,
+    # Every task done and no close-out line: the plan reads 100% yet is not closed.
+    pending = (f" {DIM}◌ close-out pending{RESET}"
+               if total > 0 and done == total and not gate_mark else "")
+    fields["tail"], fields["tail_spans"] = tail_parts(gate_mark + pending)
+    return {"line": _bar_line(name, done, total, DIM, width) + gate_mark + pending,
             "fields": fields, "text": text, "path": plan_path}
 
 
@@ -1766,6 +1871,59 @@ def master_register(text, path):
     return out
 
 
+def current_run(cwd):
+    """The run the display marks as current from `cwd`, as a dict:
+    `state_file`, `state` and `pinned` (all None when no run is current), `own_root`
+    (this worktree's root, or `cwd` with no state file), `own_state_file` (the file
+    find_state() found, whatever it holds) and `state_error`.
+
+    Order: this worktree's fresh run, else the one fresh run among the other
+    worktrees (two or more mark none current), else this worktree's stale run.
+    A finished run (run_finished) and an unreadable state are no run. A failure in
+    the cross-worktree read costs that pin only. context-usage.py's sidecar_root()
+    calls this too, so the sidecar sits with the run the display pins."""
+    state_file = own_state_file = find_state(cwd)
+    state = pinned = None
+    state_error = None
+    if state_file is None:
+        # find_state cannot discover a deleted owned snapshot. The common-dir
+        # run pointer distinguishes that interruption from an idle repository.
+        state_error = missing_projection_error(cwd)
+    if state_file is not None:
+        try:
+            # ONE read, one anchoring. Re-reading to recompute `pinned` would
+            # race executing-plans' overwrite-not-patch state writes: a rewrite
+            # landing between the two reads would make the second one fail and
+            # silently disable dedup for that redraw.
+            state = projection_state(state_file)
+            pinned = pinned_plan_path(state, state_file)
+            if run_finished(state, repo_root_of(state_file), pinned):
+                # The file stays where it is; its plan gets a row only if
+                # discovery finds it in flight.
+                state = pinned = None
+        except Exception as exc:
+            if 'state_error:' in str(exc):
+                state_error = str(exc)
+            state = pinned = None   # an unreadable state file pins nothing
+
+    own_root = repo_root_of(state_file) if state_file is not None else Path(cwd)
+    if state is None or stale_hours(state) is not None:
+        try:
+            elsewhere = fresh_runs_elsewhere(own_root)
+            if len(elsewhere) == 1:
+                state_file, state = elsewhere[0]
+                pinned = pinned_plan_path(state, state_file)
+            elif elsewhere:
+                state = pinned = None
+        except Exception:
+            pass
+    if state is None:
+        state_file = None
+    return {"state_file": state_file, "state": state, "pinned": pinned,
+            "own_root": own_root, "own_state_file": own_state_file,
+            "state_error": state_error}
+
+
 def build_model(cwd, with_detail=False):
     """THE model: {"groups": [row, ...], "detail": dict|None, "details": dict}.
 
@@ -1783,38 +1941,34 @@ def build_model(cwd, with_detail=False):
 
     Every step degrades to "fewer rows", never to an exception -- see render().
     """
-    state_file = find_state(cwd)
-    state = pinned = None
-    state_error = None
-    if state_file is None:
-        # find_state cannot discover a deleted owned snapshot. The common-dir
-        # run pointer distinguishes that interruption from an idle repository.
-        state_error = missing_projection_error(cwd)
-        if state_error:
-            print(state_error, file=sys.stderr)
-    if state_file is not None:
-        try:
-            # ONE read, one anchoring. Re-reading to recompute `pinned` would
-            # race executing-plans' overwrite-not-patch state writes: a rewrite
-            # landing between the two reads would make the second one fail and
-            # silently disable dedup for that redraw.
-            state = projection_state(state_file)
-            pinned = pinned_plan_path(state, state_file)
-        except Exception as exc:
-            if 'state_error:' in str(exc):
-                state_error = str(exc)
-                print(state_error, file=sys.stderr)
-            state = pinned = None   # an unreadable state file pins nothing
+    run = current_run(cwd)
+    if run["state_error"]:
+        print(run["state_error"], file=sys.stderr)
+    state_file, state, pinned = run["state_file"], run["state"], run["pinned"]
+    state_error, own_root = run["state_error"], run["own_root"]
 
     chosen = []
     try:
-        root = repo_root_of(state_file) if state_file is not None else Path(cwd)
-        plans_dir = records_plans_dir(root)
+        # A linked worktree shares the main worktree's managed home, but its in-tree
+        # records (exit 3) are this checkout's own docs/. One resolver call either way.
+        plans_dir = records_plans_dir(records_root(own_root), in_tree_root=own_root)
         if plans_dir is not None:
-            cache = root / ".claude" / CACHE_NAME
+            cache = own_root / ".claude" / CACHE_NAME
             chosen = discover_plans(plans_dir, pinned=pinned, cache_file=cache)
     except Exception:
         chosen = []                 # discovery is additive: never costs the pinned bar
+
+    # A run pinned from another worktree with in-tree records: this checkout's own copy
+    # of its plan (same path under each worktree) is the same plan, so it draws once.
+    try:
+        if pinned is not None and state_file is not None:
+            run_root = repo_root_of(state_file).resolve()
+            if run_root != Path(own_root).resolve():
+                rel = Path(pinned).resolve().relative_to(run_root)
+                twin = Path(own_root).resolve() / rel
+                chosen = [p for p in chosen if not _same_file(p, twin)]
+    except (ValueError, *BAD_PATH):
+        pass    # the plan is not inside the run's worktree: no in-tree twin to drop
 
     # Discovery normally returns the pinned plan itself, but it returns nothing
     # at all when the records home has no plans directory, that directory is

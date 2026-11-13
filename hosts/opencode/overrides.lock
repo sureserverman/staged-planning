@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 90eda47b189c7b5cd83d9fae10c8858cd0365082719016edb827321839ea7d75
+  base_sha256: 08786518ff140dfea3c3d42d1b745f369a8ff619484b0e8d2ca686c9d48f0ef8
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -37,7 +37,7 @@ skills/executing-plans/references/plan-continue-hook.md:
 skills/executing-plans/references/preflight-checks.md:
   base_sha256: dce2921011f25d9ec1436da43df755d0a2a23550995ef1c7411627594ab7f7ed
 skills/executing-plans/references/progress-state-file.md:
-  base_sha256: fb6de6b3ef783de19e379210f4dc6b0aa2c08b0d9ed89e8082b43ff9beeeb9c7
+  base_sha256: 3cf88f8076c323639a20f173f08d513766307636c29ad2699b7d3e6b15d963d5
 skills/executing-plans/references/session-handoff.md:
   base_sha256: 6d60b324a24d068d1b74a22827c20911c9fca774710350db5ae9c8dc0144f3ae
 skills/executing-plans/references/stack-routing.md:
@@ -47,14 +47,14 @@ skills/executing-plans/references/stage-gate.md:
 skills/executing-plans/references/task-execution.md:
   base_sha256: cffa3caf1c533bcf88b02dded5f7b0e7d8638a7fa326dab3e2802107efdf1dbd
 skills/executing-plans/scripts/context-usage.py:
-  base_sha256: 755db0df2246a40855c1176608db336acb4a556ebb3be8f72da9e78467e91535
+  base_sha256: 9b19c08c62ca44d19e6f9b5b56a7e34c2e4c4dc111bc25f56dbc0e732db88ce4
   host_fact: 'OpenCode keeps no transcript file and sets no session id in a shell''s environment: it records each model call''s token use in its SQLite session store (opencode.db in its data directory) and each model''s context limit in its models cache, so the fork reads those, newest top-level session for the working directory unless --session names one; the rollover-request rule and the sidecar writer go with the handoff envelope and the planning mod, which OpenCode does not ship.'
 skills/executing-plans/scripts/plan-progress.py:
-  base_sha256: 729dd773531953328579f7241cc8316c42bad39bb2062b7c3f8d25d910784387
+  base_sha256: 74811b125c97b942a9ccd0afc2fe75e93fd7c6d251169741c554c06fa8b937e7
   host_fact: OpenCode has no status line a plugin or a command can feed, so the status-line renderer and its --json model can never run; the fork ships the budget, stage-order and dispatch checks byte-identical and exits 64 on any other argument.
   depends_on:
     lib/plan_parser.py: 657fd27d6289af4d507616a9ba24c57041db547e5350a1438ee0478db6eed73b
-    skills/executing-plans/scripts/plan_state.py: 38e2a8a2b6a3111e0669d9295cf27c649ddb6cdece809444bf64a84cb8e792e5
+    skills/executing-plans/scripts/plan_state.py: 2bc2cd1390db79aee38f6cdd6899525b6eb97a5d23084c7b9be962f4cc2f024d
     skills/planning-projects/scripts/validate-dispatch.py: c30f005300c83639de0d5a3df3462870a6e6cba4012689c1789c66e6cc582404
 skills/executing-plans/scripts/validate-stack-routing.py:
   base_sha256: 25b8f76e828df535a7e1270559709e367fec4068668665e8886cdaf9581d7bb2

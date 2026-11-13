@@ -811,6 +811,63 @@ try:
         check(rc == 0 and w is False, f"{label} -> nothing written, exit 0 ({rc}, {w})")
     rc, w = write_run(dict(good, tokens=None, percent=None))
     check(w is True, f"tokens and percent may be null ({w})")
+
+    # The planning mod pins a run held in another worktree (plan-progress.py), so the
+    # sidecar has to follow it there: writer and reader share sidecar_root().
+    gitenv = {k: v for k, v in env_for(home).items()
+              if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")}
+
+    def git(where, *args):
+        subprocess.run(["git", "-C", str(where), *args], check=True, capture_output=True,
+                       env=gitenv)
+
+    wtm = pathlib.Path(tmp) / "wt-main"
+    wtm.mkdir()
+    git(wtm, "init", "-q", "--template=")
+    git(wtm, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+        "commit", "--allow-empty", "-qm", "fixture")
+    wtr = pathlib.Path(tmp) / "wt-run"
+    git(wtm, "worktree", "add", "-q", "-b", "run", str(wtr))
+    (wtr / ".claude").mkdir()
+    (wtr / ".claude" / "plan-progress.json").write_text(json.dumps(
+        {"plan": "plans/x-plan.md", "phase": "task", "updated": stamp(0)}), encoding="utf-8")
+    rc, w = write_run(good, cwd=wtm)
+    check(rc == 0 and w is True and (wtr / ".claude" / "plan-context.json").is_file()
+          and not (wtm / ".claude").exists()
+          and cu.live_window({"CLAUDE_CODE_SESSION_ID": LSID}, str(wtm)) == 400000,
+          f"sidecar follows the one run in another worktree ({rc}, {w})")
+    wtr2 = pathlib.Path(tmp) / "wt-run2"
+    git(wtm, "worktree", "add", "-q", "-b", "run2", str(wtr2))
+    (wtr2 / ".claude").mkdir()
+    (wtr2 / ".claude" / "plan-progress.json").write_text(json.dumps(
+        {"plan": "plans/y-plan.md", "phase": "task", "updated": stamp(0)}), encoding="utf-8")
+    (wtr / ".claude" / "plan-context.json").unlink(missing_ok=True)
+    rc, w = write_run(good, cwd=wtm)
+    check(rc == 0 and w is False and not (wtr / ".claude" / "plan-context.json").exists()
+          and not (wtr2 / ".claude" / "plan-context.json").exists(),
+          f"two runs in other worktrees -> no root, nothing written ({rc}, {w})")
+    # One of the two goes stale: a stale run elsewhere does not compete, as on the display.
+    old = (datetime.datetime.now(datetime.timezone.utc)
+           - datetime.timedelta(hours=13)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    (wtr2 / ".claude" / "plan-progress.json").write_text(json.dumps(
+        {"plan": "plans/y-plan.md", "phase": "task", "updated": old}), encoding="utf-8")
+    rc, w = write_run(good, cwd=wtm)
+    check(rc == 0 and w is True and (wtr / ".claude" / "plan-context.json").is_file()
+          and not (wtr2 / ".claude" / "plan-context.json").exists(),
+          f"a stale run elsewhere does not compete for the sidecar ({rc}, {w})")
+    # The reported case: main holds a leftover state naming a closed-out plan.
+    (wtr / ".claude" / "plan-context.json").unlink(missing_ok=True)
+    done = wtm / "done-plan.md"
+    done.write_text("# Plan: d\n\n## Stage 1: a\n\n### Task 1.1: a\n- **Status:** [x]\n\n"
+                    "**Completed:** 2026-10-22 — commits: x\n", encoding="utf-8")
+    (wtm / ".claude").mkdir(exist_ok=True)
+    (wtm / ".claude" / "plan-progress.json").write_text(json.dumps(
+        {"plan": str(done), "phase": "task", "updated": stamp(0)}), encoding="utf-8")
+    rc, w = write_run(good, cwd=wtm)
+    check(rc == 0 and w is True and (wtr / ".claude" / "plan-context.json").is_file()
+          and not (wtm / ".claude" / "plan-context.json").exists()
+          and cu.live_window({"CLAUDE_CODE_SESSION_ID": LSID}, str(wtm)) == 400000,
+          f"a finished leftover here yields the sidecar to the live run elsewhere ({rc}, {w})")
     print("group 17 — a supervisor's request.json ends the run at the next gate")
     sup_sid = "12121212-3434-5656-7878-909090909090"
     # The supervisor's identity command: this session's id, one line on stdout.

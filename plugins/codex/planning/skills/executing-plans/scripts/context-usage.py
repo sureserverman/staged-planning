@@ -316,11 +316,29 @@ def measure(path):
             "stage_costs": stage_costs, "compactions": compactions}
 
 
+# The hooks' run reader, at <plugin root>/hooks/ (the core loads it the same way).
+_CLASSIFY = pathlib.Path(__file__).resolve().parents[3] / "hooks" / "plan_continue_classify.py"
+
+
+def run_elsewhere(cwd):
+    """The worktree of the one run among the repo's other worktrees (other_runs), as a
+    string; None when there are none, two or more, or they cannot be read."""
+    try:
+        spec = importlib.util.spec_from_file_location("plan_continue_classify", _CLASSIFY)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        runs, _ = mod.other_runs(cwd)
+    except Exception:
+        return None
+    return str(runs[0][0]) if len(runs) == 1 else None
+
+
 def sidecar_root(cwd, require_state=False):
     """Where the sidecar lives: the nearest directory at or above cwd holding
     .claude/plan-progress.json, found as plan-progress.py's find_state() finds it;
-    else cwd, or None with `require_state`. The executor may run this script from
-    below the repo root. Kept from the core for request_root(), its one caller here."""
+    else the worktree of the one run among the repo's other worktrees; else cwd, or
+    None with `require_state`. The executor may run this script from below the repo
+    root. Kept from the core for request_root(), its one caller here."""
     try:
         start = pathlib.Path(cwd).resolve()
         for d in (start, *start.parents):
@@ -328,6 +346,9 @@ def sidecar_root(cwd, require_state=False):
                 return str(d)
     except (OSError, ValueError):
         pass
+    elsewhere = run_elsewhere(cwd)
+    if elsewhere is not None:
+        return elsewhere
     return None if require_state else cwd
 
 

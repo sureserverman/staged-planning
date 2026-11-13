@@ -20,7 +20,7 @@ returns the original receipt.
 | When | Operation | Payload |
 |------|-----------|---------|
 | Preflight starts, on the run's branch (after git bootstrap's branch or worktree) | `init` | `{"plan": "<plan path>", "source": "<the owner's request, quoted>", "scope": "plan"}` (optional `budget`, the plan's remediation budget) |
-| A stage opens (Step 3.0, before its first task) | `transition` | `{"phase": "task", "stage": 2}` — no task, so `owner-decision.py match` reads the stage the run is in, not the last gate |
+| A stage opens (Step 3.0, before its first task) | `transition` | `{"phase": "task", "stage": 2}` — no task, so `owner-decision.py match` reads the stage the run is in, not the last gate. A `task` transition naming a `stage` and no `task` empties `task` and `task_desc`, so the bar shows `S2/…` and no task from the stage before. A `gate` transition keeps them, so the status-lag marker still reads the last task at the gate |
 | A task starts | `transition` | `{"phase": "task", "stage": 2, "task": "2.3", "task_desc": "<title>"}` |
 | A stage gate runs | `transition` | `{"phase": "gate", "stage": 2}` |
 | A remediation round starts, is verified, ends | `begin-round`, `record-verification`, `complete-round` | see the contract; the gate must first be named in a `transition` `gate` field |
@@ -90,6 +90,23 @@ the same width as a `blocked` note. The `handoff_id` other hosts write here come
  "reason": "rule 5: gate check 3 cannot run before 2026-11-01 (store review)",
  "updated": "<ISO-8601 UTC now>"}
 ```
+**A finished run pins nothing.** The renderer marks a state file's plan as current only
+while its run is live. A run is over when the hooks call it finished (a `complete` owned run
+whose plan has no open task, or whose plan is gone), or when its plan carries **Completed:**
+(with no gate check blocked) or **Abandoned:** — unless the file's phase is `closeout` and
+it is fresh: close-out writes the **Completed:** line before `finish`. A `closeout` file not
+updated for 12 h over a closed-out plan is a leftover, and is over. A finished run's file is left where it is; its plan gets
+an ordinary row only if it is still in flight.
+
+**Which run is current, from any worktree.** Each worktree holds its own state file, so
+the renderer picks the current row in this order: this worktree's run when it is fresh; else
+the one fresh run among the repo's other worktrees (read as the hooks read them);
+two or more there mark none current, this worktree's stale run included, and each plan
+shows as an ordinary row; else this worktree's stale run, with `(stale Nh)`. A run elsewhere that is stale, finished, unreadable,
+or in a worktree whose folder is gone does not compete. From a linked worktree, where a
+records resolver manages the repo, the records home is resolved for the main worktree's path,
+so the same plans show from every worktree; in-tree records stay each checkout's own `docs/`.
+
 **Markers the bar can append**, so an operator who sees one has somewhere to read:
 
 | Marker | Means |
@@ -98,6 +115,7 @@ the same width as a `blocked` note. The `handoff_id` other hosts write here come
 | `⚠ status lag N` | the plan file's `Status:` markers trail the task this state file names by N sequential tasks. `Dispatch: YES` siblings are excluded — they are dispatched together and do not finish in document order. `[~]` counts as a marker that moved. |
 | `⚠ not in plan` | this file names a task the plan does not contain. A worse divergence than a lag: the plan was edited under a run whose markers had already stopped. |
 | `⊘ STAGE ORDER` | this file's `stage` depends (its `**Depends on:**` line) on a stage whose gate is not fully `[x]` — an open `[ ]` or a blocked `[~]`. The stage opened too early; `python3 <planning-plugin>/skills/executing-plans/scripts/plan-progress.py --stage-order-check`, run from the repo root, exits 2 on the same condition, with its `FAIL:` reason printed. An exit 2 without one is a **BROKEN INVOCATION** (Python exits 2 when it cannot open the file), not a result. |
+| `◌ close-out pending` | a plan that is not the current row has every task done and no **Completed:** or **Abandoned:** line, and no gate check blocked. Dim. The current row never carries it: its phase already says where the run is. |
 | `↻N/M` | a gate being re-run after a failure; see `remediation_round`. |
 | `⏸ HANDOFF` | the executor stopped on purpose at a stage gate because a stop rule fired (on Cursor, rule 5's dated wait). Followed by `reason`. Not a failure: the next session resumes from the plan's `**RESUME HERE (<date>):**` block. |
 

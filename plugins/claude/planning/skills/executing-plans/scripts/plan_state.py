@@ -418,6 +418,9 @@ def transition(state,payload):
         elif old and old!=new and rounds['active']:
             rounds['active']['verification']=None
         state['gate']=new
+    if payload['phase']=='task' and 'stage' in payload and 'task' not in payload:
+        # A stage opens naming no task, so the last stage's task leaves the bar.
+        state['task']='';state['task_desc']=''
     state.update(payload)
 
 

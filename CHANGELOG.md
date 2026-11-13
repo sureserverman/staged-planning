@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0 — 2026-11-12
+
+- **The progress display marks the live run as current, from any worktree.** A session with
+  no fresh run of its own now pins the one fresh run held in another worktree of the repo.
+  Two or more fresh runs elsewhere mark none current, and each plan shows as an ordinary row.
+  A run not updated for 12 h elsewhere does not compete. Where a records resolver manages
+  the repo, a linked worktree shows the main worktree's plans.
+- **A finished run stops pinning.** A run the hooks call finished, or a run over
+  a plan carrying **Completed:** or **Abandoned:** (outside a fresh close-out), no longer
+  holds the current row. Its state file is left where it is.
+- **A stage opens with no task on the bar.** A `task` transition naming a stage and no task
+  empties `task` and `task_desc`, so the bar reads `S2/…` without the last stage's task. A
+  gate transition keeps them.
+- **A plan with every task done and no close-out line says `◌ close-out pending`.**
+- **The live-window sidecar follows the pinned run (Claude Code build).** `context-usage.py` keeps
+  `plan-context.json` in the worktree of the run the display marks current, so the Claude
+  mod writes it where the executor reads it.
+
 ## 2.0.0 — 2026-11-11
 
 - **Breaking: the `dispatching-parallel-agents` skill is gone.** Its rules now live in
