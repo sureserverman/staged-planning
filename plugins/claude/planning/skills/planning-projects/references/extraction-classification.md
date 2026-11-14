@@ -1,7 +1,7 @@
 # Extraction classification — `../SKILL.md`
 
 What each `../SKILL.md` section keeps in the trunk and where its elaboration lives.
-The trunk is **39472 B** across **35 headings**, of which 787 B is scaffolding
+The trunk is **39464 B** across **35 headings**, of which 787 B is scaffolding
 (frontmatter, title, and the preamble that precedes the first heading). Every `bytes`
 figure is re-taken by
 `python3 scripts/trunk-sections.py --all-levels core/skills/planning-projects/SKILL.md`;
@@ -51,13 +51,13 @@ short by compressing justification, not by relocating procedure.
 `bytes` is the section's current size in the trunk. `elaboration` names the file in
 this directory that holds what the trunk does not, or `—` where the section has none.
 
-### unconditional — 14 sections, 10747 B
+### unconditional — 14 sections, 10739 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
 | 1659 | — | Stage structure | the literal task/stage field template every plan is built from |
 | 1392 | `set-valued-checks.md` | Write a set-valued check as the sweep that proves it | binds every gate check an author writes |
-| 1667 | `task-fields.md` | Task and stage fields | a pointer at task-fields.md plus six load-bearing rules — among them `Depends on`/`Blocks` required and symmetric, intra-stage dependency order with no forward reference, and a consistent `Dispatch`, because a rule that survives only as a noun in a pointer sentence binds nothing |
+| 1659 | `task-fields.md` | Task and stage fields | a pointer at task-fields.md plus six load-bearing rules — among them `Depends on`/`Blocks` required and symmetric, intra-stage dependency order with no forward reference, and a consistent `Dispatch`, because a rule that survives only as a noun in a pointer sentence binds nothing |
 | 1156 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
 | 468 | `plan-document-template.md` | Plan Document Format | a pointer at the template fixture |
 | 646 | `task-fields.md` | Phase 3 — The Red-Green Loop | a pointer plus its five obligations: a runnable test, a cycle budget, a test of the promised outcome, a claim that goes red when false, and a preparing task testing that it prepared |

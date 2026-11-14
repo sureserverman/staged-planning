@@ -9,6 +9,8 @@ gate checks and the next session read it to learn where the run got to.
 Every run is an owned v2 run, started by `init` at Preflight. The
 [execution-state contract](execution-state-contract.md) operations are the only writers.
 Keep the snapshot after finish; deleting it loses the owning pointer's required evidence.
+The next `init` moves a finished snapshot to `.claude/plan-state-archive/<run_id>.json`
+itself, on the run's branch or another; never move state files by hand.
 
 ## When to call each operation
 

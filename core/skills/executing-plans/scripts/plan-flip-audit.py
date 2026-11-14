@@ -29,18 +29,18 @@ that had not happened, or burn turns on one (10):
      approves …") that carries no quote of the owner's words — `blocking`
   7. an amendment's `was:` value still standing, unannotated, elsewhere in the
      plan — `advisory` (it may be a true historical statement; say which)
-  8. a ticked task whose FIRST Test claim, or any claim that names its break
-     "(red if …)", has no valid prove-claim.py record (proof/<plan>/<task>/
-     claim-K.json, bound to the commit that last wrote it) — `blocking`; a claim
-     recorded as a claim deviation, or only self-reported `mutation:` lines —
-     `advisory`. Any other claim needs no record. Needs --repo; without it,
-     reported NOT RUN.
+  8. a ticked task the plan marks `- **Proof:** required` whose FIRST Test claim,
+     or any claim that names its break "(red if …)", has no valid prove-claim.py
+     record (proof/<plan>/<task>/claim-K.json, bound to the commit that last wrote
+     it) — `blocking`; a claim recorded as a claim deviation, or only
+     self-reported `mutation:` lines — `advisory`. A task without the field owes
+     no record. A record that exists is validated whether or not it is owed, and
+     an invalid one is `blocking`. Needs --repo; without it, reported NOT RUN.
      A valid record whose bound file HEAD holds at another blob (it binds the
      blobs of the files its break touched and the test files its command names,
-     `touched_blobs` and `witness_blobs`) is proof drift — `blocking` while the
-     task's stage is open, as at its `Stage N green`; `advisory` once that
-     stage's gate boxes are all ticked and a `Stage N green` commit holds the
-     files as proven, since a later stage may edit the file.
+     `touched_blobs` and `witness_blobs`) is proof drift — `advisory` at every
+     stage state: it is reported, never blocking. A committed file under proof/
+     that is not a record is `advisory` too.
   9. a ticked task with a requirement clause that has neither a valid
      req-K.json nor a deviation-K.json record — `advisory`, always: requirement
      accounting carries no blocking mandate until it is measured. Needs --repo.
@@ -309,14 +309,18 @@ STALE_EXEMPT = re.compile(r"\bwas:|\bamended\b|\bhistorical(ly)?\b", re.I)
 # the thing it claims is broken. A test of a path setting can pass with the
 # setting unset and with it pointing nowhere, and a commit can record one
 # `mutation:` line for the easiest of several claims.
-# So a ticked task's required claims — its first, and each naming its break
-# "(red if …)" — need a prove-claim.py record (see required_claims); the
-# self-reported `mutation:` line is the retired form, read only as legacy.
+# So a ticked task the plan marks `Proof: required` owes a prove-claim.py record
+# for its first claim and each claim naming its break "(red if …)" (see
+# owed_claims); a task without the field owes none. The self-reported
+# `mutation:` line is the retired form, read only as legacy.
 # Claims are counted the way plans write them:
 # `<command>` — claim; claim; claim.
 TASK_HEAD = re.compile(r"^\s*#{2,5}\s+Task\s+(\d+\.\d+)\b", re.I)
 ANY_HEAD = re.compile(r"^\s*#{1,5}\s")
 STATUS_TICKED = re.compile(r"^\s*[-*+]\s*\*\*Status:\*\*\s*\[[xX]\]")
+# The task field that makes a task owe a proof record (task-fields.md), shaped like
+# `Review: required`.
+PROOF_REQUIRED = re.compile(r"^\s*[-*+]\s*\*\*Proof:\*\*\s*required\b", re.I)
 TEST_FIELD = re.compile(r"^\s*[-*+]\s*\*\*Test:\*\*\s*(.*)$")
 # The tasks a commit SUBJECT names. One reader for the audit and the git ref hook
 # (hooks/git-ref-gate.sh), so they cannot disagree about which commit is whose:
@@ -362,6 +366,9 @@ REPORT_LABEL = re.compile(rf"^\s*(?:{'|'.join(REPORT_LABELS)})\s*:", re.I)
 # `holds`, alone or with a note set off by a dash or brackets ("holds — on both devices",
 # "holds (both devices)"); never "holds only on …" or "holds, but …", which qualify it.
 HOLDS = re.compile(r"^holds\.?\s*(?:(?:—|–|--?)\s+.*|\(.*\))?\s*$", re.I)
+# The demo's third verdict: the session could not show the Outcome. A residual, never
+# Blocking; its evidence says what a person would need to show it.
+NOT_SHOWN = re.compile(r"^not shown here\b", re.I)
 
 
 def _is_stage(heading_number, stage):
@@ -594,11 +601,36 @@ def demo_skip_shas(report):
     return list(dict.fromkeys(shas))
 
 
-def demo_problems(report, outcomes, plan_text=None, stage=None):
-    """Why a stage's demo report does not cover its Outcomes, or [] when it does.
+def stage_numbers(text):
+    """Every `## Stage N` the plan carries, in plan order, each once."""
+    return list(dict.fromkeys(int(m.group(1)) for m in
+                              map(STAGE_SECTION.match, (text or "").splitlines()) if m))
 
-    One `## Outcome K` per plan Outcome, its `> ` quote equal to the plan's text
-    (whitespace aside), a first `Verdict:` of `holds`, and non-empty `Evidence:`. The
+
+def last_stage(text):
+    """The plan's last stage number, or None."""
+    nums = stage_numbers(text)
+    return nums[-1] if nums else None
+
+
+def plan_outcomes(text):
+    """Every stage's Outcomes, in plan order: what the plan's one demo quotes."""
+    return [o for s in stage_numbers(text) for o in stage_outcomes(text, s)]
+
+
+def demo_owed(text, stage):
+    """review-scope.md: the demo runs once per plan, at its last gate, at `standard` and
+    `high` (an undeclared plan is `standard`), and only when some stage has Outcomes."""
+    return (declared_tier(text) not in ("none", "light")
+            and last_stage(text) == int(stage) and bool(plan_outcomes(text)))
+
+
+def demo_problems(report, outcomes, plan_text=None, stage=None):
+    """Why the plan's demo report does not cover its Outcomes, or [] when it does.
+
+    One `## Outcome K` per plan Outcome (numbered across the plan), its `> ` quote equal
+    to the plan's text (whitespace aside), a first `Verdict:` of `holds` or `not shown
+    here`, and non-empty `Evidence:`. The
     quote is what stops a brief or a report from paraphrasing an Outcome away: a
     written brief drops Outcomes and lets a test suite stand in for the demo. A report
     recording a skipped evaluator is also held to demo_skip_problems, against the plan's
@@ -616,8 +648,9 @@ def demo_problems(report, outcomes, plan_text=None, stage=None):
             probs.append(f"Outcome {k}: the quoted text is not the plan's Outcome word for word")
             continue
         verdict = _label(body, "Verdict")
-        if not HOLDS.match(verdict):
-            probs.append(f"Outcome {k}: verdict is {verdict.lower() or 'empty'!r}, not 'holds'")
+        if not (HOLDS.match(verdict) or NOT_SHOWN.match(verdict)):
+            probs.append(f"Outcome {k}: verdict is {verdict.lower() or 'empty'!r}, not 'holds' "
+                         "or 'not shown here'")
         if len(_label(body, "Evidence")) < 20:
             probs.append(f"Outcome {k}: no evidence — the commands run and what was seen")
     return probs
@@ -1031,12 +1064,12 @@ def scan_stale_was_values(path, text):
 
 
 def task_blocks(text):
-    """Every task block: {id, line (Status line if ticked), test, desc}."""
+    """Every task block: {id, line (Status line if ticked), test, desc, proof}."""
     out, cur = [], None
     for i, line in enumerate(text.splitlines(), 1):
         m = TASK_HEAD.match(line)
         if m:
-            cur = {"id": m.group(1), "line": None, "test": "", "desc": ""}
+            cur = {"id": m.group(1), "line": None, "test": "", "desc": "", "proof": False}
             out.append(cur)
             continue
         if ANY_HEAD.match(line):
@@ -1046,6 +1079,8 @@ def task_blocks(text):
             continue
         if STATUS_TICKED.match(line):
             cur["line"] = i
+        if PROOF_REQUIRED.match(line):
+            cur["proof"] = True
         t = TEST_FIELD.match(line)
         if t:
             cur["test"] = t.group(1)
@@ -1054,12 +1089,6 @@ def task_blocks(text):
             if d:
                 cur["desc"] += " " + d.group(1)
     return out
-
-
-def ticked_tasks(text):
-    """Ticked tasks in the plan: (task id, Status line number, Test text)."""
-    out = task_blocks(text)
-    return [(t["id"], t["line"], t["test"]) for t in out if t["line"]]
 
 
 def _masked(text):
@@ -1179,6 +1208,13 @@ def required_claims(test):
     claims = claim_clauses(test)
     return [k for k, c in enumerate(claims, 1)
             if k == 1 or NAMED_BREAK.search(_masked(c))]
+
+
+def owed_claims(block):
+    """The claim numbers a task owes a proof record for: none unless the plan marks the
+    task `- **Proof:** required`, and then its required_claims. The audit and the commit
+    gate both read this, so they agree on which task owes a proof."""
+    return required_claims(block["test"]) if block.get("proof") else []
 
 
 def claim_deviation_problems(rec, fingerprint, expect):
@@ -1548,10 +1584,12 @@ def scan_task_mutations(path, text, repo):
     out = []
     stray = stray_proof(repo)
     if stray:
-        out.append({"finding": 8, "severity": "blocking", "file": str(path), "line": None,
+        # Named, not blocking: proof/ is outside every fingerprint, so such a file is bound
+        # to nothing, but a note beside the records proves nothing false either.
+        out.append({"finding": 8, "severity": "advisory", "file": str(path), "line": None,
                     "text": "proof/",
                     "rule": f"{len(stray)} file(s) under proof/ are not proof records — proof/ is "
-                            f"outside every fingerprint, so nothing else may live there: "
+                            f"outside every fingerprint, so nothing there is bound to the code: "
                             f"{', '.join(stray[:5])}"})
     stem, closed = Path(path).stem, closed_stages(text)
     for old in orphan_proof_dirs(repo, path):
@@ -1574,10 +1612,17 @@ def scan_task_mutations(path, text, repo):
                     "text": f"{_prove_claim().PROOF_DIR}/{stem}/",
                     "rule": f"proof records for {stem} are kept outside git: each is read from "
                             "disk and bound to the commits naming its task in their subject"})
-    for tid, line, test in ticked_tasks(text):
-        required = required_claims(test)
-        n = len(required)
+    for b in task_blocks(text):
+        if not b["line"]:
+            continue
+        tid, line = b["id"], b["line"]
         got = proofs.get(tid, {})
+        # Owed claims, plus any claim whose record exists: a record is validated whether
+        # or not the task owes it, and an invalid one is reported.
+        required = owed_claims(b)
+        required += sorted(key_[1] for key_ in got if len(key_) == 2 and key_[0] == "claim"
+                           and key_[1] not in required)
+        n = len(required)
         commits, muts = ev.get(tid, [0, 0, 0])[:2]
         unproven = [k for k in required if got.get(("claim", k), ["no record"])]
         devs = [k for k in unproven if ("claim-deviation", k) in got]
@@ -1589,33 +1634,28 @@ def scan_task_mutations(path, text, repo):
             if cites is not None and got.get(("drift", "claim", cites), (None, None))[1] == moved:
                 continue  # a covered req binds its claim's maps: that claim's line reports it
             drift = (f"Task {tid}: proof drift — {', '.join(moved[:5])} changed since {rel} was "
-                     f"proven (HEAD holds another blob); re-prove {key_[1]} {key_[2]}")
-            if tid.split(".")[0] in closed and held:
-                # The stage closed on these records — its gate is ticked and its `Stage N
-                # green` commit holds the files as proven — and a later change, which a later
-                # stage may make, moved one. Named, not blocking: the commit gate judges drift
-                # only at the `Stage N green` of the task's own stage.
-                out.append({**base, "severity": "advisory",
-                            "rule": f"{drift} — Stage {tid.split('.')[0]} closed on this proof "
-                                    "(its gate is ticked and its green commit holds the files "
-                                    "as proven), so a later change is advisory; re-proving "
-                                    "rebinds the record"})
-            else:
-                # Blocking: a proof of code that has since changed proves nothing about it, and
-                # the stage gate must not pass on it. Re-proving rebinds the record.
-                out.append({**base, "severity": "blocking", "rule": drift})
+                     f"proven (HEAD holds another blob) for {key_[1]} {key_[2]}")
+            # Reported, never blocking (2.2.0 lifted drift's blocking severity): a later
+            # edit to a proven file is ordinary work, and the record still binds the blobs
+            # it proved, so the drift is named for the reader to weigh.
+            where = (f"Stage {tid.split('.')[0]} closed on this proof, so a later change "
+                     "moved it" if tid.split(".")[0] in closed and held
+                     else "the record no longer describes the file as HEAD holds it")
+            out.append({**base, "severity": "advisory",
+                        "rule": f"{drift} — {where}; reported, not blocking"})
         if devs:
             out.append({**base, "severity": "advisory",
                         "rule": f"Task {tid}: claim(s) {devs} recorded as deviations, not proven — "
                                 + "; ".join(f"claim {k}: {got[('claim-deviation', k)]}"
                                             for k in devs[:4])})
-        if not unproven:
-            continue
         if commits == 0 and not got:
             out.append({**base, "severity": "advisory",
                         "rule": f"ticked task has no commit naming 'Task {tid}' in "
                                 f"{repo.name} — per-task commits are mandatory"})
-        elif not got and muts:
+            continue
+        if not unproven:
+            continue
+        if not got and muts:
             out.append({**base, "severity": "advisory",
                         "rule": f"Task {tid}: legacy, unverified — {muts} self-reported "
                                 "`mutation:` line(s) and no proof record; nothing shows "

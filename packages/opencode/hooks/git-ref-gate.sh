@@ -30,16 +30,17 @@
 # record's path and the plan's current wording. A commit closes stage N when its subject
 # starts `Stage N green` or when it newly ticks a box under the plan's `### Stage N Gate`
 # (the plan as that commit holds it, so only a plan inside the repo; "Stage 2 done" ticking
-# the gate is a stage close). A stage-closing commit is also refused
-# while a record of a stage-N task has drifted: a file it proved is another blob in that
-# commit. The claims a task must prove are upstream's claim
-# set — its FIRST claim and every claim that names its break "(red if …)"
-# (plan-flip-audit's required_claims), so the hook and the audit agree. A record
-# that is present is validated whether or not it is required. A claim deviation is
+# the gate is a stage close). A record of a stage-N task that has drifted at a
+# stage-closing commit (a file it proved is another blob there) is named on stderr,
+# never refused. A task owes records only when the plan marks it `Proof: required`, and
+# then for upstream's claim set — its FIRST claim and every claim that names its break
+# "(red if …)" (plan-flip-audit's owed_claims), so the hook and the audit agree. A
+# record that is present is validated whether or not it is owed, and an invalid one is
+# refused. A claim deviation is
 # a valid record, named on stderr — never proof: a requirement "covered by" it is
 # refused. A requirement with no record is advisory (finding 9 carries no
 # mandate): named on stderr, never refused. A file under proof/ that is not a
-# record is refused.
+# record is named on stderr, never refused.
 #
 # WHAT IT DOES NOT GATE. A commit whose subject names no task of the plan ("wip")
 # is not a task commit and is not checked; nor is a commit already reachable from
@@ -380,7 +381,7 @@ def ticked_gates(sha):
     return sorted({gates[ln] for _k, _b, ln in entries if ln in gates}), None
 
 
-missing, deviations, advisory = [], [], []
+missing, deviations, advisory, named = [], [], [], []
 for sha in added:
     subject = git("log", "-1", "--format=%s", sha).stdout.strip()
     tasks = sorted(t for t in pfa.subject_tasks(subject) if t in blocks)
@@ -399,14 +400,15 @@ for sha in added:
         fp, blobs = pc.commit_tree(repo, sha)
     except Exception as e:
         allow(f"cannot fingerprint {short} ({e}); allowing")
-    # proof/ is outside every fingerprint: anything but a record there rides along unbound.
+    # proof/ is outside every fingerprint: anything but a record there is bound to nothing.
+    # Named, not refused: a note beside the records proves nothing false.
     ls = git("ls-tree", "-r", "-z", "--name-only", sha, "--", pc.PROOF_DIR).stdout
     for p in ls.split("\0"):
         if p and not pc.RECORD_PATH.match(p):
-            missing.append(f"{short}: {p}: not a proof record — proof/ may hold records only")
-    # A stage with Outcomes is judged on two reports: the premise worksheet (Step 3.0)
-    # and the demo evaluator's report, whose sections must quote every Outcome word for
-    # word, hold, and carry evidence. The word-for-word quote is what stops a report
+            named.append(f"{short}: {p}: not a proof record — bound to nothing")
+    # A stage with Outcomes is judged on its premise worksheet (Step 3.0); the plan's last
+    # stage also on the demo evaluator's report, whose sections must quote every stage's
+    # Outcomes word for word, hold or be `not shown here`, and carry evidence. The word-for-word quote is what stops a report
     # from paraphrasing an Outcome away. The hook cannot tell who wrote a report, and a
     # report is not bound to the tree the way a proof record is.
     for close in closes:
@@ -437,14 +439,17 @@ for sha in added:
             elif pfa.has_outcomes_field(plan_text, n) and not outcomes:
                 missing.append(f"{short} Stage {n} outcomes: the **Outcomes:** field has no "
                                "bullet the gate can read — write one `- ` line per Outcome")
-            elif outcomes or recorded:
-                # The demo is the gate evaluator, so it follows the tier: none at a plan
-                # declaring `review-scope: none`, and an owner's evidenced opt-out stands in.
-                kinds = [("premise", pfa.premise_problems)]
+            elif outcomes or recorded or pfa.demo_owed(plan_text, n):
+                # A stage with Outcomes owes its premise worksheet. The demo is the plan's
+                # one gate evaluator: owed at the last stage only, of every stage's
+                # Outcomes, at `standard` and `high` (pfa.demo_owed); an owner's evidenced
+                # opt-out stands in.
+                kinds = [("premise", pfa.premise_problems)] if (outcomes or recorded) else []
                 demo_text = texts["demo"]
-                if pfa.declared_tier(plan_text) != "none" and not (
+                if pfa.demo_owed(plan_text, n) and not (
                         isinstance(demo_text, str) and pfa.demo_opted_out(demo_text)):
-                    kinds.append(("demo", lambda r: pfa.demo_problems(r, outcomes, plan_text, n)))
+                    every = pfa.plan_outcomes(plan_text)
+                    kinds.append(("demo", lambda r: pfa.demo_problems(r, every, plan_text, n)))
                 for kind, check in kinds:
                     text = texts[kind]
                     if isinstance(text, Unreadable):
@@ -457,7 +462,7 @@ for sha in added:
                     missing.extend(f"{short} Stage {n} {kind}: {p}" for p in check(text))
                 # A skip's commit is the tree this stage ends on: a command green on an
                 # older tree says nothing about what this commit ships.
-                if len(kinds) == 2 and isinstance(demo_text, str):
+                if any(k == "demo" for k, _ in kinds) and isinstance(demo_text, str):
                     for at in pfa.demo_skip_shas(demo_text):
                         if git("merge-base", "--is-ancestor", f"{at}^{{commit}}",
                                sha).returncode != 0:
@@ -482,8 +487,9 @@ for sha in added:
     for close in closes:
         # Drift: a record of stage N whose bound file (one its break touched or its test
         # runs) this commit holds at another blob.
-        # Its task commit was judged; a later commit of the stage changed the code it proves,
-        # so the stage does not close on it. A record without touched_blobs binds the whole
+        # Its task commit was judged; a later commit of the stage changed the code it proves.
+        # Named on stderr, never refused: drift is reported (plan-flip-audit finding 8,
+        # advisory). A record without touched_blobs binds the whole
         # tree and was judged at its task commit by that rule. A covered req is checked
         # below to carry exactly the blob maps of the claim it cites.
         try:
@@ -496,15 +502,15 @@ for sha in added:
                         rel = f"{pc.PROOF_DIR}/{stem}/{t}/{kind}-{k}.json"
                         moved = pc.blob_drift(record(sha, rel), blobs)
                         if moved:
-                            missing.append(f"{short} Stage {stage}: proof drift — "
-                                           f"{', '.join(moved[:5])} changed since {rel} was "
-                                           f"proven; re-prove Task {t} {kind} {k}")
-        except Exception as e:  # noqa: BLE001 — records that crash the check are not valid
-            missing.append(f"{short} Stage {close[:12]} proof drift: unreadable "
-                           f"({e.__class__.__name__})")
+                            named.append(f"{short} Stage {stage}: proof drift — "
+                                         f"{', '.join(moved[:5])} changed since {rel} was "
+                                         f"proven (Task {t} {kind} {k})")
+        except Exception as e:  # noqa: BLE001 — a crash here is named; the task commit validated the record
+            named.append(f"{short} Stage {close[:12]} proof drift: unreadable "
+                         f"({e.__class__.__name__})")
     for t in tasks:
         b = blocks[t]
-        required = set(pfa.required_claims(b["test"]))
+        required = set(pfa.owed_claims(b))
         proven = {}  # claim k -> its record, only for a valid kind "claim" record
         for k, c in enumerate(pfa.claim_clauses(b["test"]), 1):
             rec = record(sha, f"{pc.PROOF_DIR}/{stem}/{t}/claim-{k}.json")
@@ -559,6 +565,9 @@ for sha in added:
             else:
                 missing.append(f"{short} Task {t} requirement {k}: {next(iter(probs.values()))[0]}")
 
+if named:
+    sys.stderr.write("commit gate: named, not refused — proof drift and files under proof/ "
+                     "that are not records:\n" + "".join(f"  - {n}\n" for n in dict.fromkeys(named)))
 if not missing:
     if deviations:
         sys.stderr.write("commit gate: recorded as deviations — name each in the gate "
@@ -573,12 +582,12 @@ more = f"\n  (+{len(missing) - 20} more)" if len(missing) > 20 else ""
 refuse(
     f"commit gate: refused — {len(missing)} proof record(s) missing or stale in the commit(s) "
     f"being added:\n{shown}{more}\n\n"
-    "A task must prove its first claim and every claim that names its break (red if …). "
-    "Stage the change, run prove-claim.py claim for each (a claim no repo patch can break: "
-    "prove-claim.py deviation --claim K --why …), `git add proof/`, then commit again. A "
-    "record proven before the last code change is stale: re-prove after staging the final "
-    "code. A task commit rebased or cherry-picked needs re-proving when the move changes a "
-    "file one of its records proved (any file, for a deviation or a record bound to the whole "
-    "tree), and so does a record whose proven file a later commit changed (proof drift)."
+    "A task the plan marks `Proof: required` must prove its first claim and every claim that "
+    "names its break (red if …). Stage the change, run prove-claim.py claim for each (a claim "
+    "no repo patch can break: prove-claim.py deviation --claim K --why …), `git add proof/`, "
+    "then commit again. A record that is present is validated whether or not it is owed: one "
+    "proven before the last code change is stale, so re-prove after staging the final code. A "
+    "task commit rebased or cherry-picked needs re-proving when the move changes a file one of "
+    "its records proved (any file, for a deviation or a record bound to the whole tree)."
 )
 PY

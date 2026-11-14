@@ -9,19 +9,27 @@ the stage's Goal, Outcomes and Risk, and an entry per assumption to fill in —
 what was checked, on the real environment, and what came back. It prints the
 file's path and what to do with it.
 
-`demo` (the gate) writes proof/<plan>/stage-N/demo.md with every Outcome quoted
-word for word, and prints the evaluator's brief. Pass the brief to the evaluator
-EXACTLY as printed: it is generated so that nobody has to write it, because a
-written brief drifts — it paraphrases Outcomes, drops one, and lets a test suite
-stand in for the demo.
+`demo` runs once per plan, at the last stage's gate. There it writes
+proof/<plan>/stage-N/demo.md with every stage's Outcomes quoted word for word,
+each under its stage and numbered across the plan, and prints the evaluator's
+brief. Pass the brief to the evaluator EXACTLY as printed: it is generated so
+that nobody has to write it, because a written brief drifts — it paraphrases
+Outcomes, drops one, and lets a test suite stand in for the demo. For an earlier
+stage it prints one line saying the demo is owed at the last gate, and writes
+nothing.
 
-The `Stage N green` commit carries both files; the git hook refuses it unless
-every Outcome's section quotes the plan, holds, and carries evidence, and every
-premise is recorded (plan-flip-audit's demo_problems / premise_problems).
-An existing file is never overwritten: delete it to start again.
+The verdicts are holds, does not hold, and not shown here. Only "does not hold",
+a crash, or a user who gets nothing is Blocking; "not shown here" is a residual
+that names what a person would need to show it.
 
-Exit 0 written or already present · 2 bad arguments, or the stage has no
-Outcomes (nothing to demo or to bind; Step 3.0 derives them first).
+The `Stage N green` commit carries the premise worksheet, and the last stage's
+commit the demo worksheet too; the git hook checks them (plan-flip-audit's
+demo_problems / premise_problems). An existing file is never overwritten:
+delete it to start again.
+
+Exit 0 written, already present, or not owed at this stage · 2 bad arguments,
+the stage has no Outcomes (premise), or the plan has none (demo); Step 3.0
+derives them first.
 """
 import argparse
 import importlib.util
@@ -136,6 +144,17 @@ def gate_lines(text, stage):
     return out
 
 
+def stage_numbers(text):
+    """Every `## Stage N` the plan carries, in plan order, each once."""
+    nums = [int(m.group(1)) for m in map(PFA.STAGE_SECTION.match, text.splitlines()) if m]
+    return list(dict.fromkeys(nums))
+
+
+def plan_outcomes(text):
+    """[(stage, Outcomes)] for every stage that carries Outcomes, in plan order."""
+    return [(s, o) for s in stage_numbers(text) if (o := PFA.stage_outcomes(text, s))]
+
+
 def master_goal(plan, text):
     """A sub-plan's master register Goal: the `**Goal:**` of the register entry whose
     `**Plan:**` names this file, in the master its `Master:` line points at. None for a
@@ -193,41 +212,58 @@ def premise(plan, repo, stage, text):
 
 
 def demo(plan, repo, stage, text):
+    nums = stage_numbers(text)
+    last = nums[-1] if nums else stage
+    if int(stage) != last:
+        print(f"stage-brief: no demo at Stage {stage} — the plan's one demo is owed at the last "
+              f"gate (Stage {last}); nothing written.")
+        return
+    by_stage = plan_outcomes(text)
     f = PFA.stage_fields(text, stage)
-    outcomes = PFA.stage_outcomes(text, stage)
-    prem_path, path = stage_paths(plan, repo, stage)
+    _, path = stage_paths(plan, repo, stage)
     unchecked = []
-    if prem_path.is_file():
-        for k, body in sorted(PFA._sections(prem_path.read_text(), "Premise").items()):
-            if PFA._label(body, "Verdict").lower().startswith("not checkable"):
-                unchecked.append(PFA._label(body, "Assumption"))
+    for s in nums:
+        prem_path, _ = stage_paths(plan, repo, s)
+        if prem_path.is_file():
+            for k, body in sorted(PFA._sections(prem_path.read_text(), "Premise").items()):
+                if PFA._label(body, "Verdict").lower().startswith("not checkable"):
+                    unchecked.append(PFA._label(body, "Assumption"))
     kind = platform(repo)
     env = ", ".join(devices()) if kind == "android" else "(see below)"
-    lines = [f"# Stage {stage} demo — {Path(plan).stem}", "", f"Environment: {env}", "",
+    lines = [f"# Plan demo — {Path(plan).stem}", "", f"Environment: {env}", "",
              "Fill in Verdict and Evidence under each Outcome. Do not edit the quoted lines.", ""]
-    for k, o in enumerate(outcomes, 1):
-        lines += [f"## Outcome {k}", f"> {o}", "Verdict: ", "Evidence:", "", ""]
+    k = 0
+    for s, outcomes in by_stage:
+        lines += [f"# Stage {s}", ""]
+        for o in outcomes:
+            k += 1
+            lines += [f"## Outcome {k}", f"> {o}", "Verdict: ", "Evidence:", "", ""]
     made = write_new(path, "\n".join(lines))
     rel = path.relative_to(repo)
     print(f"# {'wrote' if made else 'exists'}: {path}")
     print("# Dispatch the demo evaluator with everything below this line, unchanged.\n")
     goals = [l for l in gate_lines(text, stage) if "(goal)" in l]
     mgoal = master_goal(plan, text)
-    print(f"""You are the Stage {stage} demo evaluator. You did not build this. Do not read the
-source or the diff: use the product, as its user would, and record what you saw.
+    print(f"""You are the plan's demo evaluator, at its last gate (Stage {stage}). You did not
+build this. Do not read the source or the diff: use the product, as its user would,
+and record what you saw.
 
 Plan: {plan_title(text)}
 Plan goal, as its gate checks it: {' / '.join(goals) if goals else '(no (goal) check at this gate)'}""")
     if mgoal:
         print(f"Master register Goal: {mgoal}")
-    print(f"""Stage goal: {f.get('goal', {}).get('text', '')}
-Gate criteria:""")
+    print("Gate criteria:")
     for line in gate_lines(text, stage) or ["(none listed)"]:
         print(f"  {line}")
-    print(f"""Who: {f.get('outcomes', {}).get('text', '')}
-Outcomes:""")
-    for k, o in enumerate(outcomes, 1):
-        print(f"  {k}. {o}")
+    print("Outcomes, by stage:")
+    k = 0
+    for s, outcomes in by_stage:
+        sf = PFA.stage_fields(text, s)
+        print(f"  Stage {s} — goal: {sf.get('goal', {}).get('text', '')}")
+        print(f"    who: {sf.get('outcomes', {}).get('text', '')}")
+        for o in outcomes:
+            k += 1
+            print(f"    {k}. {o}")
     print(f"""Premises not checked yet: {'; '.join(unchecked) if unchecked else 'none'}
 Environment: {env}
 Repo: {repo}
@@ -238,19 +274,20 @@ For each Outcome:
 2. Do what they do, then cause each failure the Outcome names.
 3. Record the commands you ran and what came back: screen text, the result the
    caller got, crash lines.
-If an Outcome cannot be reached by the user's route with the tools below, its verdict
-is "cannot reach by the user's route" — do not substitute a test.
+If you cannot show an Outcome in this session by the user's route with the tools
+below, its verdict is "not shown here" — do not substitute a test.
 
 How, on this platform —
 {PLATFORM_HOWTO[kind]}
 
 Write your results into {rel}: under each `## Outcome K`, keep the quoted line exactly,
-set `Verdict:` to holds / does not hold / cannot reach by the user's route, and put the
-commands and what you saw under `Evidence:`. "Does not hold", "cannot reach", a crash,
-or "the user gets nothing" is Blocking, and so is a stage whose finished output already
-falls short of the plan goal with no later stage planned to change it. Other defects are
-Material or Minor; list
-them after the Outcomes. A FAIL with no Blocking finding is a PASS with residuals.
+set `Verdict:` to holds / does not hold / not shown here, and put the commands and what
+you saw under `Evidence:`. For "not shown here", write one line on what a person would
+need to show it (a device, an account, a second machine). "Does not hold", a crash,
+or "the user gets nothing" is Blocking, and so is a plan whose finished output
+falls short of the plan goal. "Not shown here" is a residual, not Blocking. Other
+defects are Material or Minor; list them after the Outcomes. A FAIL with no
+Blocking finding is a PASS with residuals.
 Wait on any background job you start by its own completion (the harness notification,
 `wait <pid>`, or a sentinel file the job writes last), never by searching for its name.
 Return only after your background work has finished or been stopped, and say which.
@@ -271,8 +308,13 @@ def main(argv=None):
         print(f"stage-brief: cannot read the plan: {e}", file=sys.stderr)
         return 2
     repo = str(Path(a.repo).resolve())
-    if not PFA.stage_outcomes(text, a.stage):
+    if a.kind == "premise" and not PFA.stage_outcomes(text, a.stage):
         print(f"stage-brief: Stage {a.stage} has no **Outcomes:** — derive them first "
+              "(executing-plans Step 3.0, item 1).", file=sys.stderr)
+        return 2
+    nums = stage_numbers(text)
+    if a.kind == "demo" and (not nums or a.stage == nums[-1]) and not plan_outcomes(text):
+        print("stage-brief: the plan has no **Outcomes:** on any stage — derive them first "
               "(executing-plans Step 3.0, item 1).", file=sys.stderr)
         return 2
     (premise if a.kind == "premise" else demo)(a.plan, repo, a.stage, text)

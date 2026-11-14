@@ -139,6 +139,20 @@ try:
     check(rc == 1 and "mandated" in o, f"a scope line at a stage with Outcomes fails ({rc}: {o[-200:]})")
     rc, o = run([], ['evaluator: not run — owner, 2026-10-30: "no evaluator here"'])
     check(rc == 0, f"the owner's quoted words excuse it ({rc}: {o[-200:]})")
+    # One demo per plan: an earlier stage with Outcomes owes no evaluator; the last one does.
+    with open(plan, "w") as fh:
+        fh.write("# Project Plan: fixture\n\n## Stage 1: one\n\n**Outcomes:** the user\n"
+                 "- Works: it reads a file.\n\n### Stage 1 Gate\n" + goal
+                 + "\n## Stage 2: two\n\n### Stage 2 Gate\n- [ ] x\n")
+    rc, o = run([], ["review: Tier-2 not run — fixture"])
+    check(rc == 0, f"stage 1 of 2 with Outcomes and no evaluator line passes ({rc}: {o[-200:]})")
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                    "commit", "--allow-empty", "-qm", "Stage 1 green"], check=True)
+    r = subprocess.run([sys.executable, script, "--plan", plan, "--stage", "2", "--repo", repo,
+                        "--report", "-"], input="review: Tier-2 not run — fixture\n",
+                       capture_output=True, text=True)
+    check(r.returncode == 1 and "evaluator" in r.stdout + r.stderr,
+          f"the last stage with no evaluator line fails ({r.returncode}: {(r.stdout + r.stderr)[-200:]})")
 finally:
     shutil.rmtree(tmp)
 

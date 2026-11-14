@@ -1617,11 +1617,10 @@ for i in range(1, 8):
 commit(proj, env, "Stage 1 green\n\nevaluator: PASS — reads well")
 plan.write_text(plan.read_text().replace("- [ ]", "- [x]").replace("**Status:** [ ]", "**Status:** [x]"))
 r, doc = run_json(str(plan), "--repo", str(proj), "--require-all-checks")
-# Its tasks are evidenced by `mutation:` lines, which are legacy: proof records
-# are the evidence form, so finding 8 reports the lines advisory, nothing else fires.
-others = [f for f in (doc or {}).get("findings", []) if not (
-    f["finding"] == 8 and f["severity"] == "advisory" and "legacy" in f["rule"])]
-if doc is not None and not others and r.returncode == 4:
+# Its tasks carry `mutation:` lines and no `Proof: required` field: they owe no proof
+# record, so the legacy lines are not read and nothing fires.
+others = (doc or {}).get("findings", [])
+if doc is not None and not others and r.returncode == 0:
     ok("with task commits, a probe artefact and a review ledger: the history checks are clean")
 else:
     bad(f"honest run must be clean; exit {r.returncode}",
@@ -2033,9 +2032,11 @@ print("findings 8 and 9 — proof records, bound to their commit")
 PC = SCRIPT.parent / "prove-claim.py"
 REC_PLAN = (
     "# Plan\n\n## Stage 1\n\n"
-    "### Task 1.1: calc\n- **Status:** [x]\n- `add` returns the sum.\n"
+    "### Task 1.1: calc\n- **Status:** [x]\n- **Proof:** required\n- `add` returns the sum.\n"
     "- **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts)\n"
 )
+# The same task as the plan leaves it when it does not mark it: no `Proof:` field.
+UNMARKED_PLAN = REC_PLAN.replace("- **Proof:** required\n", "")
 CALC = "def add(a, b):\n    return a + b\n"
 TESTPY = "import sys\nsys.path.insert(0, '.')\nfrom calc import add\nassert add(2, 3) == 5\n"
 BUILD = "python3 -c 'import ast; ast.parse(open(\"calc.py\").read())'"
@@ -2093,6 +2094,51 @@ if doc is not None and not task_findings(doc, 8) and not task_findings(doc, 9) a
 else:
     bad("valid committed records must satisfy 8 and 9 (red if records are not read)",
         json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+
+# A proof is owed only where the plan asks: a ticked task with no `Proof: required` field
+# and no record draws no finding 8; the same task marked draws it, blocking.
+plan, proj, env = rec_world("rec-unmarked")
+plan.write_text(UNMARKED_PLAN)
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+commit(proj, env, "Stage 1 Task 1.1: twice, no record")
+r, doc = run_json(str(plan), "--repo", str(proj))
+if doc is not None and not task_findings(doc, 8) and r.returncode in (0, 4) and 8 in doc["checks_run"]:
+    ok("a ticked task with no Proof: required field and no record draws no finding 8")
+else:
+    bad("an unmarked task must owe no proof record (red if every ticked task owes its first "
+        "claim)", json.dumps(doc, indent=2)[:900] if doc else r.stderr)
+plan.write_text(REC_PLAN)
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = task_findings(doc, 8) if doc else []
+if r.returncode == 1 and f8 and f8[0]["severity"] == "blocking" and "no valid proof record" in f8[0]["rule"]:
+    ok("the same task marked Proof: required with no record is blocking finding 8")
+else:
+    bad("a Proof: required task with no record must block (red if the field is ignored)",
+        f"rc={r.returncode} {str(f8)[:600]}")
+# Only a ticked task owes its proof: the same marked task, not yet ticked, draws nothing.
+plan.write_text(REC_PLAN.replace("**Status:** [x]", "**Status:** [ ]"))
+r, doc = run_json(str(plan), "--repo", str(proj))
+if doc is not None and not task_findings(doc, 8):
+    ok("a Proof: required task that is not ticked owes no record yet")
+else:
+    bad("an unticked task must owe no proof record (red if unticked tasks are read)",
+        json.dumps(task_findings(doc, 8) if doc else r.stderr)[:600])
+# A record that exists on an unmarked task is still validated: a broken one is reported.
+plan, proj, env = rec_world("rec-unmarked-bad")
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 2 * a\n")
+subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
+prove_task(plan, proj)
+plan.write_text(UNMARKED_PLAN)
+(proj / "calc.py").write_text(CALC + "\n\ndef twice(a):\n    return 3 * a\n")
+commit(proj, env, "Stage 1 Task 1.1: twice, proven on another tree")
+r, doc = run_json(str(plan), "--repo", str(proj))
+f8 = task_findings(doc, 8) if doc else []
+if r.returncode == 1 and f8 and f8[0]["severity"] == "blocking" and any(
+        "different tree" in f["rule"] for f in f8):
+    ok("a record on an unmarked task is still validated and its problem named")
+else:
+    bad("a record that exists must be validated whether or not the task owes it",
+        f"rc={r.returncode} {str(f8)[:600]}")
 
 # A project may keep proof records out of git (proof/ ignored): its plans live outside
 # the repo, and a record copies the plan's path and wording. The records are then read
@@ -2397,10 +2443,11 @@ prove_task(plan, proj)
 commit(proj, env, "Stage 1 Task 1.1: with a stray file under proof/")
 r, doc = run_json(str(plan), "--repo", str(proj))
 st = [f for f in findings_of(doc, 8) if f.get("text") == "proof/"] if doc else []
-if st and st[0]["severity"] == "blocking" and "proof/helper.py" in st[0]["rule"]:
-    ok("a committed file under proof/ that is not a record is blocking")
+if st and st[0]["severity"] == "advisory" and "proof/helper.py" in st[0]["rule"] and r.returncode == 4:
+    ok("a committed file under proof/ that is not a record is named, advisory")
 else:
-    bad("a non-record file under proof/ must block (red when proof/ accepts any file)",
+    bad("a non-record file under proof/ must be named and not block (red when it blocks or "
+        "goes unnamed)",
         json.dumps(doc, indent=2)[:600] if doc else r.stderr)
 
 # Catches: the audit and the ref hook reading subjects differently. One reader,
@@ -2685,10 +2732,10 @@ r, doc = run_json(str(plan), "--repo", str(proj))
 f8 = task_findings(doc, 8) if doc else []
 crel = f"proof/{plan.stem}/1.1/claim-1.json"
 drift = [f for f in f8 if "drift" in f["rule"] and "calc.py" in f["rule"] and crel in f["rule"]]
-if r.returncode == 1 and drift and drift[0]["severity"] == "blocking":
-    ok("a later commit changing a touched file is blocking drift, naming the file and the record")
+if r.returncode == 4 and drift and drift[0]["severity"] == "advisory":
+    ok("a later commit changing a touched file is advisory drift, naming the file and the record")
 else:
-    bad("drift must be reported, blocking, with the file and the record (red if the touched "
+    bad("drift must be reported, advisory, with the file and the record (red if the touched "
         "blobs at HEAD go uncompared)", f"rc={r.returncode} {str(f8)[:600]}")
 # Catches: a req covered by claim 1 reporting the drift of claim 1's own maps a second time.
 alld = [f for f in f8 if "drift" in f["rule"]]
@@ -2697,10 +2744,9 @@ if len(alld) == 1:
 else:
     bad("a covered req must not repeat its claim's drift line (red if each record of the "
         "same maps reports it)", json.dumps(alld, indent=2)[:900])
-# Catches: drift in a closed stage blocking a later stage. Stage 1's gate is fully ticked
-# and its `Stage 1 green` commit holds calc.py as proven: a later change to a file Stage 1
-# proved is expected of a later stage, and the drift is advisory. A stage whose gate is not
-# fully ticked is still open: its drift blocks, as at its gate.
+# Drift is advisory at every stage state: a closed stage (gate fully ticked, its `Stage 1
+# green` commit holding calc.py as proven) and an open one alike. The line says which:
+# a closed stage's drift is a later change, an open stage's a record that no longer fits.
 FULL_GATE = "\n### Stage 1 Gate\n- [x] the suite passes\n- [x] no regressions\n"
 plan, proj, env = rec_world("blob-drift-closed")
 (proj / "calc.py").write_text(TWICE)
@@ -2711,22 +2757,22 @@ subprocess.run(["git", "-C", str(proj), "commit", "-q", "--allow-empty", "-m", "
                check=True, env=env)
 (proj / "calc.py").write_text(TWICE + "# changed by a later stage\n")
 commit(proj, env, "Stage 2 Task 2.1: tidy calc")
-for gate_, sev_ in ((FULL_GATE, "advisory"),
-                    (FULL_GATE.replace("- [x] no", "- [ ] no"), "blocking")):
+for gate_, sev_, says_ in ((FULL_GATE, "advisory", "closed on this proof"),
+                           (FULL_GATE.replace("- [x] no", "- [ ] no"), "advisory", "no longer describes")):
     plan.write_text(REC_PLAN + gate_)
     r, doc = run_json(str(plan), "--repo", str(proj))
     f8 = task_findings(doc, 8) if doc else []
     drift = [f for f in f8 if "drift" in f["rule"] and "calc.py" in f["rule"]]
-    if drift and all(f["severity"] == sev_ for f in drift) and r.returncode == (
+    if drift and all(f["severity"] == sev_ and says_ in f["rule"] for f in drift) and r.returncode == (
             4 if sev_ == "advisory" else 1):
-        ok(f"drift on a task of {'a closed' if sev_ == 'advisory' else 'an open'} stage is {sev_}")
+        ok(f"drift on a task of {'a closed' if '[ ]' not in gate_ else 'an open'} stage is {sev_}")
     else:
-        bad(f"drift on a task whose stage gate is {'fully' if sev_ == 'advisory' else 'not fully'} "
-            f"ticked must be {sev_} (red if every stage's drift blocks)",
+        bad(f"drift on a task whose stage gate is {'fully' if '[ ]' not in gate_ else 'not fully'} "
+            f"ticked must be {sev_}, saying '{says_}' (red if an open stage's drift blocks or "
+            "reads as closed)",
             f"rc={r.returncode} {str(f8)[:600]}")
-# Catches: ticked boxes read as a close the proof survived. Here calc.py changed BEFORE the
-# `Stage 1 green` commit, so the stage closed on a stale proof (a gate not installed, or
-# bypassed): the drift stays blocking however the boxes read.
+# Here calc.py changed BEFORE the `Stage 1 green` commit, so the stage closed on a stale
+# proof: still advisory, and the line says the record no longer describes the file.
 plan, proj, env = rec_world("blob-drift-stale-close")
 (proj / "calc.py").write_text(TWICE)
 subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True, env=env)
@@ -2740,11 +2786,12 @@ plan.write_text(REC_PLAN + FULL_GATE)
 r, doc = run_json(str(plan), "--repo", str(proj))
 f8 = task_findings(doc, 8) if doc else []
 drift = [f for f in f8 if "drift" in f["rule"] and "calc.py" in f["rule"]]
-if drift and all(f["severity"] == "blocking" for f in drift) and r.returncode == 1:
-    ok("drift a record already had at its stage's `Stage N green` commit stays blocking")
+if drift and all(f["severity"] == "advisory" and "no longer describes" in f["rule"]
+                 for f in drift) and r.returncode == 4:
+    ok("drift a record already had at its stage's `Stage N green` commit is advisory, named as stale")
 else:
-    bad("a stage closed on a drifted proof must keep its drift blocking (red if ticked gate "
-        "boxes alone make it advisory)", f"rc={r.returncode} {str(f8)[:600]}")
+    bad("a stage closed on a drifted proof must name it as stale, advisory (red if it blocks "
+        "or reads as a later change)", f"rc={r.returncode} {str(f8)[:600]}")
 
 # The test the record was watched under is bound too (witness_blobs): weakening it
 # after the proof is drift, named like a changed touched file.
@@ -2760,8 +2807,8 @@ f8 = task_findings(doc, 8) if doc else []
 crel = f"proof/{plan.stem}/1.1/claim-1.json"
 drift = [f for f in f8 if "drift" in f["rule"] and "tests/test_calc.py" in f["rule"]
          and crel in f["rule"]]
-if r.returncode == 1 and drift and drift[0]["severity"] == "blocking":
-    ok("a test file edited after the proof is blocking drift, naming the test file and the record")
+if r.returncode == 4 and drift and drift[0]["severity"] == "advisory":
+    ok("a test file edited after the proof is advisory drift, naming the test file and the record")
 else:
     bad("a weakened test must be reported as drift (red if the files the test runs go unbound)",
         f"rc={r.returncode} {str(f8)[:600]}")
@@ -3242,6 +3289,52 @@ if doc is not None and "requirement 2: no valid fingerprint" in f9:
 else:
     bad("the own-number record must decide its clause (red if a later renumbered file "
         "replaces it)", f9 or (r.stderr if doc is None else doc))
+
+# ---- One demo per plan ----------------------------------------------------------
+# The demo is owed at the plan's last gate only, at `standard` and `high`, and quotes every
+# stage's Outcomes; an Outcome the session cannot show is `not shown here`, a residual.
+print()
+print("one demo per plan")
+_dm = importlib.util.module_from_spec(importlib.util.spec_from_file_location("pfa_demo", SCRIPT))
+_dm.__spec__.loader.exec_module(_dm)
+_DEMO_PLAN = ("# P\n\n## Stage 1: a\n\n**Goal:** g\n**Outcomes:** u\n- Works: one.\n**Risk:** LOW\n\n"
+              "## Stage 2: b\n\n**Goal:** g\n**Risk:** LOW\n\n"
+              "## Stage 3: c\n\n**Goal:** g\n**Outcomes:** u\n- Works: three.\n**Risk:** LOW\n{tier}")
+for tier, stage, want, name in (
+        ("", 1, False, "stage 1 of 3 owes no demo"),
+        ("", 2, False, "stage 2 of 3 owes no demo"),
+        ("", 3, True, "the last stage owes the demo at an undeclared (standard) tier"),
+        ("\nreview-scope: high — x\n", 3, True, "the last stage owes the demo at high"),
+        ("\nreview-scope: high — x\n", 1, False, "an earlier stage owes no demo at high"),
+        ("\nreview-scope: light — x\n", 3, False, "no gate owes a demo at light"),
+        ("\nreview-scope: none — x\n", 3, False, "no gate owes a demo at none")):
+    if _dm.demo_owed(_DEMO_PLAN.format(tier=tier), stage) is want:
+        ok(name)
+    else:
+        bad(name + f" (red if demo_owed is per stage) — got {not want}")
+if _dm.plan_outcomes(_DEMO_PLAN.format(tier="")) == ["Works: one.", "Works: three."]:
+    ok("the plan's demo quotes every stage's Outcomes, in plan order")
+else:
+    bad("plan_outcomes", _dm.plan_outcomes(_DEMO_PLAN.format(tier="")))
+if not _dm.demo_owed("# P\n\n## Stage 1: a\n\n**Goal:** g\n", 1):
+    ok("a plan with no Outcomes owes no demo")
+else:
+    bad("a plan with no Outcomes must owe no demo")
+_rep = ("# Stage 1\n\n## Outcome 1\n> Works: one.\nVerdict: {v}\nEvidence:\n"
+        "needs a phone with another app installed to share from\n\n"
+        "# Stage 3\n\n## Outcome 2\n> Works: three.\nVerdict: holds\nEvidence:\n"
+        "$ tool run x -> printed the cleaned copy\n")
+_every = ["Works: one.", "Works: three."]
+for v, want, name in (("not shown here", [], "a worksheet verdict 'not shown here' is accepted"),
+                      ("not shown here — needs a phone", [], "'not shown here — <why>' is accepted"),
+                      ("does not hold", ["Outcome 1: verdict"], "'does not hold' is still refused"),
+                      ("cannot reach by the user's route", ["Outcome 1: verdict"],
+                       "the retired 'cannot reach' verdict is refused")):
+    got = _dm.demo_problems(_rep.format(v=v), _every)
+    if [g for g in got if any(w in g for w in want)] == got and len(got) == len(want):
+        ok(name)
+    else:
+        bad(name, got)
 
 for d_ in _tmpdirs:
     shutil.rmtree(d_, ignore_errors=True)

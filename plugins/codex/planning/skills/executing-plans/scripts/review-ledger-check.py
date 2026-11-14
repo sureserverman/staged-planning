@@ -51,8 +51,9 @@ GATE MODE (--plan --stage). Reads Stage N's `review:` and `evaluator:` lines —
                      named, like an unmatched claim. Any other evaluator line saying
                      `skipped` fails the same way, whatever excuse it gives: a skip names
                      its goal command or quotes the owner
-  an evaluator scope line where the evaluator is mandated (above `none`, a gate with a
-                     `(judgment)` line or a stage with Outcomes; always at `high`) fails
+  an evaluator scope line where the evaluator is mandated (at `standard` and `high`: the
+                     plan's last gate, when some stage has Outcomes or always at `high`, and
+                     any gate with a `(judgment)` line; never at `none` or `light`) fails
                      unless it quotes the owner (`owner, <date>: "<words>"`): an excuse word
                      does not excuse a mandated evaluator. There, so does an evaluator line
                      stating neither an agent, a reason nor a verdict (`n/a`, `waived`), and a
@@ -336,18 +337,26 @@ def declared_tier(plan_text):
     return m.group(1).lower() if m else None
 
 
+def last_stage(plan_text):
+    """The number of the plan's last `## Stage N` section, or None."""
+    nums = list(dict.fromkeys(int(n) for n in re.findall(r"^\s*##\s+Stage\s+(\d+)\b",
+                                                         plan_text, re.M)))
+    return nums[-1] if nums else None
+
+
 def evaluator_mandated(plan_text, stage):
-    """review-scope.md's gate column: never at `none`, always at `high`, otherwise at a gate
-    with a `(judgment)` line or a stage with Outcomes. An undeclared plan is `standard`."""
+    """review-scope.md's gate column: never at `none` or `light`. At `standard` and `high`,
+    once, at the plan's last gate — a demo of every stage's Outcomes, so at `standard` only
+    when some stage has them; at `high` always — and at any gate with a `(judgment)` line.
+    An undeclared plan is `standard`."""
     tier = declared_tier(plan_text)
-    if tier == "none":
+    if tier in ("none", "light"):
         return False
-    if tier == "high" or gate_has_judgment(plan_text, stage):
+    if gate_has_judgment(plan_text, stage):
         return True
-    try:
-        return OUTCOMES_FIELD.search(stage_section(plan_text, stage)) is not None
-    except Usage:
+    if last_stage(plan_text) != int(stage):
         return False
+    return tier == "high" or OUTCOMES_FIELD.search(plan_text) is not None
 
 
 def files_moved_since(sha, stage, repo, plan):

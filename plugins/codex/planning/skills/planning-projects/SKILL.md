@@ -373,9 +373,8 @@ Each task carries `Status`, `Depends on`, `Blocks`, `Dispatch`, `Test:` and
   a path, directory or API used downstream is written into the creating task, so execution
   cannot pick another (`references/task-fields.md` § Names other tasks rely on).
 
-Exact semantics for every field — including `Review: skip`, risk flags and rollback
-notes: `references/task-fields.md`. (Stage sizing is not there; it is § Stage sizing,
-in this trunk.)
+Exact semantics for every field — `Review: skip`, `Proof: required`, risk flags and rollback
+notes: `references/task-fields.md`. (Stage sizing is § Stage sizing, in this trunk.)
 ### Stage sizing
 
 If a stage has more than 7 tasks, it's too large. Split it. Large stages hide integration problems behind a wall of individual task tests that all pass but don't work together. Aim for 3-5 tasks per stage.

@@ -61,17 +61,17 @@ TEST_CMD = "python3 tests/test_calc.py"
 CLAIM1 = "add returns the sum (red if add subtracts)"
 REC_PLAN = (
     "# Plan\n\n## Stage 1: calc\n\n"
-    "### Task 1.1: calc\n- **Status:** [x]\n- `add` returns the sum.\n"
+    "### Task 1.1: calc\n- **Status:** [x]\n- **Proof:** required\n- `add` returns the sum.\n"
     f"- **Test:** `{TEST_CMD}` — {CLAIM1}{{more}}\n\n"
     "### Stage 1 Gate\n- [{gate}] the suite passes: `" + TEST_CMD + "`\n"
 )
 TWO_STAGE_PLAN = (
     "# Plan\n\n## Stage 1: calc\n\n"
-    "### Task 1.1: calc\n- **Status:** [x]\n- `add` returns the sum.\n"
+    "### Task 1.1: calc\n- **Status:** [x]\n- **Proof:** required\n- `add` returns the sum.\n"
     f"- **Test:** `{TEST_CMD}` — {CLAIM1}\n\n"
     "### Stage 1 Gate\n- [x] the suite passes: `" + TEST_CMD + "`\n\n"
     "## Stage 2: more\n\n"
-    "### Task 2.1: more\n- **Status:** [x]\n- `add` still returns the sum.\n"
+    "### Task 2.1: more\n- **Status:** [x]\n- **Proof:** required\n- `add` still returns the sum.\n"
     f"- **Test:** `{TEST_CMD}` — {CLAIM1}\n\n"
     "### Stage 2 Gate\n- [ ] the suite passes: `" + TEST_CMD + "`\n"
 )
@@ -218,6 +218,17 @@ try:
           and {8, 9} <= set(doc.get("checks_run", [])),
           "one claim, proven and committed with its code: clean on findings 8 and 9",
           (r.returncode, r.stdout[:600], r.stderr[:300]))
+
+    # A task the plan does not mark `Proof: required` owes no record, on Cursor too.
+    unmarked = REC_PLAN.format(more="; add is commutative", gate=" ").replace(
+        "- **Proof:** required\n", "")
+    plan, proj = rec_world("unmarked", unmarked)
+    add_code(proj)
+    commit(proj, "Stage 1 Task 1.1: twice, no record")
+    r, doc = audit(plan, proj)
+    check(doc is not None and task_f(doc, 8) == [] and r.returncode in (0, 4),
+          "a ticked task with no Proof: required field and no record draws no finding 8",
+          (r.returncode, task_f(doc, 8), r.stderr[:300]))
 
     two = REC_PLAN.format(more="; add is commutative", gate=" ")
     plan, proj = rec_world("unnamed-second", two)

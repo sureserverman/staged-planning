@@ -327,11 +327,15 @@ try:
     # ---- git-ref-gate.sh through the installed shim
     os.makedirs(os.path.join(repo, "plans"))
     with open(os.path.join(repo, "plans", "p-plan.md"), "w") as fh:
-        fh.write("# Plan\n\n## Stage 1: s\n\n"
-                 "### Task 1.1: calc\n- **Status:** [ ]\n- **Test:** `python3 t.py` — add "
+        fh.write("# Plan\n\n## Stage 1: s\n\n**Outcomes:** the caller\n- Works: add returns the sum.\n\n"
+                 "### Task 1.1: calc\n- **Status:** [ ]\n- **Proof:** required\n"
+                 "- **Test:** `python3 t.py` — add "
                  "returns the sum (red if add subtracts); add stays a plain function\n\n"
-                 "### Task 1.2: calc again\n- **Status:** [ ]\n- **Test:** `python3 t.py` — "
+                 "### Task 1.2: calc again\n- **Status:** [ ]\n- **Proof:** required\n"
+                 "- **Test:** `python3 t.py` — "
                  "add keeps its sign (red if add drops the sign)\n\n"
+                 "### Task 1.3: calc, unmarked\n- **Status:** [ ]\n- **Test:** `python3 t.py` — "
+                 "add returns the sum\n\n"
                  "### Stage 1 Gate\n- [ ] green\n\n## Stage 2: t\n\n"
                  "### Task 2.1: other\n- **Status:** [ ]\n- **Test:** `true` — passes\n")
     with open(os.path.join(repo, "calc.py"), "w") as fh:
@@ -345,9 +349,10 @@ try:
     c = git(repo, "commit", "-q", "-m", "Stage 1 green")
     check(c.returncode != 0 and "Task 1.1 claim 1: no record" in c.stderr
           and "Task 1.1 claim 2: no record" in c.stderr
-          and "Task 1.2 claim 1: no record" in c.stderr and "Task 2.1" not in c.stderr,
+          and "Task 1.2 claim 1: no record" in c.stderr and "Task 2.1" not in c.stderr
+          and "Task 1.3" not in c.stderr,
           "a Stage 1 green commit with no records is refused for every claim of every task "
-          "of stage 1, and only stage 1", c.stderr)
+          "of stage 1 the plan marks Proof: required, and only those", c.stderr)
     state = os.path.join(repo, ".claude", "plan-progress.json")
     os.rename(state, state + ".off")
     c = git(repo, "commit", "-q", "-m", "Stage 1 green")
@@ -370,6 +375,26 @@ try:
     git(repo, "add", "-A")
     c = git(repo, "commit", "-q", "-m", "Stage 1 done")
     check(c.returncode == 0, "a commit 'Stage 1 done' that ticks no gate box is not gated",
+          c.stderr)
+    # Stage 2's only task carries no `Proof: required`: its green commit owes no record, and
+    # a file under proof/ that is not a record is named on stderr, not refused.
+    os.makedirs(os.path.join(repo, "proof"), exist_ok=True)
+    with open(os.path.join(repo, "proof", "notes.md"), "w") as fh:
+        fh.write("why the break is this one\n")
+    git(repo, "add", "-f", "proof/notes.md")
+    # One demo per plan: Stage 2 is the last stage, so its green commit owes the demo of
+    # Stage 1's Outcome; `not shown here` is an accepted verdict.
+    c = git(repo, "commit", "-q", "-m", "Stage 2 green")
+    check(c.returncode != 0 and "Stage 2 demo: no" in c.stderr,
+          "the last stage's green commit is refused without the plan's demo", c.stderr)
+    os.makedirs(os.path.join(repo, "proof", "p-plan", "stage-2"), exist_ok=True)
+    with open(os.path.join(repo, "proof", "p-plan", "stage-2", "demo.md"), "w") as fh:
+        fh.write("# Stage 1\n\n## Outcome 1\n> Works: add returns the sum.\nVerdict: not shown here\n"
+                 "Evidence:\nneeds a caller program installed on a second machine\n")
+    git(repo, "add", "-f", "proof/p-plan/stage-2/demo.md")
+    c = git(repo, "commit", "-q", "-m", "Stage 2 green")
+    check(c.returncode == 0 and "proof/notes.md" in c.stderr and "not a proof record" in c.stderr,
+          "a Stage 2 green commit with no marked task lands, naming a non-record file under proof/",
           c.stderr)
     # A terminal commit while prove-claim.py holds its lock: no shell hook sees it, the ref
     # hook does — any subject, plan in flight or not.

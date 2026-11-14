@@ -294,7 +294,7 @@ with tempfile.TemporaryDirectory() as t:
             ("outcomes", skip_line(), 0),
             ("plain", "evaluator: skipped — docs-only diff", 1),
             ("plain", "evaluator: not run — tier is light, no (judgment) check or Outcomes", 0),
-            ("stage1-outcomes", "evaluator: not run — tier is light, no Outcomes at this gate", 0),
+            ("stage1-outcomes", "evaluator: not run — no Outcomes at this gate", 1),
             ("none", "evaluator: not run — tier none", 0)):
         rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
                       "--report", "-", stdin=line + "\n")
@@ -340,6 +340,61 @@ with tempfile.TemporaryDirectory() as t:
         rc, out = run("--plan", gate_plan(kind), "--stage", 2, "--repo", repo,
                       "--report", "-", stdin=line + "\n")
         check(f"at a {kind} gate `{line}` exits {want}", rc == want, f"rc={rc} {out}")
+
+    # One demo per plan: the evaluator is owed at the plan's last gate (standard, high), or
+    # at a gate with a real (judgment) line; never at `light` or `none`.
+    THREE = ("# Project Plan: three\n\n## Stage 1: one\n\n**Outcomes:** the user\n"
+             "- Works: one.\n\n### Stage 1 Gate\n- [x] x: `true`\n\n"
+             "## Stage 2: two\n\n**Outcomes:** the user\n- Works: two.\n\n"
+             "### Stage 2 Gate\n- [x] x: `true`\n\n"
+             "## Stage 3: three\n\n### Stage 3 Gate\n- [x] x: `true`\n{tail}")
+    SCOPE = "review: Tier-2 not run — fixture\n"
+    (Path(t) / "three").mkdir()
+    repo3 = mkrepo(Path(t) / "three")
+    commit(repo3, "Stage 1 green", "2026-10-06T10:00:00+00:00")
+    commit(repo3, "Stage 2 green", "2026-10-06T11:00:00+00:00")
+    write_log(repo3, [])
+    head3 = git(repo3, "rev-parse", "HEAD").stdout.strip()
+    for name, tail, stage, want in (
+            ("a stage 2 of 3 gate report with no evaluator line passes at standard", "", 2, 0),
+            ("a stage 2 of 3 gate report with no evaluator line passes at high",
+             "\nreview-scope: high — fixture\n", 2, 0),
+            ("a last-stage report with no evaluator line fails at standard", "", 3, 1),
+            ("a last-stage report with no evaluator line fails at high",
+             "\nreview-scope: high — fixture\n", 3, 1),
+            ("a last-stage report with no evaluator line passes at light",
+             "\nreview-scope: light — fixture\n", 3, 0),
+            ("a (judgment) gate at light owes no evaluator",
+             "- [x] **(judgment)** reads well\n\nreview-scope: light — fixture\n", 3, 0),
+            ("an earlier gate with a real (judgment) line still owes the evaluator at standard",
+             "", "judgment-2", 1)):
+        p3 = write_plan(t)
+        body = THREE.format(tail=tail)
+        if stage == "judgment-2":
+            body = body.replace("### Stage 2 Gate\n- [x] x: `true`\n",
+                                "### Stage 2 Gate\n- [x] x: `true`\n- [x] **(judgment)** reads well\n")
+            stage = 2
+        p3.write_text(body)
+        rc, out = run("--plan", p3, "--stage", stage, "--repo", repo3, "--report", "-", stdin=SCOPE)
+        check(name, rc == want and (want == 0 or "evaluator" in out), f"rc={rc} {out}")
+    # The ledger reads stages as the audit, the brief and the hook do: an indented heading
+    # counts, and a repeated one keeps its first place in plan order.
+    for name, body, stage, want in (
+            ("an indented `## Stage` heading counts as a stage, as in the audit",
+             THREE.format(tail="") + "\n  ## Stage 4: four\n\n### Stage 4 Gate\n- [x] x: `true`\n", 3, 0),
+            ("a repeated `## Stage` heading keeps its first place in plan order",
+             THREE.format(tail="") + "\n## Stage 2: two again\n", 3, 1)):
+        p3 = write_plan(t)
+        p3.write_text(body)
+        rc, out = run("--plan", p3, "--stage", stage, "--repo", repo3, "--report", "-", stdin=SCOPE)
+        check(name, rc == want, f"rc={rc} {out}")
+    p3 = write_plan(t)
+    p3.write_text(THREE.format(tail="").replace("### Stage 3 Gate\n- [x] x: `true`",
+                                                 "### Stage 3 Gate\n- [x] **(goal)** g: `true`"))
+    rc, out = run("--plan", p3, "--stage", 3, "--repo", repo3, "--report", "-",
+                  stdin=SCOPE + skip_line(cmd="true", sha=head3) + "\n")
+    check("the goal-command skip still stands where the last-stage demo is owed", rc == 0,
+          f"rc={rc} {out}")
 
     # Catches: the (goal) box of another stage standing in for this stage's.
     other = write_plan(t)

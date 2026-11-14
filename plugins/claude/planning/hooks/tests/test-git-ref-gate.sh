@@ -5,8 +5,9 @@
 #
 # WHAT THIS SUITE IS REALLY GUARDING. In a project that opted in (the shim that
 # proof-hooks-install.py writes), a task commit cannot land without prove-claim.py
-# records for the claims the plan requires — the FIRST claim and every claim that
-# names its break "(red if …)" (plan-flip-audit's required_claims). The hook is a
+# records for the claims the plan requires of a task it marks `Proof: required` — the
+# FIRST claim and every claim that names its break "(red if …)" (plan-flip-audit's
+# owed_claims); a task without the field owes none. The hook is a
 # git reference-transaction hook, so these cases make REAL commits by every route:
 # a gate that reads the index before the command runs misses `-a`, and one that
 # parses commands is beaten by a quoted `;`. Two failures matter equally: an
@@ -37,13 +38,19 @@ cat > "$PLAN" <<'EOF'
 
 ### Task 1.1: calc
 - **Status:** [ ]
+- **Proof:** required
 - `add` returns the sum.
 - **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts); add stays a plain function
 
 ### Task 1.2: calc again
 - **Status:** [ ]
+- **Proof:** required
 - `add` returns the sum.
 - **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts); add keeps its sign (red if add drops the sign)
+
+### Task 1.3: calc, unmarked
+- **Status:** [ ]
+- **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts)
 EOF
 
 mkrepo() {  # $1 = path; a repo with calc.py, its test, and a plan in flight
@@ -112,6 +119,14 @@ else ok "an unnamed later claim needs no record"; fi
 if grep -q 'requirement 1' <<<"$err"; then
     ok "a requirement with no record is named on stderr (advisory)"
 else bad "an unaccounted requirement must be named, not silently passed" "$err"; fi
+
+# A proof is owed only where the plan asks: Task 1.3 carries no `Proof: required` field,
+# so its commit lands with no record.
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 Task 1.3: no record"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && ! grep -q 'Task 1.3 claim' <<<"$err"; then
+    ok "a task commit with no record lands when the plan does not mark the task Proof: required"
+else bad "an unmarked task must owe no record (red if every task owes its first claim) (rc=$rc)" "$err"; fi
 
 # Catches: named breaks not required. Task 1.2's claim 2 names its break.
 change; prove 1.2 && git -C "$REPO" add proof; h=$(head_of)
@@ -191,13 +206,16 @@ if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'different wording' <<<"$
     ok "records proving wording the plan no longer has are refused"
 else bad "reworded claim must be refused (rc=$rc)" "$err"; fi
 
-# Catches: proof/ as a hiding place.
+# A file under proof/ that is not a record is named on stderr, and the commit lands.
 printf 'x = 1\n' > "$REPO/proof/helper.py"; git -C "$REPO" add proof/helper.py
 try_commit 'git commit -q -m "Stage 1 Task 1.1: with a stray file"'
-if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'proof/helper.py: not a proof record' <<<"$err"; then
-    ok "a staged file under proof/ that is not a record is refused"
-else bad "stray proof/ files must be refused (rc=$rc)" "$err"; fi
-git -C "$REPO" rm -q --cached proof/helper.py; rm "$REPO/proof/helper.py"
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && grep -q 'proof/helper.py: not a proof record' <<<"$err"; then
+    ok "a staged file under proof/ that is not a record is named on stderr and the commit lands"
+else bad "a stray proof/ file must be named and not refused (rc=$rc)" "$err"; fi
+git -C "$REPO" rm -q proof/helper.py >/dev/null 2>&1; rm -f "$REPO/proof/helper.py"
+try_commit 'git commit -q -m "Stage 1 Task 1.1: drop the stray file"'
+[ $rc -eq 0 ] || bad "fixture: dropping the stray file must land (rc=$rc)" "$err"
+h=$(head_of)
 
 # Catches: a present-but-stale record waved through because it is not required.
 python3 - "$REPO/proof/$STEM/1.1" <<'PY'
@@ -560,10 +578,9 @@ cat > "$OPLAN" <<'EOF'
 - `add` returns the sum.
 - **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts)
 
-## Stage 2: internal
+## Notes
 
-**Goal:** Internal refactor.
-**Risk:** LOW — nothing user-facing.
+Stage 1 is this plan's last stage, so its gate owes the plan's one demo.
 EOF
 outcome='Works: the chooser opens with a cleaned copy another app can read.'
 write_reports() {  # $1 = repo, $2 = the demo verdict
@@ -595,11 +612,33 @@ try_commit 'git commit -q -m "Stage 1 green"'
 if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
     ok "filled reports in the commit's tree let the green commit land"
 else bad "filled reports must let the green commit land (rc=$rc)" "$err"; fi
-in_flight "$REPO" 2; change; h=$(head_of)
+# One demo per plan: an earlier stage's green commit needs its premise worksheet and no
+# demo; the last stage's needs the demo of every stage's Outcomes, in its own folder.
+TWO="$T/plans/2026-10-05-two-plan.md"
+{ sed '/^## Notes/,$d' "$OPLAN"; printf '## Stage 2: internal\n\n**Goal:** Internal refactor.\n**Risk:** LOW — nothing user-facing.\n'; } > "$TWO"
+REPO="$T/outcomes-two"; mkrepo "$REPO"
+printf '{"plan": "%s", "phase": "gate", "stage": 1, "updated": "2026-10-05T10:00:00Z"}\n' "$TWO" > "$REPO/.claude/plan-progress.json"
+python3 "$INSTALL" --install --repo "$REPO" >/dev/null 2>&1
+OSTEM_SAVED=$OSTEM; OSTEM=2026-10-05-two-plan; write_reports "$REPO" "holds"
+rm "$REPO/proof/$OSTEM/stage-1/demo.md"; git -C "$REPO" add proof
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 1 green"'
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
+    ok "a Stage 1 green commit of a two-stage plan lands with no demo worksheet"
+else bad "an earlier stage must not owe the demo (rc=$rc)" "$err"; fi
+change; h=$(head_of)
+try_commit 'git commit -q -m "Stage 2 green"'
+if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'Stage 2 demo: no' <<<"$err"; then
+    ok "the last stage's green commit with no demo is refused, though that stage has no Outcomes"
+else bad "the last stage must owe the plan's demo (rc=$rc)" "$err"; fi
+mkdir -p "$REPO/proof/$OSTEM/stage-2"
+printf '# Stage 1\n\n## Outcome 1\n> %s\nVerdict: not shown here\nEvidence:\nneeds a phone with another app installed to share from\n' \
+    "$outcome" > "$REPO/proof/$OSTEM/stage-2/demo.md"; git -C "$REPO" add proof
 try_commit 'git commit -q -m "Stage 2 green"'
 if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ]; then
-    ok "a stage with no Outcomes needs no reports"
-else bad "a stage without Outcomes must not be held to reports (rc=$rc)" "$err"; fi
+    ok "a last-stage demo of every stage's Outcomes, verdict 'not shown here', lets the green commit land"
+else bad "a 'not shown here' verdict in the plan's demo must be accepted (rc=$rc)" "$err"; fi
+OSTEM=$OSTEM_SAVED; REPO="$T/outcomes"
 REPO="$T/outcomes-local"; mkrepo "$REPO"; in_flight "$REPO" 1
 printf 'proof/\n' >> "$REPO/.gitignore"; git -C "$REPO" add .gitignore && git -C "$REPO" commit -q -m ignore
 python3 "$INSTALL" --install --repo "$REPO" >/dev/null 2>&1
@@ -765,7 +804,7 @@ else bad "an evidenced owner opt-out must let the green commit land (rc=$rc)" "$
 # hook refuses that form at a gate with a (judgment) line, an unticked (goal) box, or an
 # Outcome with no `Decided by:`.
 skip_plan() {  # $1 = file, $2 = the Stage 1 gate lines
-    awk -v gate="$2" '/^## Stage 2:/ { print "### Stage 1 Gate\n" gate "\n" } { print }' "$OPLAN" > "$1"
+    awk -v gate="$2" '/^## Notes/ { print "### Stage 1 Gate\n" gate "\n" } { print }' "$OPLAN" > "$1"
 }
 skip_demo() {  # $1 = demo.md, $2 = the Outcome's `Decided by:` line (empty for none)
     { printf 'Evaluator: skipped — goal command `python3 tests/test_calc.py` at %s\n\n' "${SKIP_AT:-$(head_of)}"
@@ -870,6 +909,7 @@ REPO="$SAVED_REPO"
 # that touches other files, leave it valid. A later commit that changes a touched file is
 # drift: the `Stage N green` commit is refused, naming the file and the record, until the
 # record is re-proven. A record with no touched_blobs keeps the whole-tree rule.
+# Drift is named on stderr and the commit lands: it is reported, never refused.
 echo
 echo "records bound to their touched files' blobs"
 SAVED_REPO="$REPO"; SAVED_PLAN="$PLAN"; REPO="$T/blobs"; mkrepo "$REPO"
@@ -910,15 +950,15 @@ try_commit 'git commit -q -m "chore: tidy calc"'
 [ $rc -eq 0 ] || bad "fixture: a commit naming no task must land (rc=$rc)" "$err"
 h=$(head_of)
 try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
-if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'proof drift' <<<"$err" \
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && grep -q 'proof drift' <<<"$err" \
         && grep -q 'calc.py' <<<"$err" && grep -qF "$CREC" <<<"$err"; then
-    ok "a Stage 1 green commit after a change to a touched file is refused as drift, naming file and record"
-else bad "drift must refuse Stage N green, naming the file and the record (rc=$rc)" "$err"; fi
+    ok "a Stage 1 green commit after a change to a touched file lands, naming the drift, file and record"
+else bad "drift must be named on stderr and not refuse Stage N green (rc=$rc)" "$err"; fi
 prove && git -C "$REPO" add proof
 try_commit 'git commit -q -m "Stage 1 Task 1.1: re-proven on the tidied code"'
 [ $rc -eq 0 ] || bad "fixture: the re-proven task commit must land (rc=$rc)" "$err"
 try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
-if [ $rc -eq 0 ]; then ok "re-proven, the Stage 1 green commit lands"
+if [ $rc -eq 0 ] && ! grep -q 'proof drift' <<<"$err"; then ok "re-proven, the Stage 1 green commit lands with no drift named"
 else bad "a re-proven record must clear the drift (rc=$rc)" "$err"; fi
 printf 'import sys\nsys.exit(0)  # the assertions are gone\n' > "$REPO/tests/test_calc.py"
 git -C "$REPO" add tests/test_calc.py
@@ -926,10 +966,10 @@ try_commit 'git commit -q -m "chore: weaken the test"'
 [ $rc -eq 0 ] || bad "fixture: a commit naming no task must land (rc=$rc)" "$err"
 h=$(head_of)
 try_commit 'git commit -q --allow-empty -m "Stage 1 green"'
-if [ $rc -ne 0 ] && [ "$(head_of)" = "$h" ] && grep -q 'proof drift' <<<"$err" \
+if [ $rc -eq 0 ] && [ "$(head_of)" != "$h" ] && grep -q 'proof drift' <<<"$err" \
         && grep -q 'tests/test_calc.py' <<<"$err" && grep -qF "$CREC" <<<"$err"; then
-    ok "a Stage 1 green commit after the test was weakened is refused as drift, naming the test file"
-else bad "a weakened test must refuse Stage N green as drift (rc=$rc)" "$err"; fi
+    ok "a Stage 1 green commit after the test was weakened lands, naming the drift and the test file"
+else bad "a weakened test must be named as drift on Stage N green (rc=$rc)" "$err"; fi
 # Catches: a req covered by a claim carrying blob maps of its own choosing. The copy must be
 # the cited claim's; here it binds another file, at the blob that file really has.
 git -C "$REPO" checkout -q -- tests/test_calc.py 2>/dev/null

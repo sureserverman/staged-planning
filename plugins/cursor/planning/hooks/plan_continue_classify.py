@@ -287,6 +287,12 @@ def owned_state_fallback(root):
                 return outcome['state']
             return {'state_status':'state_error','note':'owned execution snapshot is missing or unreadable'}
     except Exception:
+        try:
+            # A finished run on another branch (`show` says no active plan): finished.
+            if module.result(root,'show',{})['status']=='no_active_plan':
+                return module.finished_run(root)
+        except Exception:
+            pass
         return {'state_status':'state_error','note':'invalid owned execution discovery metadata'}
     return None
 
@@ -468,6 +474,10 @@ def read_state(root):
             outcome=module.result(root,'show',{})
             if outcome['status']=='ok':
                 return outcome['state']
+            if outcome['status']=='no_active_plan':
+                # A finished run on another branch: the hooks treat it as finished, as
+                # on its own branch; None when there is none.
+                return module.finished_run(root)
         except Exception:
             pass
         return {'state_status':'state_error','note':'unsupported or invalid owned execution snapshot'}

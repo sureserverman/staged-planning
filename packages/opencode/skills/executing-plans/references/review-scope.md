@@ -16,9 +16,9 @@ gates only the two review passes leaves the rest running unconditionally underne
 | Tier | When (judged on the plan's **cumulative diff**) | Tier-1 (which tasks) | Tier-2 (the deep review) | Gate evaluator | Close-out evaluator |
 |---|---|---|---|---|---|
 | **none** | Docs-only, config-only, version-bump-only, comment-only across the whole plan — **and none of that prose asserting executable behavior** (see below) | skip | skip | skip | skip |
-| **light** | No new executable behavior, **or** a diff under roughly 200 changed lines across ≤ ~5 files — and no risk-listed area touched | skip | **one**, over the whole plan diff, before close-out | at a gate carrying a `(judgment)` check **or whose stage has `**Outcomes:**`**, unless a recorded goal command decides it (`stage-gate.md` § Skipped when a recorded command decides the goal) | if the final gate carries `(judgment)` or any stage has Outcomes |
-| **standard** | Multi-file code with new behavior — the default when unsure, and what an undeclared run gets | skip | at the shape the format sets | at a gate carrying a `(judgment)` check **or whose stage has `**Outcomes:**`**, unless a recorded goal command decides it (`stage-gate.md` § Skipped when a recorded command decides the goal) | if the final gate carries `(judgment)` or any stage has Outcomes |
-| **high** | **Risk-listed:** security-sensitive, auth, data-destructive, public API, schema/migration — **paths a task's diff touches, never a project's subject matter** (`review-scope.md` § Risk-listed names a path, not a project) | per **risk-listed task** (see below) | that, **plus** a second independent pass | **every gate, always** | **always** |
+| **light** | No new executable behavior, **or** a diff under roughly 200 changed lines across ≤ ~5 files — and no risk-listed area touched | skip | **one**, over the whole plan diff, before close-out | never | none — the last gate's demo is the plan's demo |
+| **standard** | Multi-file code with new behavior — the default when unsure, and what an undeclared run gets | skip | at the shape the format sets | once, **at the plan's last gate**, as a demo of every stage's Outcomes, and at a gate carrying a `(judgment)` check — unless a recorded goal command decides it (`stage-gate.md` § Skipped when a recorded command decides the goal) | none — the last gate's demo is the plan's demo |
+| **high** | **Risk-listed:** security-sensitive, auth, data-destructive, public API, schema/migration — **paths a task's diff touches, never a project's subject matter** (`review-scope.md` § Risk-listed names a path, not a project) | per **risk-listed task** (see below) | that, **plus** a second independent pass | once, **at the plan's last gate**, always, and at a gate carrying a `(judgment)` check | none — the last gate's demo is the plan's demo |
 
 **`none` excludes prose that asserts executable behavior.** A docs-only diff qualifies for
 `none` only when its prose *mentions* things; the moment it **asserts** a fact about a
@@ -71,8 +71,8 @@ reader is the **executor** (`stage-gate.md` § Decisions-conformance check). A g
 only `(judgment)` lines are those two is, for the tier table's evaluator column, a gate
 carrying none.
 
-**What the tier gates.** Everything in the row: the two review tiers, the gate evaluator, the
-close-out evaluator, and the second independent pass. Two more agent-dispatching mandates are
+**What the tier gates.** Everything in the row: the two review tiers, the gate evaluator and the
+second independent pass. Two more agent-dispatching mandates are
 gated by it, and are named here because a table that leaves them off is a half-measure:
 
 - **The Preflight dispatch probe** runs only when the roster is non-empty **and** the tier is
@@ -83,9 +83,9 @@ gated by it, and are named here because a table that leaves them off is a half-m
   delivers the same news almost as early. The accepted cost, stated because it is real: a
   `light` run with a non-empty roster learns one task later than a `standard` run would.
 - **The design-fidelity verify loop's evaluator** (Step 3.5's redesign hook) is a dispatch
-  like any other and follows the same rule as the gate evaluator: never at `none`, at
-  `light`/`standard` when the stage carries a design-handoff task whose fidelity is a
-  `(judgment)` gate check, always at `high`. A redesign stage that reproduces a handoff pack
+  like any other and follows the same rule as the gate evaluator: never at `none` or `light`; at
+  `standard` and `high` when the stage carries a design-handoff task whose fidelity is a
+  `(judgment)` gate check. A redesign stage that reproduces a handoff pack
   is essentially always at least `standard`, so in practice this loop runs — but it is listed
   here because a mandate costing an agent dispatch that appears on neither list is exactly
   the gap this section exists to close.
@@ -148,7 +148,7 @@ Two rules govern which direction an ambiguity resolves:
 - **Touching a risk-listed area sets `high`**, whatever the size. Small and dangerous is
   still dangerous; the `high` row's list is the authority on what counts.
 - **The floor escalates the plan, but Tier-1 attaches to the risk-listed task.** Everything
-  in the `high` row that reads an *integrated* diff — both evaluators, the second Tier-2
+  in the `high` row that reads an *integrated* diff — the last gate's evaluator, the second Tier-2
   pass — is plan-level and runs for the whole plan, because a risk-listed task's blast
   radius is not confined to its own diff. Tier-1 is the exception: it reads one task's diff
   in isolation, so it runs for **the tasks whose `Scope:`/diff touches the risk-listed area,
@@ -181,9 +181,9 @@ questions**, and a plan carries both at once. Resolve them this way, always:
 | From the **tier** — depth | Tier-2 passes | Tier-1 (which tasks) | Evaluator |
 |---|---|---|---|
 | `none` | none | no | no |
-| `light` | **one**, whatever shape the format sets | no | only at a gate carrying `(judgment)` or whose stage has Outcomes, unless a recorded goal command decides it |
-| `standard` | one **per** unit the format's shape names | no | only at a gate carrying `(judgment)` or whose stage has Outcomes, unless a recorded goal command decides it |
-| `high` | that, plus a second independent pass | **yes — risk-listed tasks only** | **yes, always** — every gate and close-out |
+| `light` | **one**, whatever shape the format sets | no | no |
+| `standard` | one **per** unit the format's shape names | no | once, at the plan's last gate (a demo of every stage's Outcomes), and at a gate carrying `(judgment)`, unless a recorded goal command decides it |
+| `high` | that, plus a second independent pass | **yes — risk-listed tasks only** | **yes** — at the plan's last gate, always, and at a gate carrying `(judgment)` |
 
 **How to read the two together without them fighting.** The format's row names the unit a
 Tier-2 pass *would* cover if the tier bought one pass per unit: the whole plan diff for

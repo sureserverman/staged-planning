@@ -349,15 +349,16 @@ if r.returncode == 1 and "assume-unchanged" in r.stderr:
 else:
     bad(f"index flags must be refused, exit {r.returncode}", r.stderr)
 
-# Catches: proof/ as a hiding place. It is excluded from every check.
-(repo / "proof" / "helper.py").parent.mkdir(exist_ok=True)
-(repo / "proof" / "helper.py").write_text("x = 1\n")
+# A non-record file under proof/ (a note beside the records) is named and the claim is
+# proven: proof/ is outside every fingerprint, so the file binds nothing either way.
+(repo / "proof" / "notes.md").parent.mkdir(exist_ok=True)
+(repo / "proof" / "notes.md").write_text("why the break is this one\n")
 r = claim(repo, plan, 1, brk)
-(repo / "proof" / "helper.py").unlink()
-if r.returncode == 1 and "proof records only" in r.stderr:
-    ok("a non-record file under proof/ is refused")
+(repo / "proof" / "notes.md").unlink()
+if r.returncode == 0 and r.stderr.count("proof/notes.md") == 1 and "not a proof record" in r.stderr:
+    ok("a claim is proven with proof/notes.md present, and the file is named once on stderr")
 else:
-    bad(f"proof/ must hold records only, exit {r.returncode}", r.stderr)
+    bad(f"a non-record file under proof/ must be named, not refused, exit {r.returncode}", r.stderr)
 
 # Catches: red that is "could not run". Under the break the test is not found.
 # `a + b` is absent only under the break (sub's `a - b` is there all along).

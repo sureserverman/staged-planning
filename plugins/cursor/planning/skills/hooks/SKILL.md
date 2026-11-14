@@ -75,7 +75,8 @@ has a plan in flight — a second chat in the same repo is pushed to continue to
 ## The commit gate
 
 Proof is checked once per stage. A `Stage N green` commit needs a `prove-claim.py`
-record for every claim of every task of stage N, bound to the code it commits. Task
+record for every claim of every task of stage N the plan marks `Proof: required`, bound to
+the code it commits; a task without the field needs none. Task
 commits carry code only. The check is git's `reference-transaction` hook
 (`hooks/git-ref-gate.sh`), installed per repo with `--install --repo`: git runs it
 whenever a branch moves — `--no-verify`, amend, cherry-pick and plumbing included — and

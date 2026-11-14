@@ -257,8 +257,13 @@ def untracked_files(repo):
                            ".", ex, ":(top,exclude).claude/").stdout.split("\0") if u]
 
 
+_STRAY_NAMED = set()  # named once per run, though require_clean runs before and after
+
+
 def require_clean(repo, allowed_untracked=()):
-    """Worktree == index outside proof/; nothing hides a difference; proof/ holds records only.
+    """Worktree == index outside proof/; nothing hides a difference. A file under proof/
+    that is not a record is named on stderr, never refused: proof/ is outside every
+    fingerprint, so it binds nothing either way.
 
     `allowed_untracked` is the after-the-proof check's: what the build and the baseline
     run wrote before the break was applied is the tree the break started from.
@@ -292,10 +297,11 @@ def require_clean(repo, allowed_untracked=()):
         raise Refused("a tracked path contains a newline; the fingerprint cannot bind it")
     stray = [p for p in git(repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard",
                             "--", PROOF_DIR).stdout.split("\0")
-             if p and not RECORD_PATH.match(p)]
+             if p and not RECORD_PATH.match(p) and p not in _STRAY_NAMED]
     if stray:
-        raise Refused(f"{PROOF_DIR}/ may hold proof records only — it is excluded from every "
-                      f"other check, so nothing else may live there: {', '.join(stray[:5])}")
+        sys.stderr.write(f"prove-claim: note — not a proof record, bound to nothing (proof/ is "
+                         f"outside every fingerprint): {', '.join(stray[:5])}\n")
+        _STRAY_NAMED.update(stray)
 
 
 # ------------------------------------------------------------------- plan

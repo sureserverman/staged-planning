@@ -105,7 +105,8 @@ Omit the heading entirely when no decision bears on this task.>
 6. Run NOTHING WIDER than the Test above. No full suite, no regression sweep across other
    test trees, no "check I broke nothing else" — the main session runs that once at the
    stage gate. Running a whole test file instead of one filter is fine
-7. Stage your work, then prove it (executing-plans rule 4a): `python3 <absolute path of
+7. When the task carries `Proof: required` (its plan entry has the field): Stage your work,
+   then prove it (executing-plans rule 4a): `python3 <absolute path of
    <planning-plugin>/skills/executing-plans/scripts/prove-claim.py claim` (`--help` lists its arguments) for the
    first claim and each `(red if …)` claim — `--test` the Test command above, `--break` a
    patch reverting your fix in `.claude/`; then `git add proof/`

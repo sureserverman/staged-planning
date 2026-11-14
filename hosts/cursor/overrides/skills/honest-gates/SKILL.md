@@ -181,25 +181,25 @@ agent dispatch, so they are **untiered — they run at every review scope includ
    derive one test from the set — a fix scoped from the one counterexample regenerates
    on the next sibling.
 
-2. **Revert the fix; the suite must go red.** If it stays green you do not have a
+2. **Revert the fix; the suite must go red.** It binds a verdict-producing checker and a
+   task the plan marks `Proof: required`. If it stays green you do not have a
    weak test, you have **no test** — and you cannot know which, because both look
    identical from a passing run. Record it with `prove-claim.py claim` — on Cursor the
    stage gate's `claim-verifier` does, once per stage (executing-plans rule 4a). No red,
-   no record. This is the whole
-   rule: a check that cannot fail is not evidence, and it is indistinguishable
-   from one that can until you try. One red proves one guard, so **each guard is
+   no record. A check that cannot fail is not
+   evidence. One red proves one guard, so **each guard is
    independently reachable from a named test** — two guards that each keep the other's
    fixture clean stay green with either deleted, and that is no test for either. For a
    check whose output is a *verdict* rather than a value, the proof is a **mutation
    battery, one mutation per guard**; a survivor is a guard with no test, and a masking
    pair is its common shape (`references/reasons.md`).
 
-   **Cost bound: one break per claim, on the host, at the task's own `Test:`** — on Cursor
-   every claim of a task gets its record, proven once per stage at the gate. A device,
+   **Cost bound: one break per claim of a marked task, on the host, at its own `Test:`** —
+   on Cursor proven once per stage at the gate. A device,
    VM or instrumented run is never the mutant's proof — on an expensive-suite project prove
    it against the host-side test guarding the same line, or record the device-only claim
    with `prove-claim.py deviation --claim` — disclosed, never counted as proof. The battery is
-   for verdict-producing checkers; a product test gets one break per claim.
+   for verdict-producing checkers; a marked product test gets one break per claim.
 
 3. **Build fixtures from the requirement, never from observed behavior.** The
    moment a fixture is shaped by what the code currently does, it can no longer

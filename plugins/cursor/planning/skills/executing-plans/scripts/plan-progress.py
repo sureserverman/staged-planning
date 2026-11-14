@@ -1527,21 +1527,28 @@ def projection_state(state_file):
         try:
             owned = module.read_pointer(owner) is not None
         except Exception as exc:
+            # A finished run on another branch is no run here (`show` says so).
+            if module.result(repo_root_of(state_file), 'show', {})['status'] == 'no_active_plan':
+                return None
             raise ValueError('state_error: invalid execution discovery metadata') from exc
     if owned:
-        outcome = module.result(repo_root_of(state_file), 'show', {})
-        if outcome['status'] != 'ok':
-            raise ValueError('state_error: ' + outcome.get('message', outcome['status']))
-        return outcome['state']
+        return owned_projection(module, state_file)
     # No run pointer: keep the legacy renderer's silence for unusable legacy
     # files. A parsed version marker still requires the shared owned reader.
     state = json.loads(pu.read_capped(state_file, STATE_READ_CAP))
     if isinstance(state, dict) and 'schema_version' in state:
-        outcome = module.result(repo_root_of(state_file), 'show', {})
-        if outcome['status'] != 'ok':
-            raise ValueError('state_error: ' + outcome.get('message', outcome['status']))
-        return outcome['state']
+        return owned_projection(module, state_file)
     return state
+
+
+def owned_projection(module, state_file):
+    """The shared reader's state, None when it reports no active plan, else an error."""
+    outcome = module.result(repo_root_of(state_file), 'show', {})
+    if outcome['status'] == 'no_active_plan':
+        return None
+    if outcome['status'] != 'ok':
+        raise ValueError('state_error: ' + outcome.get('message', outcome['status']))
+    return outcome['state']
 
 
 # The hooks' run reader, at <plugin root>/hooks/ (owner-decision.py loads it the same way).
@@ -1896,8 +1903,8 @@ def current_run(cwd):
             # landing between the two reads would make the second one fail and
             # silently disable dedup for that redraw.
             state = projection_state(state_file)
-            pinned = pinned_plan_path(state, state_file)
-            if run_finished(state, repo_root_of(state_file), pinned):
+            pinned = None if state is None else pinned_plan_path(state, state_file)
+            if state is not None and run_finished(state, repo_root_of(state_file), pinned):
                 # The file stays where it is; its plan gets a row only if
                 # discovery finds it in flight.
                 state = pinned = None
@@ -2098,9 +2105,9 @@ def budget_check(cwd):
     try:
         if sf is not None:
             state = projection_state(sf)
-            if not isinstance(state, dict):
+            if state is not None and not isinstance(state, dict):
                 raise ValueError('state is not an object')
-            if 'schema_version' not in state:
+            if state is not None and 'schema_version' not in state:
                 rnd = state.get('remediation_round')
                 if rnd is None and 'remediation_round' not in state:
                     return 0  # labeled legacy compatibility, not mutation authority

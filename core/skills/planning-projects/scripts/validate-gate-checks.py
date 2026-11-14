@@ -118,7 +118,7 @@ plan's TASK fields:
                         classified (an instance-shaped one is still INSTANCE-SHAPED). Why: when
                         each stage's checks cover only part of the goal, every gate passes,
                         and the gap surfaces only at the first reader of the plan goal,
-                        usually the close-out evaluator. It checks
+                        usually the plan's demo at its last gate. It checks
                         presence, not placement: one `(goal)` check in the final gate reports
                         zero, so placement from the first gate is the author's to check.
                         ADVISORY, because the corpus plans were written without the marker:

@@ -29,32 +29,11 @@ procedure. Work the steps in order.
    `light`'s single review is the whole plan's only white-box pass; a close-out that forgot it
    would ship a tier that reads as reviewed and was not.
 
-3. **Independent evaluator pass.** **Whether it runs comes from `../references/review-scope.md`**
-   — never at `none`; at `light` and `standard` when the final gate carries a `(judgment)`
-   check or any stage has `**Outcomes:**`; always at `high`. When it runs, dispatch a fresh
-   evaluator briefed ONLY with the plan's stated goals, the per-stage Goal lines and the gate
-   criteria — never the implementation transcript. Where stages have Outcomes, also give it
-   the brief `stage-brief.py demo --stage <the last stage with Outcomes>` prints, and tell it
-   to demo every earlier stage's `demo.md` Outcomes again on the finished build, the way its
-   users use it.
-   It verifies the goal against the artifact itself and grades every
-   finding Blocking / Material / Minor, as at the stage gate, and **each finding is repaired as
-   a class** per `../SKILL.md` § A bug found during execution is a class — sweep it, fix every
-   instance — a close-out evaluator reads the whole plan diff, which is the widest view any
-   reader gets and therefore the one most likely to name one instance of something true of
-   several. **A Blocking finding is the stop condition** — surface it before merge. A FAIL
-   carrying only **Material** findings is *not* a merge blocker — but it is not a filing
-   exercise either: **fix each Material finding**, sweeping its class, and report what was
-   fixed. Only a Material finding you genuinely cannot fix here escalates with its blocker
-   named, per the exit criterion's fourth row
-   (`../references/stage-gate.md` § Exit criterion — the dispositions behind it). The
-   distinction matters because "the evaluator returned no adverse findings" is not a reachable
-   state for a fresh reader of a real artifact; treating any FAIL as blocking is what makes the
-   final gate oscillate. The evaluator is dispatched **once**: a Material fix is proven at
-   fix-scope by the executor, not by re-dispatching it (`stage-gate.md` § Independent
-   evaluator for non-command checks). Where the tier mandates it, skip only on an
-   **evidenced** user opt-out; where the tier does not, report it as scope rather than as an
-   opt-out.
+3. **No second evaluator.** The plan's demo ran at its last gate, where the review-scope tier
+   funded it (`../references/review-scope.md`; `stage-gate.md` § Independent evaluator for
+   non-command checks), and its findings were dispositioned there. Close-out dispatches no
+   other. Each Outcome that demo graded `not shown here` goes into the close-out report's
+   `ACTION NEEDED:` block, with what a person would need to show it.
 4. **Bump versions for what changed**, as part of close-out rather than a follow-up.
    Breaking/removed → major; new capability → minor; fix/docs/internal → patch. Bump it
    wherever the project records it **and every place that mirrors it** — grep the old version
@@ -237,9 +216,9 @@ sub-plan that never closed.
 ## Last step, every close-out
 
 Run `plan-state.py finish` with actual close-out evidence; retain the
-terminal snapshot, pointer and receipts. The terminal run is immutable; init refuses
-to overwrite it. The current contract has no automatic archive/reset operation; an
-independent owning worktree can initialize a separate run. Unowned legacy state may still be deleted. Archive `.claude/dispatch-log.jsonl`
+terminal snapshot, pointer and receipts. The terminal run is immutable: nothing mutates it, and the
+next `init`, on this branch or another, moves it to `.claude/plan-state-archive/<run_id>.json`
+itself before starting the new run, so never move state files by hand. Unowned legacy state may still be deleted. Archive `.claude/dispatch-log.jsonl`
 beside it, so the next plan's review claims are checked against a log of its own run. This applies to every close-out,
 blocked or clean — it is a `##` section rather than a trailing line because a line inside the
 blocked-gate section is one a reader working an unblocked plan never reaches.

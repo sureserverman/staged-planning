@@ -57,7 +57,8 @@ well it works, ignore that description and read the plan and the diff.
 
 - `plan` — absolute path to the plan file
 - `tasks` — the task ids to prove, e.g. `2.3`, or a stage number, e.g. `stage 2`, for
-  **every** `### Task 2.M` in the plan; one task after another (the tool takes a lock, so
+  **every** `### Task 2.M` in the plan that carries `Proof: required` (a task without the
+  field owes no proof; leave it out); one task after another (the tool takes a lock, so
   never two at once). A parent re-proving only the tasks that failed names those ids
 - `repo` — the project root
 - `base` — the commit the work started from (the task's parent commit, or the previous

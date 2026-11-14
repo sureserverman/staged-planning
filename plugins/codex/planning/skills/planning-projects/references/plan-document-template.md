@@ -82,6 +82,7 @@ checks and records it in the worksheet, never a second worksheet. A fixture cann
 - **Blocks:** Task 1.2
 - **Dispatch:** YES
 - **Scope:** [the set this task sweeps — omit for a single-artifact task]
+- **Proof:** required  <!-- OPTIONAL: only on a task whose diff touches a risk-listed path or whose product is a checker that produces a verdict (task-fields.md § `Proof:`); omit on every other task -->
 - **Test:** `[exact command or criterion]`
 - **Red-Green max cycles:** 3
 
@@ -114,8 +115,8 @@ checks and records it in the worksheet, never a second worksheet. A fixture cann
 - [ ] [Class predicate — the sweep that proves a set-wide property, e.g. `! grep -rl '<the stale claim>' <scope>`]
 - [ ] [No regressions in touched scope (stage-scope — see references/test-scope-tiers.md)]
 - [ ] [Stage goal verified end-to-end]
-<!-- A stage with **Outcomes:** gets an evaluator at every tier above `none`, grading those
-     lines as their user, unless a recorded goal command decides it (below `high`, every
+<!-- The plan's **Outcomes:** get one evaluator, at its last gate, at `standard` and `high`,
+     grading every stage's lines as their user, unless a recorded goal command decides it (below `high`, every
      Outcome decided by a ticked gate command; executing-plans stage-gate.md § Skipped when
      a recorded command decides the goal); do not restate them here. A `(judgment)` line also buys an
      evaluator dispatch, and a fresh evaluator never returns empty-handed. Add one only where

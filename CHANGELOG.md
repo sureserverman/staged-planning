@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.2.0 — 2026-11-14
+
+- **A task owes a proof only when its plan marks it `Proof: required`.** Any other task goes
+  from a green test to its commit, with no `prove-claim.py` record. Planners write the new
+  optional field on a task whose diff touches a risk-listed path, or whose product is a
+  checker that produces a verdict. The record audit and the commit gate agree on which tasks
+  owe one. A record that exists is still checked against its commit.
+- **Proof drift and a stray file under `proof/` are reported, not refused.** A later task
+  editing a proven file is an advisory in the record audit, and the `Stage N green` commit
+  lands. `prove-claim.py` and the commit gate name a non-record file under `proof/` and carry
+  on. One exception on Cursor: its ref hook still refuses a green commit whose record does
+  not match that commit's own tree.
+- **The demo evaluator runs once per plan, at the last gate.** At `standard` and `high` it
+  demos every stage's Outcomes there. At `light` and `none` no gate owes one. A gate with a
+  `(judgment)` line still funds an evaluator at `standard` and `high`. There is no second
+  evaluator at close-out.
+- **An Outcome the session cannot show is a residual.** Its verdict is `not shown here`,
+  with what a person would need to show it. It goes in the gate report and in a close-out
+  `ACTION NEEDED:` item, not a Blocking finding, and the owner is not stopped to reword it.
+  `does not hold` stays Blocking.
+- **A finished run no longer blocks the next one.** `plan-state.py init` over a `complete`
+  run moves its snapshot to `.claude/plan-state-archive/<run_id>.json` and starts the new
+  run, on the same branch or another. An unfinished run still refuses, naming its plan and
+  branch. On another branch than a finished run's, or under a detached HEAD, the status line
+  shows no run and the hooks treat it as the finished run it is (they stand aside), instead
+  of a `state_error`.
+- **An existing plan needs no change.** Its tasks simply owe no proof unless you add
+  `Proof: required`.
+
 ## 2.1.0 — 2026-11-12
 
 - **The progress display marks the live run as current, from any worktree.** A session with

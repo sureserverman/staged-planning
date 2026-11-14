@@ -68,7 +68,8 @@
 # Raised 56400 -> 56577 (1.2.0): the gate report's reasons for an unrun review or evaluator name a fourth, the goal-command skip of the gate evaluator below `high`.
 # Lowered 56577 -> 56427 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 56427 -> 56426 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
-core/skills/executing-plans/SKILL.md 56426
+# Lowered 56421 -> 56408 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
+core/skills/executing-plans/SKILL.md 56408
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -106,7 +107,7 @@ core/skills/executing-plans/SKILL.md 56426
 # Lowered 40598 -> 40499 (1.2.0): the description states triggers only; its step order and outcome are gone.
 # Lowered 40499 -> 39482 (2.0.0): Phase -1 states its rule in one paragraph.
 # Lowered 39482 -> 39472 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-core/skills/planning-projects/SKILL.md 39472
+core/skills/planning-projects/SKILL.md 39464
 
 # honest-gates.
 # Its rules are WRITE-TIME disciplines: each has to be in front of whoever is writing
@@ -127,7 +128,7 @@ core/skills/planning-projects/SKILL.md 39472
 # depends on; the mutant's proof is a prove-claim.py record, and a deviation record is
 # disclosed, never counted as proof; sibling skills in the Integration list are
 # optional.
-core/skills/honest-gates/SKILL.md 15069
+core/skills/honest-gates/SKILL.md 15049
 
 # backlog.
 # The ceiling pays for the configurable records-home lookup and the command that
@@ -141,7 +142,8 @@ core/skills/backlog/SKILL.md 16181
 # Raised 16101 -> 16416 (1.2.0): every brief it writes, the reproducer's and the Phase 7 evaluator's, carries the background-work rules.
 # Lowered 16416 -> 15781 (2.0.0): its Sources section moved to docs/sources.md.
 # Lowered 15781 -> 15690 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-core/skills/applying-design-handoff/SKILL.md 15690
+# Lowered 15690 -> 15689 (2.2.0): a `(judgment)` fidelity check funds the evaluator at `standard` and `high`; `light` funds none.
+core/skills/applying-design-handoff/SKILL.md 15689
 
 # project-maturity.
 # The ceiling pays for the printed `audit-detectors.py` invocation carrying the
@@ -182,7 +184,8 @@ core/skills/workflow-spec/SKILL.md 10066
 # Raised 17625 -> 17956 (1.2.0): as core/skills/applying-design-handoff/SKILL.md.
 # Lowered 17956 -> 17321 (2.0.0): its Sources section moved to docs/sources.md.
 # Lowered 17321 -> 17230 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-hosts/codex/overrides/skills/applying-design-handoff/SKILL.md 17230
+# Lowered 17230 -> 17229 (2.2.0): a `(judgment)` fidelity check funds the evaluator at `standard` and `high`; `light` funds none.
+hosts/codex/overrides/skills/applying-design-handoff/SKILL.md 17229
 # Raised 13348 -> 13604 (1.2.0): as core/skills/architecting-projects/SKILL.md.
 # Raised 13604 -> 13632 (2.0.0): as core/skills/architecting-projects/SKILL.md.
 hosts/codex/overrides/skills/architecting-projects/SKILL.md 13632
@@ -198,7 +201,8 @@ hosts/codex/overrides/skills/architecting-projects/SKILL.md 13632
 # Raised 65974 -> 66151 (1.2.0): as core/skills/executing-plans/SKILL.md.
 # Lowered 66151 -> 66001 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 66001 -> 66000 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
-hosts/codex/overrides/skills/executing-plans/SKILL.md 66000
+# Lowered 65995 -> 65982 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 65982
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
@@ -207,7 +211,8 @@ hosts/codex/overrides/skills/executing-plans/SKILL.md 66000
 # Raised 16336 -> 16651 (1.2.0): as core/skills/applying-design-handoff/SKILL.md.
 # Lowered 16651 -> 16016 (2.0.0): its Sources section moved to docs/sources.md.
 # Lowered 16016 -> 15925 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-hosts/cursor/overrides/skills/applying-design-handoff/SKILL.md 15925
+# Lowered 15925 -> 15924 (2.2.0): a `(judgment)` fidelity check funds the evaluator at `standard` and `high`; `light` funds none.
+hosts/cursor/overrides/skills/applying-design-handoff/SKILL.md 15924
 # Raised 12304 -> 12558 (1.2.0): as core/skills/architecting-projects/SKILL.md.
 # Raised 12558 -> 12586 (2.0.0): as core/skills/architecting-projects/SKILL.md.
 hosts/cursor/overrides/skills/architecting-projects/SKILL.md 12586
@@ -224,22 +229,25 @@ hosts/cursor/overrides/skills/brainstorming/SKILL.md 5824
 # Raised 69132 -> 69309 (1.2.0): as core/skills/executing-plans/SKILL.md.
 # Lowered 69309 -> 69159 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 69159 -> 69127 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
-hosts/cursor/overrides/skills/executing-plans/SKILL.md 69127
-hosts/cursor/overrides/skills/honest-gates/SKILL.md 15462
+# Lowered 69114 -> 69100 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
+# Lowered 69100 -> 69095 (2.2.0): the Cursor ref hook reads `demo.md` at the last stage only.
+hosts/cursor/overrides/skills/executing-plans/SKILL.md 69095
+hosts/cursor/overrides/skills/honest-gates/SKILL.md 15437
 # Lowered 39953 -> 39952 (1.0.3): "nine" Light items became "ten", as core.
 # Lowered 39952 -> 39944 (1.0.5): the Light list grew to eleven items; its pointer line was tightened.
 # Raised 39944 -> 41111 (1.1.0): § Ask execution's questions now and its reference-map row, as core.
 # Lowered 41111 -> 41012 (1.2.0): as core/skills/planning-projects/SKILL.md.
 # Lowered 41012 -> 39995 (2.0.0): Phase -1 states its rule in one paragraph.
 # Lowered 39995 -> 39985 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-hosts/cursor/overrides/skills/planning-projects/SKILL.md 39985
+hosts/cursor/overrides/skills/planning-projects/SKILL.md 39977
 # Lowered 14437 -> 14275 (1.2.0): as core/skills/project-maturity/SKILL.md.
 # Raised 14275 -> 14377 (1.2.0): as core/skills/project-maturity/SKILL.md.
 hosts/cursor/overrides/skills/project-maturity/SKILL.md 14377
 # Raised 17317 -> 17632 (1.2.0): as core/skills/applying-design-handoff/SKILL.md.
 # Lowered 17632 -> 16997 (2.0.0): its Sources section moved to docs/sources.md.
 # Lowered 16997 -> 16894 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-hosts/opencode/overrides/skills/applying-design-handoff/SKILL.md 16894
+# Lowered 16894 -> 16893 (2.2.0): a `(judgment)` fidelity check funds the evaluator at `standard` and `high`; `light` funds none.
+hosts/opencode/overrides/skills/applying-design-handoff/SKILL.md 16893
 # Raised 13210 -> 13464 (1.2.0): as core/skills/architecting-projects/SKILL.md.
 # Raised 13464 -> 13492 (2.0.0): as core/skills/architecting-projects/SKILL.md.
 hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13492
@@ -253,4 +261,5 @@ hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13492
 # Raised 63266 -> 63443 (1.2.0): as core/skills/executing-plans/SKILL.md.
 # Lowered 63443 -> 63293 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 63293 -> 63274 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
-hosts/opencode/overrides/skills/executing-plans/SKILL.md 63274
+# Lowered 63244 -> 63241 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
+hosts/opencode/overrides/skills/executing-plans/SKILL.md 63241

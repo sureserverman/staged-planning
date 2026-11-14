@@ -9,6 +9,8 @@ users who haven't wired it.
 Every run is an owned v2 run, started by `init` at Preflight. The
 [execution-state contract](execution-state-contract.md) operations are the only writers.
 Keep the snapshot after finish; deleting it loses the owning pointer's required evidence.
+The next `init` moves a finished snapshot to `.claude/plan-state-archive/<run_id>.json`
+itself, on the run's branch or another; never move state files by hand.
 
 ## When to call each operation
 
@@ -86,8 +88,9 @@ while its run is live. A run is over when the hooks call it finished (a `complet
 whose plan has no open task, or whose plan is gone), or when its plan carries **Completed:**
 (with no gate check blocked) or **Abandoned:** — unless the file's phase is `closeout` and
 it is fresh: close-out writes the **Completed:** line before `finish`. A `closeout` file not
-updated for 12 h over a closed-out plan is a leftover, and is over. A finished run's file is left where it is; its plan gets
-an ordinary row only if it is still in flight.
+updated for 12 h over a closed-out plan is a leftover, and is over. A finished run's file is left where it is until the next `init` archives it; its plan gets
+an ordinary row only if it is still in flight. On a branch other than a finished run's,
+`show` and the renderer see no run.
 
 **Which run is current, from any worktree.** Each worktree holds its own state file, so
 the renderer picks the current row in this order: this worktree's run when it is fresh; else

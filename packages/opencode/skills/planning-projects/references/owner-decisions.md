@@ -101,7 +101,7 @@ does not name.
 | A test cannot be run | stays a stop | a test needs a fixture, a service or a device | Check it exists now; ask for access to any that does not. |
 | A mandated verification or dispatch cannot be performed | ask while planning | the dispatch roster is non-empty | If dispatch is unavailable in the session, may those tasks run inline (`Executor: inline (user authorised)`), or does the run stop? |
 | Verifying the test requires modifying shared infrastructure | ask while planning | a task's test touches a production DB or a live service | May `<task>`'s test change `<system>`? |
-| An Outcome cannot be met or shown as written | stays a stop | always | Write Outcomes the session can show (`../SKILL.md` § Phase 2). |
+| An Outcome cannot be met as written | stays a stop | always | Write Outcomes the product can meet; one the session cannot show is a residual, not a stop (`../SKILL.md` § Phase 2). |
 | The plan's premise is false | stays a stop | a stage's Risk is HIGH or its Goal relies on something outside the code | Check the premise now, on the real environment, where it can be checked. |
 
 ### Other points where the executor asks

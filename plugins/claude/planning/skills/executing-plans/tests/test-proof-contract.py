@@ -15,8 +15,10 @@ names the tool only to opt out of it ("you need not run prove-claim.py claim")
 does not satisfy the check.
 
 What it pins in executing-plans:
-  1. Rule 4a records the proof with `prove-claim.py claim`, for the first claim and
-     every claim marked `(red if …)`, and stages `git add proof/` with the commit.
+  1. Rule 4a records the proof with `prove-claim.py claim` for a task carrying
+     `Proof: required` — for the first claim and every claim marked `(red if …)` —
+     and stages `git add proof/` with the commit; any other task goes from green to
+     its commit, and no copy says the proof runs at every scope.
   2. Rule 4a does not ask for a hand-written mutation sentence.
   3. Rule 4a routes a requirement through `prove-claim.py req` or
      `prove-claim.py deviation`, and the device-only case to a deviation.
@@ -30,7 +32,14 @@ What it pins in the two skills that must say the same:
      inline tasks.
   6. honest-gates § *A test does not exist until its mutant dies* records the
      mutant's proof with `prove-claim.py`, and its device-only line is a
-     deviation; neither skill asks for a hand-written sentence.
+     deviation; neither skill asks for a hand-written sentence. Its rule binds a
+     verdict-producing checker and a task the plan marks `Proof: required`, and no
+     longer says every product test owes a mutant.
+
+What it pins in planning-projects:
+  7. task-fields.md defines `Proof: required` beside `Review: required`: a task whose
+     diff touches a risk-listed path, or whose product is a checker that produces a
+     verdict.
 """
 import importlib.util
 import re
@@ -42,6 +51,9 @@ SKILLS = HERE.parents[1]
 EP = SKILLS / "executing-plans" / "SKILL.md"
 DPA = SKILLS / "executing-plans" / "references" / "dispatch.md"
 HG = SKILLS / "honest-gates" / "SKILL.md"
+TF = SKILLS / "planning-projects" / "references" / "task-fields.md"
+# The pre-2.2.0 sentence that put every task's proof at every review scope.
+EVERY_SCOPE = re.compile(r"Untiered.{0,45}" + r"so it runs" + r" at every scope", re.S)
 
 
 def _load_helper():
@@ -91,6 +103,12 @@ def main():
     r4a = section(ep, r"4a\. \*\*Prove it", r"\n5\. \*\*Flip the task", "rule 4a")
     check("rule 4a records the proof with `prove-claim.py claim`",
           affirms_claim(r4a, r"prove-claim\.py claim"))
+    check("rule 4a binds the proof to a task carrying `Proof: required`",
+          affirms_claim(r4a, r"task carrying `Proof: required` is proven with `prove-claim\.py claim`"))
+    check("rule 4a: any other task goes from green to its commit",
+          affirms_claim(r4a, r"any other task goes from green to its commit"))
+    check("rule 4a no longer says the proof runs at every scope",
+          bool(r4a) and not EVERY_SCOPE.search(r4a))
     check("rule 4a names the claim set: the first claim and each `(red if …)` claim",
           affirms_claim(r4a, r"first claim") and affirms_claim(r4a, r"each claim marked `\(red if"))
     check("rule 4a: the work is staged before the tool runs",
@@ -135,6 +153,8 @@ def main():
     brief = section(DPA.read_text(), r"## Brief each agent", r"\n## Dispatch\n", "prompt template")
     check("the dispatch brief tells the task to run `prove-claim.py claim` before committing",
           affirms_claim(brief, r"prove-claim\.py claim"))
+    check("the dispatch brief proves only a task carrying `Proof: required`",
+          affirms_claim(brief, r"task carries `Proof: required`"))
     check("the dispatch brief stages the records (`git add proof/`)",
           affirms_claim(brief, r"git add proof/"))
     check("the dispatch brief: stage the work first, `--test` from the Test, the patch a shell "
@@ -152,6 +172,20 @@ def main():
           affirms_claim(hg, r"prove-claim\.py deviation --claim"))
     check("neither skill asks for a hand-written mutation sentence",
           not HAND_WRITTEN.search(hg) and not HAND_WRITTEN.search(brief))
+    check("honest-gates binds the mutant to a verdict-producing checker and a marked task",
+          affirms_claim(hg, r"verdict-producing checker")
+          and affirms_claim(hg, r"task the plan marks `Proof: required`"))
+    check("honest-gates no longer says every product test owes a mutant",
+          bool(hg) and not re.search(r"a product test gets one mutant", hg))
+
+    print("planning-projects defines the field:")
+    tf = flat(TF.read_text())
+    check("task-fields.md defines `Proof: required`",
+          affirms_claim(tf, r"`Proof: required`"))
+    check("task-fields.md: a task whose diff touches a risk-listed path, or whose product is "
+          "a checker that produces a verdict",
+          affirms_claim(tf, r"diff touches a risk-listed path")
+          and affirms_claim(tf, r"checker that produces a verdict"))
 
     print()
     if FAILED:

@@ -16,10 +16,13 @@ author or executor reads, using the shared negation screening
      stage-gate.md, every copy. The rest of the class — every place that re-dispatches a
      review after a Critical fix (SKILL.md's Tier-1 rule, close-out.md's Tier-2 step) —
      scopes that re-dispatch to the fix diff, so no copy still orders a fresh full review.
-  3. After a repair, only the drifted records are re-proved. § If the gate fails in
-     stage-gate.md, every copy, says to re-prove the drifted records only — the tasks whose
-     touched or witness files the repair changed, as Sub-plan 1's per-file binding reports
-     them — never every task of the stage.
+  3. After a repair, no record is re-proved for drift. § If the gate fails in
+     stage-gate.md, every copy, says proof drift the repair causes is reported by the
+     record audit as advisory, and no copy still orders a re-proof of drifted records
+     (2.2.0: drift is reported, never blocking). Cursor's copy is the one exception, and
+     it is pinned as one: there the stage's records ride the `Stage N green` commit, whose
+     gate refuses a record that does not match the tree it ships, so a repair made after
+     the records exist re-dispatches `claim-verifier` for the marked tasks it touched.
   4. Below `high`, the gate evaluator is skipped when a recorded command decides the goal.
      stage-gate.md, every copy, holds § Skipped when a recorded command decides the goal:
      the rule, the report line (`evaluator: skipped — goal command`) and demo.md's
@@ -27,9 +30,15 @@ author or executor reads, using the shared negation screening
      exception, each pinned: stage-gate.md's opening line, closed-at-two list, "tier's
      call" sentence and demo stand-in paragraph (four pointers outside the subsection);
      SKILL.md's evaluator paragraph and its gate-report reasons bullet (four reasons);
-     review-scope.md's two tables; light-plans.md item 4; plan-document-template.md's
-     evaluator comment; README.md's standard row (core and the Cursor override). Every
-     copy of each. A new statement elsewhere is not found by this suite.
+     review-scope.md's two tables (their standard rows); light-plans.md item 4;
+     plan-document-template.md's evaluator comment; README.md's standard row (core and the
+     Cursor override). Every copy of each. A new statement elsewhere is not found by this
+     suite.
+  5. One demo per plan (2.2.0). In every review-scope.md copy, both tables' `standard` and
+     `high` rows put the gate evaluator "at the plan's last gate", the `light` and `none`
+     rows fund none, and the close-out column funds none ("the last gate's demo is the
+     plan's demo"). Every trunk's evaluator paragraph says the same, and an Outcome the
+     session cannot show is "not shown here", a residual and a close-out `ACTION NEEDED:`.
 
 The failure it guards against: an author who reads "touches something risky" as "mentions
 something risky" marks 8 of 17 tasks `Review: required` in one master, and each buys a
@@ -122,7 +131,8 @@ def sentences(text):
 FIX_DIFF_ONLY = ws(r"re-review after a Critical fix covers the fix diff only")
 IMPORTANT_TO_GATE = ws(r"Important findings are carried to the gate as advisory")
 REDISPATCH_SCOPED = r"re-(?:dispatch|spawn)(?: the review)?\s+over\s+the\s+fix\s+diff\s+only"
-REPROVE_DRIFTED = ws(r"re-prove the drifted records only")
+DRIFT_REPORTED = ws(r"Proof drift the repair causes is reported by the record audit as advisory")
+REPROVE_DRIFTED = r"re-prove\s+the\s+drifted"
 SKIP_HEAD = r"^### Skipped when a recorded command decides the goal\s*$"
 SKIP_RULE = ws(r"the gate evaluator is skipped at a gate whose `\(goal\)` check is a command "
                r"the executor ran green and recorded")
@@ -188,12 +198,20 @@ def main():
               bool(step) and re.search(REDISPATCH_SCOPED, step) is not None,
               "step 2a's Critical re-dispatch is not scoped to the fix diff")
 
-    # --- 3. after a repair, re-prove the drifted records only ---------------------------
+    # --- 3. after a repair, drift is reported, never re-proved ---------------------------
     for label, path in copies(STAGEGATE):
         fails = section(read(path), r"^## If the gate fails", r"^## ")
-        check(f"{label}: § If the gate fails says to re-prove the drifted records only",
-              bool(fails) and affirms_claim(fails, REPROVE_DRIFTED),
-              "no non-negated 're-prove the drifted records only' in § If the gate fails")
+        check(f"{label}: § If the gate fails reports proof drift as advisory",
+              bool(fails) and affirms_phrase(fails, DRIFT_REPORTED),
+              "no non-negated 'Proof drift the repair causes is reported …' in § If the gate fails")
+        check(f"{label}: no copy still orders a re-proof of drifted records",
+              re.search(REPROVE_DRIFTED, read(path), re.I) is None,
+              "a 're-prove the drifted …' order is still in the file")
+        if "/hosts/cursor/" in path:
+            check(f"{label}: Cursor re-dispatches the verifier for the marked tasks a repair touched",
+                  bool(fails) and affirms_claim(fails, ws(r"dispatch `claim-verifier` again for the "
+                                                          r"marked tasks")),
+                  "the Cursor exception is not stated in § If the gate fails")
 
     # --- 4. the gate evaluator is skipped when a recorded command decides the goal -------
     for label, path in copies(STAGEGATE):
@@ -239,13 +257,57 @@ def main():
         rows = [ln for ln in read(path).splitlines()
                 if re.match(r"^\| (?:\*\*light\*\*|\*\*standard\*\*|`light`|`standard`) \|", ln)]
         check(f"{label}: both tables' light and standard rows carry the skip exception",
-              len(rows) == 4 and all(re.search(SKIP_EXCEPTION, r) for r in rows),
+              len(rows) == 4 and all(re.search(SKIP_EXCEPTION, r) for r in rows
+                                      if re.match(r"^\| (?:\*\*standard\*\*|`standard`) \|", r)),
               f"{len(rows)} rows, {sum(bool(re.search(SKIP_EXCEPTION, r)) for r in rows)} with it")
     for label, path in copies(LIGHTPLANS):
         item = section(read(path), r"^4\. \*\*The evaluator follows the tier", r"^5\. ")
         check(f"{label}: item 4 carries the skip exception",
               bool(item) and re.search(SKIP_EXCEPTION, item) is not None,
               "no 'unless a recorded goal command decides it' in item 4")
+
+    # --- 5. one demo per plan, at the last gate ---------------------------------------
+    LAST_GATE = ws(r"at the plan's last gate")
+    for label, path in copies(REVIEWSCOPE):
+        text = read(path)
+        main_rows = {m.group(1): m.group(0).split(" | ")
+                     for m in re.finditer(r"^\| \*\*(none|light|standard|high)\*\* \|.*$", text, re.M)}
+        depth_rows = {m.group(1): m.group(0).split(" | ")
+                      for m in re.finditer(r"^\| `(none|light|standard|high)` \|.*$", text, re.M)}
+        check(f"{label}: both tier tables located", len(main_rows) == 4 and len(depth_rows) == 4,
+              f"{len(main_rows)} main rows, {len(depth_rows)} depth rows")
+        if len(main_rows) == 4 and len(depth_rows) == 4:
+            for tier in ("standard", "high"):
+                check(f"{label}: the {tier} row's gate evaluator runs at the plan's last gate",
+                      re.search(LAST_GATE, main_rows[tier][-2]) is not None
+                      and re.search(LAST_GATE, depth_rows[tier][-1]) is not None,
+                      f"main: {main_rows[tier][-2][:90]!r} depth: {depth_rows[tier][-1][:90]!r}")
+            for tier in ("none", "light"):
+                cells = (main_rows[tier][-2], depth_rows[tier][-1])
+                check(f"{label}: the {tier} row funds no gate evaluator",
+                      all(re.fullmatch(r"\s*(?:skip|no|never|none)\s*\|?\s*", c) for c in cells),
+                      f"cells: {cells}")
+            closeout = [main_rows[t][-1] for t in ("none", "light", "standard", "high")]
+            check(f"{label}: the close-out column funds no second evaluator",
+                  all(not re.search(r"\bif\b|\balways\b", c) for c in closeout)
+                  and "the last gate's demo is the plan's demo" in " ".join(closeout),
+                  f"close-out cells: {closeout}")
+    for label, path in copies(TRUNK):
+        para = section(read(path), r"^\*\*Independent evaluator for non-command checks\.\*\*",
+                       r"^\*\*(?!Independent)")
+        flat = " ".join(para.split())
+        check(f"{label}: the evaluator paragraph runs the demo once, at the plan's last gate",
+              re.search(LAST_GATE, para) is not None and "whose stage has" not in flat
+              and "its stage has" not in flat,
+              "the paragraph still keys the evaluator on a stage having Outcomes")
+        check(f"{label}: an Outcome not shown here is a residual and a close-out ACTION NEEDED",
+              "not shown here" in flat and "residual" in flat and "ACTION NEEDED" in flat,
+              "no 'not shown here' residual in the evaluator paragraph")
+        stops = section(read(path), r"^## Stop conditions", r"^## ")
+        check(f"{label}: the Stop condition is 'An Outcome cannot be met as written'",
+              "**An Outcome cannot be met as written**" in stops
+              and "met or shown as written" not in stops,
+              "the Stop bullet still stops on an Outcome that cannot be shown")
 
     print()
     if FAILED:

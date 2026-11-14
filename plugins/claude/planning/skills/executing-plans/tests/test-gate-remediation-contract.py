@@ -36,10 +36,10 @@ What it pins:
      (BANNED_PHRASE below), which treats one gate repair as one instance. It is a
      sweep because the class-repair rule asks for one: a check of a single site
      stays green while a sibling site carries the phrase.
-  8. The Step 3.5 evaluator's brief and the close-out evaluator's brief each ask for
-     a severity (Blocking / Material / Minor), not a bare pass/fail; at close-out
-     only a Blocking finding stops the merge, and both sites say why a silent
-     detector is not the bar.
+  8. The Step 3.5 evaluator's brief asks for a severity (Blocking / Material / Minor),
+     not a bare pass/fail, and says why a silent detector is not the bar. Since 2.2.0
+     the last gate's demo is the plan's demo: close-out step 3 dispatches no second
+     evaluator and lists every Outcome graded `not shown here` as `ACTION NEEDED:`.
   9. DEFAULT_REMEDIATION_BUDGET equals the default the
      skill prose documents. One copy in the renderer serves two consumers —
      the bar's `↻N/M` and `--budget-check`'s ceiling — and nothing but this
@@ -674,13 +674,6 @@ def main():
                  .read_text(encoding="utf-8"),
                  r"## Independent evaluator for non-command checks",
                  r"## Deep code review")),
-        # Anchored on the step's NAME, not on a parenthetical after it. Pinning a policy
-        # word such as "(default)" inside a *locator* means a legitimate policy change
-        # silently unanchors every downstream assertion at once (they report as
-        # independent failures, which is how an over-fit anchor disguises itself as a
-        # regression). The class: pin the rule, locate by the stable name.
-        ("close-out evaluator",
-         section(text, r"\*\*Independent evaluator pass", r"\n4\. \*\*Bump")),
     ]
     for label, block in evaluator_sites:
         check(f"site present: {label}", bool(block), f"could not locate the {label} block")
@@ -703,35 +696,17 @@ def main():
                         r"almost never", block, re.I) is not None,
               f"{label} does not say why 'no adverse findings' cannot be the bar")
 
-    close_out = evaluator_sites[1][1]
-    # One alternative only. A looser second form (`stop condition … Blocking` within
-    # 80 chars) would also match "…is the stop condition. Blocking findings especially
-    # matter" — prose that does NOT narrow the condition. The precise form is the one
-    # that fires against the skill text.
-    check("close-out stop condition scoped to Blocking",
-          affirms(close_out, r"Blocking finding is the stop condition"),
-          "the close-out stop condition is not narrowed to Blocking findings — any FAIL "
-          "blocks merge, so no reviewer output can ever let the merge through")
-    # Plain search, NOT affirms(): this claim is affirmative in meaning but negative in
-    # wording ("is *not* a merge blocker"), so the negation guard would reject a correct
-    # sentence. Use affirms() only where a negated copy of a claim reverses the rule;
-    # used everywhere, it rejects correct prose and costs upkeep for nothing.
-    #
-    # The pattern allows emphasis markers, because the skill text emphasises its `not`,
-    # and a plain `not a merge blocker` would never match. There is no looser
-    # `|residual` alternative: ordinary boilerplate matches it, and the check would go
-    # green while pinning nothing.
-    check("close-out: a Material-only FAIL leaves the merge open",
-          re.search(r"Material[\s\S]{0,120}is \*?not\*? a merge blocker",
-                    close_out, re.I) is not None,
-          "a Material-only FAIL is not distinguished from a Blocking one")
-    check("close-out Material findings are FIXED, not just mentioned",
-          affirms(close_out, r"fix each Material finding"),
-          "Material findings are reported without an imperative to fix them")
-    check("close-out does not route a Material finding to the backlog instead",
-          not re.search(r"record each Material finding[\s\S]{0,60}backlog", close_out, re.I),
-          "close-out still files Material findings rather than fixing them, so the "
-          "deferral path survives at the one gate with the widest view of the diff")
+    # Anchored on the step's NAME, not on a parenthetical after it: pin the rule, locate
+    # by the stable name. The last gate's demo is the plan's demo (2.2.0), so close-out
+    # dispatches no second evaluator and carries each `not shown here` Outcome to the owner.
+    close_out = section(text, r"\*\*No second evaluator", r"\n4\. \*\*Bump")
+    check("close-out step 3 located", bool(close_out), "no '**No second evaluator' step")
+    check("close-out dispatches no second evaluator",
+          bool(close_out) and not re.search(r"dispatch a fresh\s+evaluator", close_out, re.I),
+          "close-out still dispatches its own evaluator")
+    check("close-out lists each Outcome not shown here as ACTION NEEDED",
+          "not shown here" in close_out and "ACTION NEEDED" in close_out,
+          "an Outcome the demo could not show does not reach the owner at close-out")
 
     # 8b — (backlog admission) A SWEEP of every skill, not a check of a few files. The
     # banned contract — fix it OR file it in the backlog — can be written at many sites,
@@ -912,8 +887,6 @@ def main():
         ("gate evaluator",
          section(text, r"\*\*Independent evaluator for non-command checks",
                  r"\*\*Deep code review")),
-        ("close-out evaluator",
-         section(text, r"\*\*Independent evaluator pass", r"\n4\. \*\*Bump")),
         ("Preflight dispatch probe",
          section(text, r"2\. \*\*Probe the capability", r"3\. \*\*Snapshot the")),
         # Lives in references/stage-gate.md — it fires only on a redesign stage, which is

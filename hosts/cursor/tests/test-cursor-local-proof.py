@@ -39,6 +39,7 @@ PLAN = """# Plan
 
 ### Task 1.1: calc
 - **Status:** [x]
+- **Proof:** required
 - `add` returns the sum.
 - **Test:** `python3 tests/test_calc.py` — add returns the sum (red if add subtracts)
 
@@ -175,8 +176,12 @@ try:
           json.dumps(f8 if f8 is not None else doc)[:900])
 
     f8, doc, _v = world("stale", stale=True)
-    check(f8 is not None and [f for f in f8 if f["severity"] == "blocking"],
-          "a local record proven on a tree no commit records stays blocking",
+    # The record still matches the task commit's blob of calc.py; HEAD changed it before the
+    # stage closed. That is drift: named, advisory (the ref hook refuses that green commit).
+    check(f8 is not None and [f for f in f8 if f["severity"] == "advisory" and "drift" in f["rule"]
+                              and "calc.py" in f["rule"]]
+          and not [f for f in f8 if f["severity"] == "blocking"],
+          "a local record whose file changed after the proof is named as advisory drift",
           json.dumps(f8 if f8 is not None else doc)[:900])
 
     f8, doc, v = world("flip", stale=False, in_repo=True)
@@ -192,9 +197,9 @@ try:
     check(v.returncode != 0 and "calc.py" in v.stderr and "different tree" in v.stderr,
           "the ref hook refuses as `Stage 1 green` a tree whose touched file changed after "
           "the proof, naming the file", v.stderr)
-    drift = [f for f in (f8 or []) if f["severity"] == "blocking" and "drift" in f["rule"]
+    drift = [f for f in (f8 or []) if f["severity"] == "advisory" and "drift" in f["rule"]
              and "calc.py" in f["rule"] and rel in f["rule"]]
-    check(bool(drift), "a later commit changing a touched file is blocking drift naming the "
+    check(bool(drift), "a later commit changing a touched file is advisory drift naming the "
           "file and the record", json.dumps(f8 if f8 is not None else doc)[:900])
 
     f8, doc, v = world("drift-closed", stale=False, later=True)
@@ -208,9 +213,9 @@ try:
     check(v.returncode != 0 and "tests/test_calc.py" in v.stderr,
           "the ref hook refuses as `Stage 1 green` a tree whose test file changed after the "
           "proof, naming it", v.stderr)
-    drift = [f for f in (f8 or []) if f["severity"] == "blocking" and "drift" in f["rule"]
+    drift = [f for f in (f8 or []) if f["severity"] == "advisory" and "drift" in f["rule"]
              and "tests/test_calc.py" in f["rule"] and rel in f["rule"]]
-    check(bool(drift), "a later commit changing the test file is blocking drift naming it and "
+    check(bool(drift), "a later commit changing the test file is advisory drift naming it and "
           "the record", json.dumps(f8 if f8 is not None else doc)[:900])
 finally:
     shutil.rmtree(tmp, ignore_errors=True)

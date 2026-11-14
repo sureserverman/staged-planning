@@ -41,18 +41,18 @@ running at full weight:
    evaluator runs beside them, comes from the declared review-scope tier — see
    `../references/review-scope.md` § *Composing with the plan format*. A light plan whose diff is `high`
    still gets the second independent pass; it just gets it over the whole diff, and its demo
-   evaluator at the gate when its stage has Outcomes. **And it
+   at its one gate, which is the plan's last. **And it
    still gets Tier-1 on the tasks its `high` declaration names**: Tier-1 belongs to the
    tier, not the format, so the "skip it" above is this item describing the
    `light`/`standard` case, not the format overriding `high`. A small
    plan doing a dangerous thing is the one case where a Light plan reviews per task — and
    even there it reviews the dangerous *task*, not all five.
 4. **The evaluator follows the tier, not the format.** Whether the independent
-   goal-evaluator runs — at the gate (Step 3.5) and at close-out (Phase Close-out step 3) —
-   is decided by the review-scope table, not by this plan being Light: off at `none`, on at
-   `light` and `standard` wherever a gate check carries `(judgment)` or the stage has
-   `**Outcomes:**` — unless a recorded goal command decides it
-   (`stage-gate.md` § Skipped when a recorded command decides the goal) — always on at `high`. A Light plan whose result nobody outside the code
+   goal-evaluator runs at the plan's one gate (Step 3.5), which is its last, is decided by
+   the review-scope table, not by this plan being Light: off at `none` and `light`; on at
+   `standard` and `high` as a demo of the stage's `**Outcomes:**`, and wherever a gate check
+   carries `(judgment)` — unless a recorded goal command decides it
+   (`stage-gate.md` § Skipped when a recorded command decides the goal), below `high` only. A Light plan whose result nobody outside the code
    meets has no Outcomes and an all-command gate, so it runs no evaluator — but that is a
    consequence of what the plan contains, not an exemption the format grants. A `(judgment)` check is a check that needs a reader; being in a small
    plan does not make it need one less.

@@ -2,7 +2,7 @@
 # commit-gate.sh — Cursor `beforeShellExecution` hook: the proof-record git hook stays on.
 #
 # WHY THIS EXISTS. A `Stage N green` commit needs prove-claim.py records for every claim
-# of every task of stage N, and the check that enforces it is git's
+# of every task of stage N the plan marks `Proof: required`, and the check that enforces it is git's
 # `reference-transaction` hook (hooks/git-ref-gate.sh): git runs it whenever a ref moves,
 # whatever command moved it — `--no-verify`, `-n`, `commit-tree` + `update-ref`,
 # cherry-pick and merge included (measured on git 2.43). The ways around it are to point

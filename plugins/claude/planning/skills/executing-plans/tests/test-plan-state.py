@@ -115,6 +115,147 @@ def stage_open_cases(Case):
     return StageOpen
 
 
+FINISHED_PLAN = ('# Project Plan: Fixture\n\n## Stage 1: Work\n\n'
+                 '### Task 1.1: Repair\n- **Status:** [x]\n')
+
+
+def finished_run_cases(Case):
+    class FinishedRun(Case):
+        """A finished run blocks nothing: `init` archives it and starts the next run, on
+        its branch or another, and a reader on another branch sees no run. An unfinished
+        run still refuses `init`, naming its plan and branch."""
+
+        def finished(self):
+            (self.repo/'fixture-plan.md').write_text(FINISHED_PLAN)
+            self.init()
+            old = self.state()['run_id']
+            self.call('finish', {'evidence': 'fixture close-out complete'})
+            return old
+
+        def pointer(self):
+            runs = list((self.repo/'.git/plan-state-runs').glob('*.json'))
+            self.assertEqual(len(runs), 1)
+            return json.loads(runs[0].read_text())
+
+        def archived(self, run_id):
+            path = self.repo/'.claude/plan-state-archive'/(run_id+'.json')
+            self.assertTrue(path.is_file(), path)
+            return json.loads(path.read_text())
+
+        def readers(self):
+            env = {**os.environ, 'STAGED_PLANNING_CONFIG': str(self.repo/'no-config.yaml')}
+            out = []
+            for args in (('--json',), ()):
+                out.append(subprocess.run([sys.executable, str(PROGRESS), *args], cwd=self.repo,
+                    env=env, input=json.dumps({'cwd': str(self.repo)}), capture_output=True,
+                    text=True, timeout=20))
+            classify = SCRIPT.parents[3]/'hooks'/'plan_continue_classify.py'
+            out.append(subprocess.run([sys.executable, str(classify), '--inputs'], cwd=self.repo,
+                input=json.dumps({'cwd': str(self.repo)}), capture_output=True, text=True,
+                timeout=20))
+            return out
+
+        def test_init_after_finish_archives_on_the_same_branch(self):
+            old = self.finished()
+            self.rev = 0
+            new = self.init()
+            self.assertNotEqual(new['run_id'], old)
+            self.assertEqual(self.archived(old)['disposition'], 'complete')
+            shown = self.state()
+            self.assertEqual((shown['run_id'], shown['revision'], shown['disposition']),
+                             (new['run_id'], 1, 'working'))
+            self.assertEqual(self.pointer()['run_id'], new['run_id'])
+
+        def test_init_after_finish_archives_on_another_branch(self):
+            old = self.finished()
+            self.git('switch', '-qc', 'next-plan')
+            self.call('show', status='no_active_plan')
+            self.rev = 0
+            new = self.init()
+            self.assertNotEqual(self.archived(old)['owner']['branch'], 'next-plan')
+            shown = self.state()
+            self.assertEqual((shown['run_id'], shown['owner']['branch']), (new['run_id'], 'next-plan'))
+            self.assertEqual(self.pointer()['owner']['branch'], 'next-plan')
+
+        def test_init_retry_after_an_interrupted_archive(self):
+            # Archived and the old pointer removed, but the new snapshot never written.
+            old = self.finished()
+            self.git('switch', '-qc', 'next-plan')
+            for p in (self.repo/'.git/plan-state-runs').glob('*.json'):
+                p.unlink()
+            self.call('show', status='no_active_plan')
+            self.rev = 0
+            new = self.init()
+            self.assertEqual(self.archived(old)['run_id'], old)
+            self.assertEqual(self.pointer()['run_id'], new['run_id'])
+
+        def test_init_over_an_unfinished_run_conflicts_naming_plan_and_branch(self):
+            self.init()
+            branch = self.git('symbolic-ref', '--short', 'HEAD')
+            snapshot = (self.repo/'.claude/plan-progress.json').read_bytes()
+            for expected in (0, self.rev):
+                refused = self.call('init', {'plan': 'second-plan.md', 'scope': 'fixture',
+                                    'source': 'owner'}, expected=expected, status='conflict')
+                self.assertIn('fixture-plan.md', refused['message'])
+                self.assertIn(branch, refused['message'])
+            self.git('switch', '-qc', 'other')
+            self.call('show', status='conflict')
+            refused = self.call('init', {'plan': 'second-plan.md', 'scope': 'fixture',
+                                'source': 'owner'}, expected=0, status='conflict')
+            self.assertIn('fixture-plan.md', refused['message'])
+            self.assertIn(branch, refused['message'])
+            self.assertEqual((self.repo/'.claude/plan-progress.json').read_bytes(), snapshot)
+            self.assertFalse((self.repo/'.claude/plan-state-archive').exists())
+
+        def test_reader_on_another_branch_than_a_finished_run_shows_no_run(self):
+            self.finished()
+            self.git('switch', '-qc', 'next-plan')
+            progress_json, progress_line, classify = self.readers()
+            for result in (progress_json, progress_line, classify):
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn('state_error', result.stdout + result.stderr)
+            self.assertNotIn('state_status', json.loads(progress_json.stdout))
+            self.assertFalse(any(g.get('role') == 'pinned'
+                                 for g in json.loads(progress_json.stdout)['groups']))
+            # The hooks see it as the finished run it is, so they stand aside as they do
+            # on its own branch; only the display shows no run.
+            self.assertEqual(json.loads(classify.stdout)['state']['disposition'], 'complete')
+
+        def test_hooks_stand_aside_for_a_finished_run_on_another_branch_or_detached(self):
+            self.finished()
+            subprocess.run([sys.executable, str(SCRIPT.parent/'proof-hooks-install.py'),
+                '--install', '--repo', str(self.repo)], capture_output=True, text=True,
+                check=True, timeout=20)
+            for move in (('switch', '-qc', 'next-plan'), ('checkout', '-q', '--detach')):
+                self.git(*move)
+                self.call('show', status='no_active_plan')
+                classify = self.readers()[2]
+                self.assertEqual(json.loads(classify.stdout)['state']['disposition'], 'complete')
+                (self.repo/'replay.txt').write_text(' '.join(move))
+                self.git('add', 'replay.txt')
+                result = subprocess.run(['git', '-C', str(self.repo), '-c', 'user.name=Fixture',
+                    '-c', 'user.email=fixture@example.invalid', 'commit', '-qm',
+                    'Stage 1 green'], capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, (move, result.stderr))
+
+        def test_replayed_init_after_finish_returns_its_original_receipt(self):
+            (self.repo/'fixture-plan.md').write_text(FINISHED_PLAN)
+            data = {'plan': 'fixture-plan.md', 'scope': 'fixture', 'source': 'owner: execute'}
+            first = self.call('init', data, op_id='first-init')
+            self.call('finish', {'evidence': 'fixture close-out complete'})
+            replay = self.call('init', data, expected=0, op_id='first-init')
+            self.assertEqual(replay, first)
+            self.assertEqual(self.state()['disposition'], 'complete')
+            self.assertFalse((self.repo/'.claude/plan-state-archive').exists())
+            self.call('init', {**data, 'plan': 'other'}, expected=0, op_id='first-init',
+                      status='conflict')
+
+        def test_contract_names_the_archive(self):
+            contract = (HERE.parent/'references/execution-state-contract.md').read_text()
+            self.assertIn('.claude/plan-state-archive/', contract)
+    return FinishedRun
+
+
 NO_DOCUMENT = ('show',)
 TAKES_DOCUMENT = ('init', 'transition', 'begin-round', 'record-verification', 'complete-round',
                   'authorize', 'set-blocker', 'strategy-review', 'migrate', 'finish', 'recover',
@@ -287,7 +428,7 @@ def suite(group):
     if group == 'storage':
         return unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(c)
                                   for c in (Storage, ProjectionReaders, stdin_cases(Case),
-                                            stage_open_cases(Case)))
+                                            stage_open_cases(Case), finished_run_cases(Case)))
     if group == 'dispositions':
         return unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(c)
                                   for c in (Dispositions, handoff_id_cases(Case)))

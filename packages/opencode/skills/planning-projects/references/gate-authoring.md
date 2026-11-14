@@ -142,7 +142,7 @@ asks for it.
 inventory then has a named owner", and whose stage gate sweeps `awk -F'|' '$4 ~ /public/'`, the
 `public` rows only, while `internal` rows need owners too. No check sweeps the goal over the
 whole inventory, so every gate passes, later gates spend remediation rounds on symptoms, and the
-gap surfaces only at the first reader given the plan goal, usually the close-out evaluator.
+gap surfaces only at the first reader given the plan goal, usually the plan's demo at its last gate.
 Raising the remediation budget buys repair attempts, not earlier detection; a `(goal)` check
 at the first gate fails there.
 

@@ -360,6 +360,66 @@ def read_pointer(owner):
     return value
 
 
+ARCHIVE='plan-state-archive'
+
+
+def same_worktree(a,b):
+    """The same worktree, whatever branch either names."""
+    return isinstance(a,dict) and all(a.get(k)==b[k] for k in ('root','common','git_dir'))
+
+
+def worktree_run(owner,directory):
+    """This worktree's validated v2 snapshot on any branch, or None. Its pointer, when
+    present, must name this worktree and this run; anything else is left to read_owned."""
+    state=read_json(directory,'plan-progress.json')
+    if not (isinstance(state,dict) and state.get('schema_version')==VERSION):
+        return None
+    validate(state)
+    if not same_worktree(state['owner'],owner):
+        return None
+    try:
+        with own_directory(owner['common'],'plan-state-runs') as fd:
+            pointer=read_json(fd,pointer_name(owner))
+    except FileNotFoundError:
+        pointer=None
+    if pointer is not None and not (isinstance(pointer,dict) and set(pointer)=={'owner','run_id'}
+                                    and same_worktree(pointer['owner'],owner)
+                                    and pointer['run_id']==state['run_id']):
+        return None
+    return state
+
+
+def finished_run(repo):
+    """This worktree's `complete` snapshot on any branch, or None: what a hook stands aside
+    for where `show`, on another branch than the run's, reports no active plan."""
+    owner=owner_of(repo)
+    try:
+        with own_directory(owner['root'],'.claude') as directory:
+            run=worktree_run(owner,directory)
+    except FileNotFoundError:
+        return None
+    return run if run and run['disposition']=='complete' else None
+
+
+def run_exists(state):
+    return StateError('run already exists: {} on branch {} is {}'.format(
+        state['plan'],state['owner']['branch'],state['disposition']),'conflict')
+
+
+def archive_run(owner,state):
+    """Copy a finished snapshot to .claude/plan-state-archive/<run_id>.json, then drop its
+    pointer. The caller then writes the new snapshot and its pointer, in that order. An
+    interruption anywhere leaves either the finished run or its archived copy, never a
+    pointer with no snapshot."""
+    with own_directory(str(Path(owner['root'])/'.claude'),ARCHIVE,True) as fd:
+        replace_json(fd,state['run_id']+'.json',state)
+    try:
+        with own_directory(owner['common'],'plan-state-runs') as fd:
+            os.unlink(pointer_name(owner),dir_fd=fd)
+    except FileNotFoundError:
+        pass
+
+
 def publish_pointer(owner,run_id):
     with own_directory(owner['common'],'plan-state-runs',True) as fd:
         replace_json(fd,pointer_name(owner),{'owner':owner,'run_id':run_id})
@@ -849,6 +909,10 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
         fields(payload,())
         try:
             with own_directory(owner['root'],'.claude') as directory:
+                run=worktree_run(owner,directory)
+                if run and run['disposition']=='complete' and run['owner']['branch']!=owner['branch']:
+                    # A finished run on another branch is history, not this branch's run.
+                    return {'status':'no_active_plan'}
                 state=read_owned(owner,directory)
         except FileNotFoundError:
             need(read_pointer(owner) is None, 'owned run directory missing')
@@ -864,7 +928,21 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
                  and stat.S_IMODE(st.st_mode)==0o600,
                  'unsafe lock')
             fcntl.flock(lock,fcntl.LOCK_EX)
-            state=read_owned(owner,directory,legacy=operation=='migrate',lost_ok=operation=='recover')
+            finished=None
+            if operation=='init':
+                run=worktree_run(owner,directory)
+                if run and run['disposition']=='complete':
+                    if operation_id in run['receipts']:
+                        # The finished run's own init, replayed: its receipt, never a new run.
+                        old=run['receipts'][operation_id]
+                        need(old['request']==digest({'operation':operation,'payload':payload}),
+                             'operation id reused with changed payload','conflict')
+                        return old['receipt']
+                    finished=run
+                elif run and run['owner']['branch']!=owner['branch']:
+                    raise run_exists(run)
+            state=None if finished else read_owned(owner,directory,legacy=operation=='migrate',
+                                                   lost_ok=operation=='recover')
             if state and state.get('schema_version')==VERSION and read_pointer(owner) is None:
                 # An init or migrate interrupted after its snapshot and before its pointer.
                 publish_pointer(owner,state['run_id'])
@@ -875,6 +953,8 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
                 return old['receipt']
             if state and operation_id in state.get('recovery',{}).get('known_operation_ids',()):
                 raise StateError('operation id ran before the snapshot was lost','conflict')
+            if operation=='init' and state is not None and state.get('schema_version')==VERSION:
+                raise run_exists(state)
             revision=state.get('revision',0) if state else 0
             need(revision==expected,'expected revision is stale','conflict')
             if operation=='strategy-review' and payload=={}:
@@ -884,7 +964,10 @@ def execute(repo,operation,payload,expected=None,operation_id=None):
             details={}
             if operation=='init':
                 fields(payload,('plan','source','scope'),('budget','stage','task','task_desc'))
-                need(state is None,'run already exists','conflict');state=new_state(owner,payload)
+                need(state is None,'run already exists','conflict')
+                if finished:
+                    archive_run(owner,finished)
+                state=new_state(owner,payload)
             elif operation=='migrate':
                 state=migrate(owner,state,payload)
                 details={'legacy_evidence':payload.get('legacy_evidence'),

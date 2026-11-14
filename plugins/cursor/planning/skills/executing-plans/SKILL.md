@@ -352,8 +352,8 @@ prose edits to 3 skill files`). An undeclared run is `standard`. Pick it once, f
 plan's **cumulative diff**, not per task. **The declaration is what makes the choice
 reviewable** — downgrading silently and openly produce the same diff.
 
-**What the tier gates** is both review tiers, the gate evaluator (at a stage with Outcomes,
-the demo), the close-out evaluator and `high`'s second pass. What it does **not** gate is the dispatch roster, the executor trailer,
+**What the tier gates** is both review tiers, the gate evaluator (at the plan's last gate,
+the demo) and `high`'s second pass. What it does **not** gate is the dispatch roster, the executor trailer,
 the dispatched-vs-inline reconciliation, honest-gates disclosure, the class sweep every
 surfaced bug requires, and the plan's own tests and gate checks: those run at every tier
 including `none`. The line is cost — a mandate costing an
@@ -480,21 +480,21 @@ write them.** The reasons behind all three: `references/task-execution.md`.
 2. **Diagnose before fixing, then fix the class.** Read the error, form a hypothesis, confirm it against the code, then write the fix. On the **second** RED cycle for a task, stop improvising and diagnose evidence-first: one failed targeted fix is bad luck, two says the hypothesis is wrong rather than the patch. Once the diagnosis holds, the repair is class-scoped — **A bug found during execution is a class** applies here exactly as it does at a gate, and a RED test is the earliest, cheapest place it fires.
 3. **Respect the cycle budget** (plan-set, default 3). On exhaustion stop and escalate — three failed targeted fixes means the approach is wrong, not the implementation. If the user skips rather than re-plans, `backlog add` the task; don't silently drop it.
 4. **Never skip the test — and never widen it into a regression sweep.** The task's Test field is the gate; "it looks right" is not green. It is also the **whole** of the task's testing: **do not run the plan's `stage-scope:` command inside a task**. The stage gate runs it once, at the gate. Widening within the task's own subject — the whole test file instead of one filter, or the class a fix touched — is task-scope and needs no permission; a genuine class sweep is likewise untouched.
-4a. **On Cursor, proof is made once per stage, at the gate, by the `claim-verifier`
-   (§ Host notes (Cursor), "Proof is made by the tool, once per stage"). Do not revert and
+4a. **On Cursor, a task carrying `Proof: required` is proven once per stage, at the gate,
+   by the `claim-verifier` (§ Host notes (Cursor), "Proof is made by the tool, once per
+   stage"); any other task goes from green to its commit. Do not revert and
    re-run per task, run no proving tool before the Status flip, and put no proof record in a
    task commit** (the premise worksheet excepted). Why the rule exists — **prove it, one break per claim, on the
    host**: nothing in a finished artifact distinguishes a test written first from one
    transcribed out of the fix; both are green. So the verifier reverts the fix (not the
    test), re-runs the task's own `Test:`, sees it go RED, and lets `prove-claim.py claim`
-   record it — for **every claim** of the task: on Cursor each claim needs its own record,
-   and the commit gate refuses `Stage N green` without one per claim. A
+   record it — for **every claim** of a marked task; the commit gate refuses `Stage N green`
+   without one per claim. A
    requirement may be recorded too — checkable → `prove-claim.py req`, else `prove-claim.py
-   deviation`. Untiered (a re-run, not an agent's judgment), so it runs at every scope
-   including `none` — **but never on a device, VM or instrumented suite**: the break is
+   deviation`. It runs on the host, **never on a device, VM or instrumented suite**: the
+   break is
    proved against the host-side test guarding the same line, or the device-only claim is
-   recorded with `prove-claim.py deviation --claim`. A per-guard *battery* is for
-   verdict-producing checkers, not product tests. Corollaries for the task itself:
+   recorded with `prove-claim.py deviation --claim`. Corollaries for the task itself:
    enumerate the population **as a command, before patching**; **build fixtures from the
    requirement, never from observed behavior**; and before writing a CHECKER rather than a
    test, ask whether the mechanism can decide the property at all. Why:
@@ -558,7 +558,7 @@ When every task in the stage is green, run the stage gate:
 - **On Cursor, proof comes last.** The checks, the reviews, the demo (its brief from
   `stage-brief.py demo`) and their fixes first; then one `claim-verifier` dispatch on the
   final staged tree; then `git add proof/` and `Stage N green`, which the git hook refuses
-  without every task's records and, where the stage needs them, its `premise.md` and
+  without the marked tasks' records and, with Outcomes, its `premise.md` and
   `demo.md` (§ Host notes (Cursor), "Proof is made by the tool, once per stage")
 - **Regressions check runs at stage-scope on intermediate gates:** cheap host-side checks in full, expensive suites (device/instrumented/e2e) restricted to the modules the stage's commits touched — never `clean`. Use the plan's declared `stage-scope:` command when its Preflight carries a "Test-scope commands" block; when the full suite is cheap (<~5 min), just run it in full. Policy: `../planning-projects/references/test-scope-tiers.md`.
 - **The final stage's gate runs at plan-scope**, together with close-out — the plan's one full clean pass.
@@ -598,19 +598,18 @@ pass: `references/stage-gate.md`.
 
 **Reviews reading the same diff are dispatched together, not in sequence.** A gate's Tier-2
 pass, `high`'s second pass and the gate evaluator (or its demo of the committed build) depend
-on none of each other's findings — one batch, one triage, one round of fixes. Only what reads a
-*different* artifact stays sequential: Tier-1 (one task's diff, pre-commit) and the close-out
-evaluator (the finished plan). Why:
+on none of each other's findings — one batch, one triage, one round of fixes. Only Tier-1 stays
+sequential: it reads one task's diff, before its commit. Why:
 `references/stage-gate.md` § *Same-diff reviews go out together*.
 
 **Independent evaluator for non-command checks.** **Whether it runs comes from
-`references/review-scope.md` — do not re-derive it**: never at `none`, at `light` and
-`standard` when the gate carries a `(judgment)` check or its stage has `**Outcomes:**` —
-unless a recorded goal command decides it (`references/stage-gate.md` § Skipped when a
-recorded command decides the goal) — always at `high`. Run command checks yourself; dispatch a fresh evaluator for the judgment
+`references/review-scope.md` — do not re-derive it**: never at `none` or `light`; at
+`standard` and `high` once, at the plan's last gate, and at a `(judgment)` gate — unless a recorded goal command decides it (`references/stage-gate.md` § Skipped when a
+recorded command decides the goal), below `high` only. Run command checks yourself; dispatch a fresh evaluator for the judgment
 checks, briefed ONLY with the plan goal, the stage goal and the gate's pass criteria — never
-the transcript or your own summary. **At a stage with Outcomes it is a demo** of the built
-product as its user meets it, briefed by `stage-brief.py demo`, never reading the diff. The session that wrote the code grades its own work too generously. A declared tier that does not
+the transcript or your own summary. **At the last gate it demos** every stage's Outcomes
+as their user meets them, briefed by `stage-brief.py demo`, never reading the diff; one it
+cannot show is `not shown here`, a residual and close-out `ACTION NEEDED:`. The session that wrote the code grades its own work too generously. A declared tier that does not
 mandate one is **scope**, reported as such and never as an opt-out; an evaluator that cannot
 be dispatched is a Stop condition, not a skip.
 
@@ -750,7 +749,7 @@ Stop immediately and escalate to the user when:
 - A test cannot be run (missing fixture, unreachable service, unclear invocation)
 - **A mandated verification or dispatch cannot be performed** — dispatch is unavailable or disallowed and Preflight's dispatch roster is non-empty (§ Dispatch roster and capability probe), or a review the gate requires cannot be run. Substituting inline execution, or proceeding unreviewed, is not a documented resolution; asking is
 - Verifying the test requires modifying shared infrastructure (production DB, live service) — see Safety rails
-- **An Outcome cannot be met or shown as written** — a task or the demo finds it unreachable or wrong. Report it (`ACTION NEEDED:`) with the evidence and the options, and record it with `plan-state.py set-blocker` (`awaiting_owner_decision`): the Stop hook reads the snapshot, not prose. Do not drop or reword it yourself: `Stage N green` is checked against the Outcomes recorded in the Step 3.0 worksheet, and a change stands only with the owner's words quoted in its amendment note (`owner, <date>: "<their words>"`)
+- **An Outcome cannot be met as written** — a task or the demo finds it wrong (one it cannot show here is a residual, no stop). Report it (`ACTION NEEDED:`) with the evidence and the options, and record it with `plan-state.py set-blocker` (`awaiting_owner_decision`): the Stop hook reads the snapshot, not prose. Do not drop or reword it yourself: `Stage N green` is checked against the Outcomes recorded in the Step 3.0 worksheet, and a change stands only with the owner's words quoted in its amendment note (`owner, <date>: "<their words>"`)
 - **The plan's premise is false** — Step 3.0, a task or the gate's demo shows that something the stage's Goal, Outcomes or Risk relies on does not hold in the real environment. Report the evidence (`ACTION NEEDED:`), what it means for the Goal, and the options you can see, and record it with `plan-state.py set-blocker` (`awaiting_owner_decision`). Building around it, or recording it as a deviation, is not a resolution: the plan is the owner's to change
 
 **Read the plan's `## Owner decisions` before you ask** — a sub-plan's, and its master's.
@@ -785,7 +784,7 @@ Return to Phase 1 (critique) when:
 ## Phase Close-out — After the last stage
 
 When every stage is green: run the plan's **sole plan-scope pass** (the only `clean` in the
-whole execution), the tier's remaining review and evaluator passes, the version bumps and
+whole execution), the tier's remaining review passes, the version bumps and
 their mirrors, the plan's closing note, the backlog and decisions reconciliation, the
 decisions-conformance sweep, and the workflow-spec audit — then report, and carry out the
 merge steps owner decisions cover (`match --at closeout --require-command`, per step) or offer
@@ -814,7 +813,7 @@ Ordered procedure, and what the report must contain: `references/close-out.md`.
 
 This skill routes to `planning-projects` (which produced the plan), `backlog` and `decisions` (at
 close-out), `workflow-spec` (the close-out audit), the `code-reviewer` agent (both
-review tiers) and a fresh agent in the goal-evaluator role (gate and close-out). What each is
+review tiers) and a fresh agent in the goal-evaluator role (the last gate's demo). What each is
 for, on what condition it fires, and the **Review opt-out** rules: `references/integration.md`.
 
 ---
@@ -900,10 +899,12 @@ for, on what condition it fires, and the **Review opt-out** rules: `references/i
      records, nothing under `proof/` but the premise worksheet, no re-proving when a later task or a review fix touches
      the same code. The git hook does not gate task commits.
   2. **At the gate, prove last.** Run the gate's checks, reviews and demo first, and land
-     their fixes. Then stage the final tree and dispatch `claim-verifier` **once**, briefed
+     their fixes. Then stage the final tree and dispatch `claim-verifier` **once** — only when a task of the stage
+     carries `Proof: required` — briefed
      with the plan path, the stage number, the stage's base commit (the previous
      `Stage N green`, or the plan's first commit) and the build command — nothing else from
-     this conversation. For every task of the stage it breaks **every claim** of the task
+     this conversation. For every task of the stage the plan marks `Proof: required` it
+     breaks **every claim** of the task
      (the plan's named break where the claim says `(red if …)`) and runs
      `prove-claim.py claim`, which writes a record only when it watched the test pass, go RED
      under the break, and the tree come back exactly. It records requirements with
@@ -914,9 +915,9 @@ for, on what condition it fires, and the **Review opt-out** rules: `references/i
      claim easier — stage, and dispatch the verifier again for the tasks that failed. A
      deviation needs the user's say-so or an annotated plan amendment; report each one.
   4. `git add proof/`, then commit `Stage N green`. The git hook refuses that commit while a
-     task of the stage lacks its records for the commit's own tree, and lists what is
-     missing; for a stage with Outcomes it also reads `proof/<plan>/stage-N/premise.md` and
-     `demo.md` from that tree. A `Stage N green` commit rebased or cherry-picked onto
+     marked task of the stage lacks its records for the commit's own tree, and lists what is
+     missing; it also reads the `premise.md` of a stage with Outcomes, and at the last
+     stage `demo.md`, from it. A `Stage N green` commit rebased or cherry-picked onto
      another tree needs re-proving.
   5. Then run `plan-flip-audit.py --repo <repo-root>`. Its findings 8 and 9 read the committed
      records; on Cursor they skip the stage in flight until its `Stage N green` exists,

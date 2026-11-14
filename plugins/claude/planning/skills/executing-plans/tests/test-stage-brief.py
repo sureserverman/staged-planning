@@ -11,6 +11,7 @@ is let through. So every case here fills a generated skeleton the way the brief
 says, and asks the hook's own check.
 """
 import importlib.util
+import re
 import subprocess
 import sys
 import tempfile
@@ -86,6 +87,7 @@ repo.mkdir()
 (repo / "settings.gradle.kts").write_text("")
 outcomes = PFA.stage_outcomes(PLAN, 2)
 base = repo / "proof" / plan.stem / "stage-2"
+last = repo / "proof" / plan.stem / "stage-3"
 
 # The Outcomes the hook will hold the report to, with the derivation note stripped.
 if outcomes == ["Works: the chooser opens with a cleaned copy another app can read.",
@@ -94,10 +96,10 @@ if outcomes == ["Works: the chooser opens with a cleaned copy another app can re
 else:
     bad("stage_outcomes", outcomes)
 
-r = run("demo", "--plan", str(plan), "--stage", "2", repo=repo)
-report = (base / "demo.md").read_text() if (base / "demo.md").is_file() else ""
+r = run("demo", "--plan", str(plan), "--stage", "3", repo=repo)
+report = (last / "demo.md").read_text() if (last / "demo.md").is_file() else ""
 if r.returncode == 0 and report:
-    ok("demo writes the report skeleton")
+    ok("demo at the last stage writes the report skeleton, though that stage has no Outcomes")
 else:
     bad("demo must write the skeleton", r.stderr)
 
@@ -148,9 +150,10 @@ else:
     bad("host path in the brief", brief[:800])
 
 # Catches: an existing report overwritten (an evaluator's results lost).
-(base / "demo.md").write_text("KEEP")
-run("demo", "--plan", str(plan), "--stage", "2", repo=repo)
-if (base / "demo.md").read_text() == "KEEP":
+last.mkdir(parents=True, exist_ok=True)
+(last / "demo.md").write_text("KEEP")
+run("demo", "--plan", str(plan), "--stage", "3", repo=repo)
+if (last / "demo.md").read_text() == "KEEP":
     ok("an existing report is never overwritten")
 else:
     bad("demo overwrote an existing report")
@@ -189,19 +192,21 @@ else:
 
 # Catches: an unchecked premise not reaching the demo brief.
 (base / "premise.md").write_text(filled)
-(base / "demo.md").unlink()
-r = run("demo", "--plan", str(plan), "--stage", "2", repo=repo)
+(last / "demo.md").unlink()
+r = run("demo", "--plan", str(plan), "--stage", "3", repo=repo)
 if "Premises not checked yet: other apps grant read access when sharing" in r.stdout:
     ok("a premise not checkable at Step 3.0 is handed to the demo")
 else:
     bad("unchecked premises must reach the brief", r.stdout[:600])
 
-# Catches: a brief for a stage with nothing to demo.
-r = run("demo", "--plan", str(plan), "--stage", "3", repo=repo)
+# Catches: a brief for a plan with nothing to demo.
+bare = tmp / "2026-10-05-bare-plan.md"
+bare.write_text(PLAN.split("## Stage 2")[0] + "## Stage 3: none\n\n**Goal:** g\n**Risk:** LOW\n")
+r = run("demo", "--plan", str(bare), "--stage", "3", repo=repo)
 if r.returncode == 2 and "no **Outcomes:**" in r.stderr:
-    ok("a stage without Outcomes gets no brief, and is told to derive them")
+    ok("a plan without Outcomes gets no brief, and is told to derive them")
 else:
-    bad("no-Outcomes stage", (r.returncode, r.stderr))
+    bad("no-Outcomes plan", (r.returncode, r.stderr))
 
 # Outcome drift: the worksheet's Outcomes against the plan's, owner words on a bullet.
 recorded = "Outcomes:\n- Works: a.\n- B fails → c.\n\n## Premise 1\n"
@@ -218,7 +223,7 @@ else:
 web = tmp / "web"
 web.mkdir()
 (web / "package.json").write_text('{"scripts": {"dev": "vite"}}')
-r = run("demo", "--plan", str(plan), "--stage", "2", repo=web)
+r = run("demo", "--plan", str(plan), "--stage", "3", repo=web)
 if "Web app." in r.stdout and "probe app" not in r.stdout:
     ok("a web project gets browser instructions, not the Android probe")
 else:
@@ -235,10 +240,10 @@ SUBDIR.mkdir()
     "- **Depends on:** none\n")
 sub = SUBDIR / "2026-10-05-m-sub-01-s-plan.md"
 sub.write_text("# Project Plan: PLANTITLE cleaning\nMaster: ./2026-10-05-m-master-plan.md\n\n"
-               + PLAN.replace("## Stage 3: none", "### Stage 2 Gate\n"
+               + PLAN + "\n### Stage 3 Gate\n"
                               "- [ ] **(goal)** `PLANGOAL check every copy`\n"
-                              "- [ ] GATECRIT the share target is registered\n\n## Stage 3: none"))
-r = run("demo", "--plan", str(sub), "--stage", "2", repo=web)
+                              "- [ ] GATECRIT the share target is registered\n")
+r = run("demo", "--plan", str(sub), "--stage", "3", repo=web)
 need = ["PLANTITLE", "PLANGOAL", "GATECRIT", "MASTERGOAL", "share a cleaned copy"]
 missing_bits = [x for x in need if x not in r.stdout]
 if r.returncode == 0 and not missing_bits:
@@ -324,6 +329,86 @@ recorded = "Outcomes:\n- A1.\n- B1.\n\n## Premise 1\n"
 one_note = plan_with("**Outcomes:** u *(amended 2026-10-06 — owner, 2026-10-06: \"drop A1\")*\n- C1.")
 expect(PFA.outcome_drift_problems(recorded, one_note, 2),
        "two dropped Outcomes need more than one owner note")
+
+
+# ---- One demo per plan: the last gate's brief covers every stage ----------------
+print("\none demo per plan")
+THREE = """# Project Plan: three
+
+## Stage 1: a
+
+**Goal:** g1.
+**Outcomes:** the first user
+- Works: ONE-A holds.
+- ONE-B fails → the user sees why.
+**Risk:** LOW
+
+### Task 1.1: t
+- **Status:** [ ]
+
+## Stage 2: b
+
+**Goal:** g2.
+**Outcomes:** the second user
+- Works: TWO-A holds.
+**Risk:** LOW
+
+### Task 2.1: t
+- **Status:** [ ]
+
+## Stage 3: c
+
+**Goal:** g3.
+**Outcomes:** the third user
+- Works: THREE-A holds.
+**Risk:** LOW
+
+### Task 3.1: t
+- **Status:** [ ]
+
+### Stage 3 Gate
+- [ ] **(goal)** `true`
+"""
+three = tmp / "2026-10-05-three-plan.md"
+three.write_text(THREE)
+trepo = tmp / "three-repo"
+trepo.mkdir()
+tdir = trepo / "proof" / three.stem
+every = [o for s in (1, 2, 3) for o in PFA.stage_outcomes(THREE, s)]
+
+# Catches: an earlier stage still writing a worksheet, so the demo runs at every gate.
+r = run("demo", "--plan", str(three), "--stage", "1", repo=trepo)
+expect(r.returncode == 0 and not (tdir / "stage-1" / "demo.md").exists()
+       and "last gate" in r.stdout and len(r.stdout.strip().splitlines()) == 1,
+       "the brief for stage 1 of 3 writes no worksheet and says the demo is owed at the last gate",
+       (r.returncode, r.stdout, r.stderr))
+
+# Catches: the last gate's demo covering its own stage only.
+r = run("demo", "--plan", str(three), "--stage", "3", repo=trepo)
+sheet = (tdir / "stage-3" / "demo.md").read_text() if (tdir / "stage-3" / "demo.md").is_file() else ""
+expect(r.returncode == 0 and all(x in r.stdout for x in ("ONE-A", "ONE-B", "TWO-A", "THREE-A")),
+       "the last-stage brief names all three stages' Outcomes", r.stdout[:900] + r.stderr)
+expect(all(f"Stage {s}" in r.stdout for s in (1, 2, 3))
+       and r.stdout.index("ONE-A") < r.stdout.index("TWO-A") < r.stdout.index("THREE-A"),
+       "the brief lists each Outcome under its stage, in plan order", r.stdout[:900])
+expect(all(f"# Stage {s}" in sheet for s in (1, 2, 3)),
+       "the worksheet groups the Outcomes under each stage", sheet[:600])
+expect(not PFA.demo_problems(fill(sheet), every),
+       "the whole-plan worksheet, filled as told, passes the hook's check", PFA.demo_problems(fill(sheet), every))
+
+# Catches: an Outcome the session cannot show graded Blocking, so it stops the owner.
+low = r.stdout.lower()
+expect("holds / does not hold / not shown here" in low,
+       "the brief's verdict words are holds, does not hold, not shown here", r.stdout[-900:])
+expect('"cannot reach"' not in low and "cannot reach by the user" not in low,
+       "the brief no longer offers a 'cannot reach' verdict", r.stdout[-900:])
+blocking = [s for s in re.split(r"(?<=\.)\s+", " ".join(r.stdout.split())) if "is Blocking" in s]
+expect(blocking and not any("not shown here" in s.lower() for s in blocking)
+       and any("does not hold" in s.lower() for s in blocking),
+       "'does not hold' is Blocking and 'not shown here' is not", blocking)
+expect(re.search(r"not shown here.{0,200}what a person would need", " ".join(r.stdout.split()), re.I),
+       "'not shown here' asks for what a person would need to show it", r.stdout[-900:])
+expect("do not substitute a test" in r.stdout, "the brief still forbids a test standing in for the demo")
 
 subprocess.run(["rm", "-rf", str(tmp)])
 print(f"\npassed {passed}, failed {failed}")

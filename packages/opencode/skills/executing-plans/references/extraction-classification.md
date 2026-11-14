@@ -16,7 +16,7 @@
 Classifies every trunk heading for extraction: what stays in the trunk, and what may move
 to a reference file. The `bytes` column is each section's size in the trunk, measured with
 `python3 scripts/trunk-sections.py --all-levels core/skills/executing-plans/SKILL.md`:
-**55762 B** across **31 headings**, plus 664 B of scaffolding (title, preamble, and rules
+**55744 B** across **31 headings**, plus 664 B of scaffolding (title, preamble, and rules
 sitting outside any heading); the two sum to the file size exactly. The `markers` column
 counts the section's rows in the retention-marker table. Both are re-taken from the current
 tree, and a figure here that disagrees with the command is stale.
@@ -70,7 +70,7 @@ enforces set equality against the trunk's real headings.
 `bytes` is the section's size in the trunk and `markers` its retention-marker count, both
 measured as stated at the top of this file.
 
-### unconditional — 14 sections, 19011 B
+### unconditional — 14 sections, 19036 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
@@ -78,7 +78,7 @@ measured as stated at the top of this file.
 | 2249 | 3 | The plan is the authorization — dispatch without a confirmation turn | dispatch-bound obligation; binds every dispatch decision |
 | 1883 | 1 | Reference map | the index — without it no reference is reachable |
 | 1412 | 3 | Phase 2 — Preflight | phase header + the check list itself |
-| 3168 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all |
+| 3193 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all |
 | 1165 | 3 | Run to completion — don't stop until you have to | governs every turn of every run |
 | 951 | 2 | What this skill expects | the format contract; every run validates against it |
 | 1329 | 3 | Safety rails | branch/destructive/secrets/shared-infra — every run |
@@ -89,17 +89,17 @@ measured as stated at the top of this file.
 | 228 | 1 | Step 3.4 — Propagate unblock | every green task |
 | 58 | 1 | Phase 3 — Stage execution | phase header |
 
-### rule+elaboration — 14 sections, 35268 B
+### rule+elaboration — 14 sections, 35237 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
-| 12699 | 16 | Step 3.5 — Stage gate | exit criterion + gate order stay; the two verify hooks (Android, redesign), evaluator briefing, Tier-2 shape, decisions sweep and failure procedure are each branch-taken |
-| 7696 | 10 | Step 3.3 — Red-Green loop (per task) | loop rules 1-7 stay; Tier-1 machinery is tier-gated and the test-first rationale is elaboration |
+| 12698 | 16 | Step 3.5 — Stage gate | exit criterion + gate order stay; the two verify hooks (Android, redesign), evaluator briefing, Tier-2 shape, decisions sweep and failure procedure are each branch-taken |
+| 7691 | 10 | Step 3.3 — Red-Green loop (per task) | loop rules 1-7 stay; Tier-1 machinery is tier-gated and the test-first rationale is elaboration |
 | 2026 | 3 | Step 3.2 — Split by parallelism | the YES-obligates-dispatch rule stays; the no-third-mode rationale is elaboration |
 | 1940 | 3 | Dispatch roster and capability probe | fires every Preflight; rationale already in references/dispatch-fidelity.md |
 | 1939 | 3 | A bug found during execution is a class — sweep it, fix every instance | rule is one paragraph; the worked reasoning is elaboration |
 | 1820 | 3 | Context resets at stage boundaries | the handoff-note requirement fires at every gate; the rest is guidance |
-| 1736 | 2 | Review scope — the machinery scales to the change | tier declaration is unconditional; the table is RESTATED from references/review-scope.md, which the trunk already calls the authority |
+| 1711 | 2 | Review scope — the machinery scales to the change | tier declaration is unconditional; the table is RESTATED from references/review-scope.md, which the trunk already calls the authority |
 | 997 | 1 | Light plans | already a trunk summary over references/light-plans.md |
 | 950 | 1 | Master plans | already a trunk summary over references/master-plans.md |
 | 699 | 1 | Calibration re-check (the plan's ceremony can be stale) | fires every Preflight; the worked example is elaboration |
@@ -108,12 +108,12 @@ measured as stated at the top of this file.
 | 646 | 1 | Git bootstrap (hard prerequisite for commit-per-task) | fires every Preflight; the decision tree is mechanical detail |
 | 493 | 1 | Decisions re-check (the plan's snapshot can be stale) | fires every Preflight; the why is elaboration |
 
-### conditional — 3 sections, 1483 B
+### conditional — 3 sections, 1471 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
-| 706 | 1 | Phase Close-out — After the last stage | a phase reached once, at the end; nothing before it needs the text |
-| 377 | 1 | Integration | per-skill descriptions consulted only when routing to one |
+| 692 | 1 | Phase Close-out — After the last stage | a phase reached once, at the end; nothing before it needs the text |
+| 379 | 1 | Integration | per-skill descriptions consulted only when routing to one |
 | 400 | 2 | Amending authored ceremony | only when an amendment is actually needed; the three legality conditions stay because a pointer is not a rule |
 
 ## Where the conditional material went

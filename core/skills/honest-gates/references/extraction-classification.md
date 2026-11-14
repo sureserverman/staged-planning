@@ -2,7 +2,7 @@
 
 Classifies this trunk's sections; the reasons behind its rules live in `reasons.md`. The
 `bytes` column is each section's size in the trunk, measured with
-`python3 scripts/trunk-sections.py core/skills/honest-gates/SKILL.md`: **14395 B** across
+`python3 scripts/trunk-sections.py core/skills/honest-gates/SKILL.md`: **14375 B** across
 **8 headings**, plus 674 B of scaffolding (frontmatter, title, preamble); the two sum to the
 file size exactly. The `markers` column counts the section's rows in the retention-marker
 table. Both are re-taken from the current tree, and a figure here that disagrees with the
@@ -35,13 +35,13 @@ only the reason behind it may.
 | 1354 | 6 | When a gate is BLOCKED | the five-step procedure and the `[~]` rule; binds the moment a check cannot run |
 | 790 | 6 | Reporting | the three states, the collapse prohibition, the substrate line and the reproducible-figure rule; every status report is written under it |
 
-### rule+elaboration — 4 sections, 11111 B
+### rule+elaboration — 4 sections, 11091 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
 | 3963 | 13 | Prohibited (these are gate-faking) | nine prohibitions stay whole (the authored-artifact one among them); the amendment bullet's second half is elaboration of the pointer it already carries |
 | 2624 | 6 | A behavioral claim is a gate too | the cite-your-source rule, the absence/aggregate shapes and the two teeth stay; why a correction is a new claim is the elaboration |
-| 3543 | 8 | A test does not exist until its mutant dies | the mechanism question, the two ways out, the three numbered rules and the discriminating-cause rule stay; why the mechanism question comes first, why fixtures come from the requirement and the "why this is not covered" paragraph are the elaboration |
+| 3523 | 8 | A test does not exist until its mutant dies | the mechanism question, the two ways out, the three numbered rules and the discriminating-cause rule stay; why the mechanism question comes first, why fixtures come from the requirement and the "why this is not covered" paragraph are the elaboration |
 | 981 | 3 | Changing a contract reclassifies everything already written | the do-not-ship rule, the inventory-is-a-command rule and the tier line stay; the marker-change worked example is the elaboration |
 
 ### conditional — 1 section, 338 B

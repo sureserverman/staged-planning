@@ -40,8 +40,10 @@ run also holds `recovery`; a reader older than that field refuses the snapshot.
 `rounds` contains `completed`, `budget` and nullable `active`. `gate` contains
 `id`, `repair_revision` and nonempty declared `checks` while repairing.
 A detached HEAD has no branch and owns no run: `show` there reports `no_active_plan`,
-or `conflict` when this worktree's pointer names a run started on a branch, and every
-other operation is a `state_error` until a branch is checked out.
+or `conflict` when this worktree's pointer names an unfinished run started on a branch
+(a `complete` one is `no_active_plan`), and every other operation is a `state_error`
+until a branch is checked out. The hooks read a `complete` run on another branch, or
+under a detached HEAD, as the finished run it is, and stand aside as on its own branch.
 Compatibility `remediation_round` is completed plus active; `remediation_budget`
 is the current ceiling. Changing a gate cannot erase spent rounds: gate accounts
 are retained. Disposition projects to existing public phase values.
@@ -64,7 +66,7 @@ owner and run id, so a retried init returns its original receipt. A pointer with
 snapshot is never left by an interruption; it is a diagnosable state error that only
 `recover` acts on. A deeply
 nested payload or snapshot is a `state_error`, like any other unparseable input. `finish` retains the terminal snapshot/receipts until
-explicit archival, and marks the run complete; no ambiguous counter is reset.
+the next `init` archives them, and marks the run complete; no ambiguous counter is reset.
 
 Every mutation compares expected revision under the lock. Operation ids bind the
 operation and canonical payload digest. Retries match their original receipt before
@@ -80,7 +82,13 @@ charging work or replacing the snapshot. Limits are published by the module.
 
 - `init`: plan, optional stage/task/description, budget (default 2), authorization
   source and scope. Revision 0 means absent; creates revision 1 and a new run id.
-- `show`: validate and return the owned state without a mutation or receipt.
+  A `complete` run in this worktree, on its branch or another, is absent (a replay of its
+  own init's operation id returns that receipt instead): `init` copies
+  its snapshot to `.claude/plan-state-archive/<run_id>.json`, removes its pointer, then
+  writes the new snapshot and the new pointer, in that order. An unfinished run is a
+  `conflict` whose message names its plan, branch and disposition.
+- `show`: validate and return the owned state without a mutation or receipt. A
+  `complete` run whose branch is not the current one is `no_active_plan`.
 - `transition`: phase, optional stage/task/task_desc, optional gate (id,
   repair_revision, checks), optional qualification. Never accepts counters, receipts,
   authority or ownership from a caller. An active round prohibits switching gates.

@@ -45,6 +45,17 @@ Omit the field entirely on every task the user did not name. An absent field mea
 the tier decide", which is the right answer for almost every task; `Review: run` is not a
 thing.
 
+### `Proof:` — the one task in a plan that owes a mutation proof
+
+A task owes a `prove-claim.py` record only when the plan marks it `Proof: required`. Mark a
+task whose diff touches a risk-listed path (the same reading as `Review: required` above),
+or whose product is a checker that produces a verdict — a validator, an audit, a gate. That
+task pays one mutation proof, for its first claim and each claim marked `(red if …)`
+(`../../executing-plans/SKILL.md` Step 3.3 rule 4a). It buys the one check nothing else
+makes: that the test can fail. Any other task goes from green to its commit, and the record
+audit and the commit gate ask nothing of it. The field takes one value; `Proof: skip` is not
+a thing, because an absent field already means no proof is owed.
+
 ### `Test:` — the outcome, and a way to go red
 
 A `Test:` is only evidence if it would fail when its claim is false. Two ways a test that

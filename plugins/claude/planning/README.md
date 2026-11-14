@@ -1,12 +1,12 @@
 # planning
 
-A ten-skill pipeline (v2.1.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
+A ten-skill pipeline (v2.2.0) that turns a vague idea into executed work — including redesigning an app to a Claude Design handoff — and keeps each project's contracts and records honest. Each skill hands off to the next; they were designed as a unit.
 
 ## Highlights
 
 - **A plan's goal is a gate check from the first gate.** Every Standard plan, Light plan and master register entry carries at least one gate check marked `(goal)`: the plan's goal as one cheap sweep over the whole artifact it is about, never a subset by category, in every gate from the first one whose artifact exists (`planning-projects/references/gate-authoring.md` § The plan's goal is a check from the first gate). The gate evaluator is briefed with the plan goal as well as the stage goal, so a stage whose output already falls short of the plan goal, with no later stage planned to change it, is a Blocking finding.
 - **Advisory validator notes carry a measured trigger rate.** `validate-gate-checks.py` reports `GOAL-CHECK-MISSING` when a plan, or a master entry, has no `(goal)` check, and `FILTERED-SUBSET` when a sweep is restricted by a category filter, such as an awk field match or a grep narrowing what `git ls-files`, `find` or `ls` printed; `(scoped)` answers it. Both are advisory because most hits are legitimate: measured 2026-10-08 over 800 plans in one owner's records homes, `FILTERED-SUBSET` fired 13 times and 1 was a true positive. Every gate heuristic ships with a severity and such a rate.
-- **Proof by tool.** A task's mutation proof is a record written by a tool, not a sentence in the commit. `prove-claim.py` (`skills/executing-plans/scripts/`) writes `proof/<plan>/<task>/claim-K.json` only after it watched the plan's own `Test:` pass, fail under your break, and the tree come back exactly. Self-reported breaks are not enough: of 26 self-reported mutants in 11 task commits (one owner's commits, undated), re-run by performing each stated break, 1 was caught by no test at all (a small sample — roughly 0.1–20% false at 95%). `plan-flip-audit.py --repo` checks the records at every stage gate, and an opt-in commit gate refuses an unproven task commit — see [Hooks](#hooks).
+- **Proof by tool, where the plan asks.** A task the plan marks `Proof: required` (a risk-listed path, or a checker that produces a verdict) owes a mutation proof, and that proof is a record written by a tool, not a sentence in the commit; any other task goes from green to its commit. `prove-claim.py` (`skills/executing-plans/scripts/`) writes `proof/<plan>/<task>/claim-K.json` only after it watched the plan's own `Test:` pass, fail under your break, and the tree come back exactly. Self-reported breaks are not enough: of 26 self-reported mutants in 11 task commits (one owner's commits, undated), re-run by performing each stated break, 1 was caught by no test at all (a small sample — roughly 0.1–20% false at 95%). `plan-flip-audit.py --repo` checks the records at every stage gate, and an opt-in commit gate refuses a marked task's commit without them — see [Hooks](#hooks).
 - **A claimed review is checked against the dispatches.** `hooks/dispatch-log.sh` logs every `Agent` dispatch, subagent start and stop while a plan is in flight, and `review-ledger-check.py` fails a gate whose `review:` or `evaluator:` line claims a dispatch the log does not hold. No log is NOT RUN, never green.
 - **Measured handoffs.** `context-usage.py` reads exact context use from the session transcript and gives each stage gate a `continue | handoff | unknown` verdict. On `handoff` the executor writes a `RESUME HERE` block carrying a `handoff_id`. Under a supervisor, `handoff-envelope.py` writes the envelopes that let a fresh session adopt the run: it runs `verify`, then `accept`, and only then Preflight, and `accept` and `fail` are one-shot per id, so a handoff is adopted at most once.
 - **Dispatch is checked, not trusted.** `Dispatch: YES` means the task must go to a sub-agent. `validate-dispatch.py` fails a plan whose dispatch fields are wrong, before the plan is presented and again at Preflight. `plan-progress.py --dispatch-check` makes roster reconciliation a close-out gate, and `--stage-order-check` stops a stage from opening before the gate it depends on.
@@ -107,10 +107,10 @@ A scoped gate report always discloses what actually ran. Policy lives in `skills
 |---|---|---|
 | **none** | docs / config / version-bump / comment-only | the plan's own tests and gate checks, nothing else |
 | **light** | no new executable behavior, **or** under ~200 changed lines across ≤ ~5 files, and nothing risk-listed | + **one** whole-plan-diff review, at close-out |
-| **standard** | multi-file code with new behavior — the default, and what an undeclared run gets | + one Tier-2 review per stage gate; an evaluator only at gates carrying a `(judgment)` check or whose stage has Outcomes (there it demos them as their user), unless a recorded goal command decides it, plus a close-out evaluator when the final gate carries one or any stage has Outcomes |
-| **high** | security / auth, data-destructive, public API, schema / migration | the full apparatus: per-task Tier-1, per-gate Tier-2 + evaluator, a second independent close-out pass |
+| **standard** | multi-file code with new behavior — the default, and what an undeclared run gets | + one Tier-2 review per stage gate; one evaluator, at the plan's last gate, demoing every stage's Outcomes as their user (and at any gate carrying a `(judgment)` check), unless a recorded goal command decides it |
+| **high** | security / auth, data-destructive, public API, schema / migration | the full apparatus: per-task Tier-1, per-gate Tier-2, the last gate's evaluator, a second independent close-out pass |
 
-**What the tier gates** is every mandate that costs an agent dispatch: both review tiers, the gate and close-out evaluators, the Preflight dispatch probe, and the design-fidelity verify loop's evaluator. What it never gates is the cheap-but-load-bearing half — the dispatch roster, the executor trailer, the dispatch reconciliation, honest-gates disclosure, the class sweep run on any bug found during execution, and the plan's own tests. Concretely, counting **verification** dispatches only — the plan's own `Dispatch: YES` task dispatches are execution, not verification, and are never tiered — a Standard 3-stage / 9-task plan whose gates each carry a `(judgment)` check costs **7** at `standard` (3 Tier-2, 3 gate evaluators, 1 probe; 8 if its close-out evaluator is a separate dispatch, 4 if its gates are all executable sweeps). Running every mandate on the same plan would cost **17** (9 Tier-1, 3 Tier-2, 3 gate evaluators, 1 close-out, 1 probe) before any re-dispatch after a fix — and an unbounded re-dispatch is the larger cost the tiers remove.
+**What the tier gates** is every mandate that costs an agent dispatch: both review tiers, the gate evaluator, the Preflight dispatch probe, and the design-fidelity verify loop's evaluator. What it never gates is the cheap-but-load-bearing half — the dispatch roster, the executor trailer, the dispatch reconciliation, honest-gates disclosure, the class sweep run on any bug found during execution, and the plan's own tests. Concretely, counting **verification** dispatches only — the plan's own `Dispatch: YES` task dispatches are execution, not verification, and are never tiered — a Standard 3-stage / 9-task plan whose gates each carry a `(judgment)` check costs **7** at `standard` (3 Tier-2, 3 gate evaluators, 1 probe; 5 when only its last gate needs a reader, the plan's one demo). Running every mandate on the same plan would cost **16** (9 Tier-1, 3 Tier-2, 3 gate evaluators, 1 probe) before any re-dispatch after a fix — and an unbounded re-dispatch is the larger cost the tiers remove.
 
 The `light` bar is a size the diff can be measured against, with escalation carried by the risk list. A criterion nothing can satisfy is a dead branch, not a conservative default: a bar of **a single file** excludes any real multi-file plan, and one that turns on a judgment ("new executable behavior") is resolved upward every time by an executor told never to take the lighter option.
 
@@ -248,7 +248,9 @@ open on every unexpected condition and always exits 0. Full contract:
 ### Proof-record commit gate — **opt-in per project**
 
 A git `reference-transaction` hook (`hooks/git-ref-gate.sh`) that refuses a task commit
-without valid `prove-claim.py` records, while a plan is in flight. A task commit is one whose
+without valid `prove-claim.py` records, while a plan is in flight, for a task the plan marks
+`Proof: required` (its first claim and each claim marked `(red if …)`); a record that is
+present on any task is validated too. A task commit is one whose
 subject names a task of the plan (*"Stage 2 Task 2.3: …"*). It reads the finished commit, so
 `--no-verify`, `-a`, `--amend`, `commit-tree` + `update-ref`, cherry-pick and a detached HEAD
 all pass through it. A record must match the commit's own tree and the plan's current wording.
@@ -269,18 +271,15 @@ against the whole tree, as is a record without both maps (written before this bi
 deviation, which proves no file: in a plan kept in the repo, record a deviation after the
 task's Status flip, or the flip stales it. A req covered by a claim carries that claim's maps,
 and the commit gate refuses a covered req carrying a map that differs from the claim it
-cites. A record has drifted when a later commit holds another blob for a file it binds: a
-`Stage N green` commit is refused while a record of a stage-N task has drifted, naming the
-file and the record. `plan-flip-audit.py --repo` reports drift against HEAD (finding 8, once
-per record, a covered req under its claim): blocking for a task whose stage gate is not yet
-fully ticked, as the commit gate refuses it; advisory once that gate is fully ticked and a
-`Stage N green` commit holds the files as proven, since a later stage may edit a file an
-earlier stage proved. A stage whose green commit already held a changed file closed on a stale
-proof, and its drift stays blocking. Re-proving rebinds the record to the tree it
+cites. A record has drifted when a later commit holds another blob for a file it binds. Drift
+is reported, never refused: a `Stage N green` commit names it on stderr, with the file and the
+record, and lands. `plan-flip-audit.py --repo` reports drift against HEAD as advisory (finding
+8, once per record, a covered req under its claim), and says whether the stage closed on the
+proof or on a file that had already changed. Re-proving rebinds the record to the tree it
 runs on. With `proof/` committed, the new record lands with the commit that carries it; with
 `proof/` kept local, it binds to the next commit whose subject names that task.
-A file under `proof/` that is not a record is refused, and so is a requirement whose only records fail
-to validate (the audit only advises on requirements). A proven commit lands by
+A file under `proof/` that is not a record is named on stderr and the commit lands. A
+requirement whose only records fail to validate is refused (the audit only advises on requirements). A proven commit lands by
 any route. Not checked: a commit naming no task; a commit already reachable from a local branch
 or a remote-tracking ref (a fetched one, or one written there by hand); a ref other than `HEAD`
 and `refs/heads/*`; and past the newest 200 commits of one update, which it says on stderr.

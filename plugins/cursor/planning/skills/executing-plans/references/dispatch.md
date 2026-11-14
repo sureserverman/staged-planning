@@ -126,7 +126,8 @@ beside it, so the path comes from the routing table's plugin and name).>
   `wait <pid>`, or a sentinel file it writes last; a `pgrep -f` loop matches its own shell
 - Commit with message: "Stage <N> Task <N.M>: <description>" — code only, nothing under
   `proof/`. The git reference-transaction hook does not gate task commits; it gates the
-  stage's `Stage N green` commit, after the gate's verifier has proven every task. End the
+  stage's `Stage N green` commit, after the gate's verifier has proven every task the plan
+  marks `Proof: required`. End the
   message with the executor trailer on its own single physical line:
   `Executor: dispatched — <your agent name>`
   (executing-plans rule 7: without it the task reads as `unknown`)

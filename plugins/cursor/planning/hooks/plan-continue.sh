@@ -202,7 +202,8 @@ try:
             "phase \"%s\"), but this repo has no `Stage %s green` commit, so the gate was never "
             "recorded and nothing it claims was checked. Run the gate now (executing-plans § "
             "the stage gate): its checks, the review and the demo evaluator, then prove every "
-            "claim of every task of the stage and commit `Stage %s green` with the records — "
+            "claim of every task of the stage the plan marks `Proof: required` and commit "
+            "`Stage %s green` with the records — "
             "the git hook refuses it without them. If the gate cannot pass, untick its boxes, "
             "record the blocker, and report."
         ) % (classifier.clean(claimed, "?", n), plan_name(n), classifier.clean(phase, "?", n),

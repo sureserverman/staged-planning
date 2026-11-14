@@ -29,7 +29,7 @@ writing; anything it rewrites is backed up beside it first, and its mode is kept
 
 THE GIT HOOK (--repo R). The proof-record check runs as git's `reference-transaction`
 hook (hooks/git-ref-gate.sh), which refuses a `Stage N green` commit without a proof
-record for every claim of every task of stage N. --install --repo writes a shim into R's
+record for every claim of every task of stage N the plan marks `Proof: required`. --install --repo writes a shim into R's
 git hooks directory (`git rev-parse --git-path hooks`) that execs this plugin's
 git-ref-gate.sh by absolute path; while a plan is in flight, the commit gate denies git
 commands in a repo without it. The shim lets every update through, and says the gate is

@@ -252,7 +252,7 @@ lives. Delegate:
   the fidelity verify loop as a stage-verify-style gate hook. That hook's separate
   evaluator is gated by the plan's declared **review scope** like any other dispatch, so
   mark the stage's fidelity check `(judgment)` when fidelity matters — it is what funds the
-  evaluator at `light` and `standard`. If the tier funds no evaluator, the loop does not run
+  evaluator at `standard` and `high`. If the tier funds no evaluator, the loop does not run
   and the gate report says so; it is never run with the executor grading its own
   reproduction, which is the one thing the loop exists to prevent.
 - **planning-projects** — a redesign-from-handoff plan declares behavior changes as
