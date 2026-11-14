@@ -192,6 +192,11 @@ with tempfile.TemporaryDirectory() as t:
         ("a (judgment) box under a sub-heading of the gate blocks the skip",
          goal + "\n\n#### Round 2\n\n- [x] **(judgment)** the errors read well",
          skip_line(), 1, "(judgment)"),
+        # Catches the Stage 1 gate of 2026-11-13-scripts-and-plan-size: a handoff note's
+        # prose naming `(judgment)` was read as a gate check, so a scope line was refused.
+        ("a handoff note naming (judgment) in prose does not block the skip",
+         goal + "\n\n**Stage 2 handoff:** no (judgment) check here\n"
+         "`evaluator: not mandated — no (judgment) line`", skip_line(), 0, "goal command"),
         ("a scope line for the evaluator at a gate with a (judgment) line exits 1",
          goal + "\n- [x] **(judgment)** the errors read well",
          "evaluator: not run — not mandated", 1, "mandated here"),

@@ -419,6 +419,8 @@ try:
             ("accepted with each Outcome's Decided by", goal, decided, True, ""),
             ("refused at a gate with a (judgment) line",
              goal + "\n- [x] **(judgment)** reads well", decided, True, "(judgment)"),
+            ("accepted when only a handoff note names (judgment), in prose",
+             goal + "\n\n**Stage 1 handoff:** no (judgment) check here", decided, True, ""),
             ("refused with the (goal) box unticked", goal.replace("[x]", "[ ]"), decided, True,
              "(goal)"),
             ("refused with an Outcome naming no Decided by", goal, "", True, "Decided by"),

@@ -1,7 +1,7 @@
 # Extraction classification — `../SKILL.md`
 
 What each `../SKILL.md` section keeps in the trunk and where its elaboration lives.
-The trunk is **39464 B** across **35 headings**, of which 787 B is scaffolding
+The trunk is **39821 B** across **35 headings**, of which 787 B is scaffolding
 (frontmatter, title, and the preamble that precedes the first heading). Every `bytes`
 figure is re-taken by
 `python3 scripts/trunk-sections.py --all-levels core/skills/planning-projects/SKILL.md`;
@@ -51,23 +51,23 @@ short by compressing justification, not by relocating procedure.
 `bytes` is the section's current size in the trunk. `elaboration` names the file in
 this directory that holds what the trunk does not, or `—` where the section has none.
 
-### unconditional — 14 sections, 10739 B
+### unconditional — 14 sections, 11096 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
-| 1659 | — | Stage structure | the literal task/stage field template every plan is built from |
+| 1706 | — | Stage structure | the literal task/stage field template every plan is built from |
 | 1392 | `set-valued-checks.md` | Write a set-valued check as the sweep that proves it | binds every gate check an author writes |
 | 1659 | `task-fields.md` | Task and stage fields | a pointer at task-fields.md plus six load-bearing rules — among them `Depends on`/`Blocks` required and symmetric, intra-stage dependency order with no forward reference, and a consistent `Dispatch`, because a rule that survives only as a noun in a pointer sentence binds nothing |
 | 1156 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
 | 468 | `plan-document-template.md` | Plan Document Format | a pointer at the template fixture |
 | 646 | `task-fields.md` | Phase 3 — The Red-Green Loop | a pointer plus its five obligations: a runnable test, a cycle budget, a test of the promised outcome, a claim that goes red when false, and a preparing task testing that it prepared |
-| 660 | — | Phase -1 — Clarification | the clarification rule in one paragraph: ask only what would change the plan and the repo cannot answer, state an inferred answer as an assumption, batch the questions; runs before every plan |
+| 877 | — | Phase -1 — Clarification | the clarification rule in one paragraph: ask only what would change the plan and the repo cannot answer, state an inferred answer as an assumption, batch the questions, mark the smallest option that meets the request Recommended; runs before every plan |
 | 271 | — | Research summary | every task must trace back to it |
 | 921 | `owner-decisions.md` | Ask execution's questions now | binds every plan at the moment it is presented: the batched round of execution's questions and the `## Owner decisions` record; a pointer followed after presenting is the same as no rule |
 | 243 | — | Phase 4 — Stage Gates | phase header |
 | 233 | — | Phase 0 — Research | phase header |
 | 230 | — | Stage sizing | the >7-tasks rule; one sentence, binds every stage |
-| 1003 | — | Phase 2 — Stage Breakdown | phase header plus the write-Outcomes-first rule, which binds every stage |
+| 1096 | — | Phase 2 — Stage Breakdown | phase header plus the write-Outcomes-first rule (the product's user, failures that user can cause, none for a stage only later stages or tests consume), which binds every stage |
 | 198 | — | Phase 1 — Preflight | phase header |
 
 ### rule+elaboration — 20 sections, 27732 B
@@ -125,6 +125,7 @@ that must survive verbatim, it is quoted from the trunk.
 | Phase -1 — Clarification | ask only what would change the plan and the repo cannot answer |
 | Phase -1 — Clarification | State an inferred answer as an assumption |
 | Phase -1 — Clarification | Batch the questions in the host's question tool |
+| Phase -1 — Clarification | The option marked Recommended is the smallest one that meets the request as the owner wrote it |
 | Phase -1 — Clarification | skip straight to Phase -0.5 |
 | Ask execution's questions now | one batched round |
 | Ask execution's questions now | An entry covers only the case it names |
@@ -160,6 +161,7 @@ that must survive verbatim, it is quoted from the trunk.
 | Preflight checklist | If any preflight check fails, stop |
 | Phase 2 — Stage Breakdown | Divide the project into sequential stages |
 | Phase 2 — Stage Breakdown | Write each stage's Outcomes before its tasks |
+| Phase 2 — Stage Breakdown | Write a failure line only for a failure |
 | Stage structure | an instruction to the executor — YES obligates dispatch |
 | Stage structure | the SET this task changes |
 | Stage structure | Class predicate: the command that sweeps the set |

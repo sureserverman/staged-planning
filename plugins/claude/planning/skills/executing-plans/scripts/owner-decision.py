@@ -125,6 +125,8 @@ PLACE = re.compile(r"\bPreflight\b|\bclose-?out\b|\bStage\s+0*(\d+)\b|\bTask\s+(
 WORD = re.compile(r"[^\s,;.()\-–—:*]+")
 CONNECTORS = {"and", "only", "the", "at", "in", "of", "on"}
 AT = ("preflight", "stage", "closeout")
+MATCH_EXAMPLE = ('python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match '
+                 '--plan <plan> --at stage --stage 1 --task 1.1 --command "<the command>"')
 
 
 class Unreadable(Exception):
@@ -534,9 +536,11 @@ def cmd_match(a):
         return e.code
     if at is None:
         print("owner-decision: --at is needed when no run of this plan is in flight", file=sys.stderr)
+        print(f"example: {MATCH_EXAMPLE}", file=sys.stderr)
         return 2
     if at == "stage" and stage is None:
         print("owner-decision: --at stage needs --stage", file=sys.stderr)
+        print(f"example: {MATCH_EXAMPLE}", file=sys.stderr)
         return 2
     case = {"at": at, "stage": stage, "task": task, "command": a.command,
             "require_command": a.require_command}
@@ -600,11 +604,35 @@ def cmd_check(a):
     return 1 if problems else 0
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main(argv=None):
     _warn_if_stale()
-    ap = argparse.ArgumentParser(prog="owner-decision.py", description=__doc__.split("\n\n")[0])
+    ap = ExampleParser(prog="owner-decision.py", description=__doc__.split("\n\n")[0],
+                       example=MATCH_EXAMPLE)
     sub = ap.add_subparsers(dest="op", required=True)
-    m = sub.add_parser("match")
+    m = sub.add_parser("match", example=MATCH_EXAMPLE)
     m.add_argument("--plan", required=True)
     m.add_argument("--at", choices=AT)
     m.add_argument("--stage", type=int)
@@ -612,7 +640,7 @@ def main(argv=None):
     m.add_argument("--command")
     m.add_argument("--require-command", action="store_true")
     m.add_argument("--json", action="store_true")
-    c = sub.add_parser("check")
+    c = sub.add_parser("check", example='python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py check <plan>')
     c.add_argument("plan")
     a = ap.parse_args(argv)
     try:

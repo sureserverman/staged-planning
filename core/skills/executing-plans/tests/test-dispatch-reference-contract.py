@@ -12,7 +12,7 @@ not a skill of its own. What it pins:
      main-session re-run of each green task's test; the trailer check; the merge check.
   2. Gone from it: the common-mistakes table, the when-not-to-use list and any Sources
      heading. The file is at most 12000 bytes.
-  3. The trunk's reference map names the file, the trunk is no larger than 56577 bytes,
+  3. The trunk's reference map names the file, the trunk is no larger than 57587 bytes,
      and the old skill folder does not exist.
 
 (The old skill's name and the Sources heading are split in the code below: the plan's
@@ -31,7 +31,9 @@ TRUNK = os.path.join(SKILL_DIR, "SKILL.md")
 REF = os.path.join(SKILL_DIR, "references", "dispatch.md")
 OLD_SKILL = os.path.join(os.path.dirname(SKILL_DIR), "dispatching-" + "parallel-agents")
 MAX_REF_BYTES = 12000
-MAX_TRUNK_BYTES = 56577
+# The ceiling scripts/trunk-budget.txt holds for this trunk, which names what each rise
+# pays for: 2.3.0 raised it for the literal prove-claim and plan-state calls.
+MAX_TRUNK_BYTES = 57587
 # Three hosts ship a whole-file fork of the reference; the host-neutral part of the
 # contract binds each. Host facts (how the host spawns, its trailer wording, its notes)
 # cost up to 1500 B more. Absent from a built copy of this test.

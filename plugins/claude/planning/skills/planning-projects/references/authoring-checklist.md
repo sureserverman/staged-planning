@@ -24,7 +24,7 @@ Run every item before showing the plan to the user.
 - [ ] Tasks within each stage follow their dependency order
 - [ ] No task depends on something from a later stage
 - [ ] Every stage has a risk flag with a reason (`task-fields.md`)
-- [ ] Every stage whose result a person or another program meets has `**Outcomes:**`: who, what they get when it works, and what they see for each way it can fail; every promise in the Research Summary lands in some stage's Outcomes (`../SKILL.md` § Phase 2 — Stage Breakdown)
+- [ ] Outcomes name the person or program that uses the product: what they get when it works, and a failure line only for a failure that user can cause through the product's own interface as the plan changes it; a stage whose result only a later stage or the project's own tests consume omits Outcomes; every promise in the Research Summary lands in some stage's Outcomes (`../SKILL.md` § Phase 2 — Stage Breakdown)
 - [ ] Every stage has a rollback note (`task-fields.md`)
 - [ ] Every stage has a gate with specific checks (`../SKILL.md` § Phase 4 — Stage Gates)
 - [ ] No stage has more than 7 tasks (`../SKILL.md` § Stage sizing)
@@ -41,7 +41,7 @@ Run every item before showing the plan to the user.
 - [ ] **Every gate check can fail in the direction its hazard runs.** For each set-valued check, name what the defect would look like in the tree: an unwanted presence is a new line and an allow-list sweep catches it; a *missing* call adds nothing for a grep to find, so it needs an invariant asserted over every operation — a test the gate runs, not a sweep of the sites the plan chose. No validator can tell these apart, because the syntax is identical and only the hazard differs (`set-valued-checks.md` § The third error)
 - [ ] A gate check over what a commit range changed (`git diff --name-only <base>..HEAD`) leaves out the files the executor commits itself — `proof/` records and any `.gitignore` git bootstrap writes — or it fails on the run's own bookkeeping
 - [ ] A task that adds a member to a closed set (an enum, event list, migration count, snapshot baseline) updates every test that pins that set, in the same task (`task-fields.md` § `Test:`)
-- [ ] **The plan's goal is a check from the first gate**: every gate from the first one whose artifact exists carries a `(goal)` check sweeping the plan's goal over the whole artifact, never a subset by category — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING, and any FILTERED-SUBSET note on it is answered. The validator checks presence, not placement: zero means some gate carries one, so placement from the first gate is checked here by the author (`gate-authoring.md` § The plan's goal is a check from the first gate)
+- [ ] **The plan's goal is one check, in the final gate**: a plan carries one `(goal)` check, in its final gate; it sweeps the plan's goal over the whole artifact, never a subset by category; an earlier gate repeats it only when that stage's own tasks can make it fail, and says which — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING, and any FILTERED-SUBSET note on it is answered. The validator checks presence, not placement: zero means some gate carries one, so whether an earlier gate needs the repeat is checked here by the author (`gate-authoring.md` § The plan's goal is one check, in the final gate)
 - [ ] **Every gate check can pass as authored**: `validate-gate-checks.py` reports zero SELECTOR-UNMATCHED — every `pytest <file> -k <expr>` selector in a gate is one some task's `Test:` builds toward, so no gate names a filter that collects nothing (such a gate cannot pass, and nothing else finds that before execution; `executing-plans` re-checks it at Preflight with `--collect-only`, where the tests actually exist)
 
 **Research and Preflight**
@@ -74,7 +74,7 @@ Run every item before showing the plan to the user.
 - [ ] The decomposition trigger actually held (`../SKILL.md` § Phase 2.5 — Decomposition decision (master plan + sub-plans)) — 2–7 sub-plans, each independently executable
 - [ ] Register `Depends on` / `Blocks` fields are symmetric across sub-plan entries
 - [ ] Every register entry ends with a `**Gate:**` block containing at least one cross-plan integration check
-- [ ] Every register entry's `**Gate:**` block, and every sub-plan's gates from the first whose artifact exists, carry a `(goal)` check — `validate-gate-checks.py` reports zero GOAL-CHECK-MISSING on the master and on each sub-plan. It checks presence, not placement, so a sub-plan's placement from its first gate is the author's to check (`gate-authoring.md` § The plan's goal is a check from the first gate)
+- [ ] Every register entry's `**Gate:**` block carries a `(goal)` check, and every sub-plan carries one in its final gate, repeated earlier only where that stage's own tasks can make it fail — `validate-gate-checks.py` reports zero GOAL-CHECK-MISSING on the master and on each sub-plan. It checks presence, not placement, so whether a sub-plan's earlier gate needs the repeat is the author's to check (`gate-authoring.md` § The plan's goal is one check, in the final gate)
 - [ ] Every sub-plan carries the `Master: ./<master-file>` backlink; every register `Plan:` link resolves
 - [ ] The master plan is parser-safe: no raw `- [ ]` bullets outside `**Gate:**` blocks, no tasks, no Preflight (`master-plan-format.md`)
 
@@ -86,8 +86,8 @@ these twelve — the Standard checklist does not apply:
 - [ ] Every task has a concrete, runnable `Test:` that asserts the outcome and could go red — the same bar as any plan
 - [ ] Tasks are in dependency order; any `Depends on` points only backward within the stage
 - [ ] Exactly one stage, with 2–5 tasks (a 6th task or a second stage means re-issue as Standard)
-- [ ] The stage has `**Outcomes:**` unless nobody outside the code meets its result (`../SKILL.md` § Phase 2 — Stage Breakdown)
-- [ ] The single `### Stage 1 Gate` includes "full existing test suite passes" and a `(goal)` check sweeping the plan's goal over the whole artifact — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING (`gate-authoring.md` § The plan's goal is a check from the first gate)
+- [ ] Outcomes name the person or program that uses the product, with a failure line only for a failure that user can cause through the product's own interface as the plan changes it; a stage whose result only a later stage or the project's own tests consume omits Outcomes (`../SKILL.md` § Phase 2 — Stage Breakdown)
+- [ ] The single `### Stage 1 Gate` includes "full existing test suite passes" and a `(goal)` check sweeping the plan's goal over the whole artifact — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING (`gate-authoring.md` § The plan's goal is one check, in the final gate)
 - [ ] A gate check over what a commit range changed (`git diff --name-only <base>..HEAD`) leaves out the files the executor commits itself — `proof/` records and any `.gitignore` git bootstrap writes — or it fails on the run's own bookkeeping
 - [ ] A task that adds a member to a closed set (an enum, event list, migration count, snapshot baseline) updates every test that pins that set, in the same task (`task-fields.md` § `Test:`)
 - [ ] The `Format: Light — …` line is present at the top; the file is saved to `<records home>/plans/` as `*-light-plan.md`

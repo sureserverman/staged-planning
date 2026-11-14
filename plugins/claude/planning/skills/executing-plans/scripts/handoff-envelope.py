@@ -630,13 +630,40 @@ def handoff_id_arg(text):
     return text
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="handoff-envelope")
+    h = 'python3 <planning-plugin>/skills/executing-plans/scripts/handoff-envelope.py'
+    hid = "--handoff-id h-0123456789abcdef0123"
+    ap = ExampleParser(prog="handoff-envelope", example=f"{h} new-id --root <repo>")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("new-id", help="print a fresh handoff id")
+    p = sub.add_parser("new-id", help="print a fresh handoff id",
+                       example=f"{h} new-id --root <repo>")
     p.add_argument("--root", required=True)
     for cmd in ("ready", "accept"):
-        p = sub.add_parser(cmd, help=f"write <id>.{EVENTS[cmd][1]}.json")
+        p = sub.add_parser(cmd, help=f"write <id>.{EVENTS[cmd][1]}.json",
+                           example=f"{h} {cmd} --root <repo> {hid} --plan <plan>")
         p.add_argument("--root", required=True)
         p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
         p.add_argument("--plan", required=True)
@@ -647,26 +674,31 @@ def main(argv=None):
             p.add_argument('--current-subplan', type=int)
         else:
             p.add_argument('--handoff-root', help='source channel root; never changes cwd')
-    p = sub.add_parser("fail", help="write <id>.failed.json")
+    p = sub.add_parser("fail", help="write <id>.failed.json",
+                       example=f"{h} fail --root <repo> {hid} --code no-ready")
     p.add_argument("--root", required=True)
     p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
     from handoff_v2 import ERRORS
     p.add_argument("--code", required=True, choices=FAILURE_CODES + ERRORS)
     p.add_argument("--plan", help="plan file (recorded as null when omitted)")
     p.add_argument('--handoff-root')
-    p = sub.add_parser("plan", help="print the plan <id>.ready.json names; exit 3 no-ready")
+    p = sub.add_parser("plan", help="print the plan <id>.ready.json names; exit 3 no-ready",
+                       example=f"{h} plan --root <repo> {hid}")
     p.add_argument("--root", required=True)
     p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
     p.add_argument('--handoff-root')
-    p = sub.add_parser("verify", help="check a handoff; exit 3 with a failure code")
+    p = sub.add_parser("verify", help="check a handoff; exit 3 with a failure code",
+                       example=f"{h} verify --root <repo> {hid} --plan <plan>")
     p.add_argument("--root", required=True)
     p.add_argument("--handoff-id", required=True, type=handoff_id_arg)
     p.add_argument("--plan", required=True)
     p.add_argument('--handoff-root')
-    p = sub.add_parser("finished", help="answer a v2 request after workflow close-out")
+    p = sub.add_parser("finished", help="answer a v2 request after workflow close-out",
+                       example=f"{h} finished --root <repo> --plan <plan>")
     p.add_argument("--root", required=True)
     p.add_argument("--plan", required=True)
-    p = sub.add_parser("request-pending", help="exit 0 when a handoff is requested of us")
+    p = sub.add_parser("request-pending", help="exit 0 when a handoff is requested of us",
+                       example=f"{h} request-pending --root <repo>")
     p.add_argument("--root", required=True)
     _warn_if_stale()
     args = ap.parse_args(argv)

@@ -856,6 +856,42 @@ check(rc == 0 and "goal-check-missing 1 (advisory" in out,
       "the note is advisory: exit 0, counted on its own summary line")
 rc, out = run(_present)
 check(rc == 0 and "goal-check-missing" not in out, "a plan with a (goal) check prints no note")
+# The 2.3.0 rule asks for one (goal) check, in the final gate. A plan written to the old
+# template carries one in every gate; the validator checks presence, so it still passes.
+_every_gate = """# Project Plan: old template — a (goal) check in every gate
+Date: 2026-10-08
+
+## Stage 1: Build the thing
+
+**Goal:** every skill file names its trigger.
+
+### Task 1.1: Add triggers
+- **Status:** [ ]
+- **Test:** `python3 tests/test-triggers.py`
+
+### Stage 1 Gate
+
+- [ ] **(goal)** `! grep -L 'Triggers' skills/*/SKILL.md | grep -q .` — every skill file names its trigger
+- [ ] No regressions: `bash scripts/run-tests.sh` exits 0
+
+## Stage 2: Ship it
+
+**Goal:** every skill file names its trigger, and the release is cut.
+
+### Task 2.1: Bump the version
+- **Status:** [ ]
+- **Test:** `python3 tests/test-version.py`
+
+### Stage 2 Gate
+
+- [ ] **(goal)** `! grep -L 'Triggers' skills/*/SKILL.md | grep -q .` — every skill file names its trigger
+- [ ] Full clean test pass: `bash scripts/run-tests.sh` exits 0
+"""
+check(vgc.goal_check_missing(_every_gate) == [],
+      "an old-template plan with a (goal) check in every gate is not reported")
+rc, out = run(_every_gate)
+check(rc == 0 and "goal-check-missing" not in out and "INSTANCE-SHAPED" not in out,
+      f"an old-template plan with a (goal) check in every gate still validates (rc={rc})")
 _r = subprocess.run([sys.executable, SCRIPT, str(GOAL / "master-missing-plan.md")],
                     capture_output=True, text=True)
 check("Sub-plan 2's **Gate:** block has no check marked (goal)" in _r.stdout,

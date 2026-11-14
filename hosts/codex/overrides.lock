@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 22d1b5d7edc5f1f01732429b48772f62a2f9ef9a89beff0ffea13cf623fc3b87
+  base_sha256: ff2ef9cf8e12e6787c68f55d29b0422d6ac1cd7ce50d95ee71b0c7988f0d6c69
 hooks/dispatch-log.sh:
   base_sha256: 84d74a452f78bf8c8c8b1528e3019852942acef9b373318ab2a26c2791d1fc5f
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
@@ -22,7 +22,7 @@ skills/applying-design-handoff/scripts/validate-handoff-pack.py:
 skills/architecting-projects/SKILL.md:
   base_sha256: ed3ebb1b9a9b8f98802f1c5722aa1b45c0d46aafe2fe1329bbce35fcb1c3cbb5
 skills/executing-plans/SKILL.md:
-  base_sha256: c68ba3781e2889068f2a7769c5bc636e225ef21b2b5b9075b0850229bd377347
+  base_sha256: f3e11cfe0ce4071cc4216f02174f51441bf258e314e785b6dc1bbe394dd8c086
 skills/executing-plans/references/close-out.md:
   base_sha256: d616defd506d422db97487b1a587f6d3973b28afac43164a6a81ac4cdc1b868a
 skills/executing-plans/references/dispatch-fidelity.md:
@@ -30,7 +30,7 @@ skills/executing-plans/references/dispatch-fidelity.md:
 skills/executing-plans/references/dispatch.md:
   base_sha256: e14fff9a65b17652f1c8f52fe3493249c072578f6480bfd82fe422445420e0fd
 skills/executing-plans/references/extraction-classification.md:
-  base_sha256: d3c08f1488f707441c3fee575128e1b045e41534e2df34b6e3ea0a7ff3442116
+  base_sha256: a1bc08061e21576c5426f612c592a759ab72133ece5e3d1432d13094ae7de97d
 skills/executing-plans/references/gate-failure-procedure.md:
   base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
 skills/executing-plans/references/integration.md:
@@ -48,20 +48,20 @@ skills/executing-plans/references/stage-gate.md:
 skills/executing-plans/references/task-execution.md:
   base_sha256: cffa3caf1c533bcf88b02dded5f7b0e7d8638a7fa326dab3e2802107efdf1dbd
 skills/executing-plans/scripts/context-usage.py:
-  base_sha256: 9b19c08c62ca44d19e6f9b5b56a7e34c2e4c4dc111bc25f56dbc0e732db88ce4
+  base_sha256: e98e9e35aa3ec0c4e9b81109731788eb8a25b2ed2fbbaf6708882d2b0c0beae4
   host_fact: Codex records each turn's token use and the context window in its session rollout under $CODEX_HOME/sessions, not in a Claude Code transcript, so the fork reads the rollout.
   depends_on:
     hooks/plan_continue_classify.py: da899becc6b710ca5ea2c67d1e366710ae5cf4c66afd33f4e70b3485e4a9f949
-    skills/executing-plans/scripts/handoff-envelope.py: 16d820c6cbb5a649eac464c784e3261734d7fa50237585f7b6455f16fbcdb7fc
+    skills/executing-plans/scripts/handoff-envelope.py: 7ef71db8a44fe272ffbeea7b5622d948854338c87856b1fa5cb7422d290e4750
 skills/executing-plans/scripts/plan-progress.py:
-  base_sha256: a0eb16133738ed1f41772bcca134eab39014b8f5f6c9d41186950a580f734a20
+  base_sha256: 3c3be851e6f3a9d2eb7d3cd5ba7903abb1d40c28e2122a366d11db219ccb91c1
   host_fact: Codex's status line takes only predefined items and runs no command, so the status-line renderer can never run; the fork keeps the budget, stage-order and dispatch checks byte-identical.
   depends_on:
     lib/plan_parser.py: 657fd27d6289af4d507616a9ba24c57041db547e5350a1438ee0478db6eed73b
     skills/executing-plans/scripts/plan_state.py: 6dcdb8d8b24dec2240193b942ce679c136739679b3c3af887d78544637a9bd8a
-    skills/planning-projects/scripts/validate-dispatch.py: c30f005300c83639de0d5a3df3462870a6e6cba4012689c1789c66e6cc582404
+    skills/planning-projects/scripts/validate-dispatch.py: c51d069a72bf97facd11b9ccd362b1c3ac11622f6c2014feabe381183c10e5a9
 skills/executing-plans/scripts/review-ledger-check.py:
-  base_sha256: 1fff33c709c8b6107d82aaf55df9b2705cffc27907323f685b8aff632a9f7781
+  base_sha256: 082e54359031f2d7d0f9faca970b0b07af635029bcaad695ea1b87a7d74be2e6
   host_fact: Codex hooks see a spawned agent only at SubagentStart and SubagentStop, with its role and id but no description, so gate mode matches each claimed review against a start row of the claimed role.
   depends_on:
     lib/staleness.py: fb4e58f7e56fd36e0b1c63d097cd7837bd938263da6db6e1d5268a43a83a486c

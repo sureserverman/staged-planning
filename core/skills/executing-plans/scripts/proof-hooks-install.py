@@ -192,12 +192,36 @@ def remove(repo):
     return 0
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main():
     _warn_if_stale()
     # allow_abbrev=False: `--rem` would otherwise run --remove past the PreToolUse
     # guard, which matches the full flag.
-    ap = argparse.ArgumentParser(
+    ap = ExampleParser(
         allow_abbrev=False,
+        example='python3 <planning-plugin>/skills/executing-plans/scripts/proof-hooks-install.py --status --repo <repo>',
         description="Opt one project repo into the proof-record commit gate "
                     "(a git reference-transaction hook).")
     g = ap.add_mutually_exclusive_group(required=True)

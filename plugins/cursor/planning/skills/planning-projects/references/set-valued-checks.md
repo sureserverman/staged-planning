@@ -231,7 +231,7 @@ for the second case: the author asserts it in the check, where a reviewer can di
 `../scripts/validate-gate-checks.py` reports this shape as FILTERED-SUBSET, an advisory note
 (measured 2026-10-08 over 800 plans in one owner's records homes: 13 hits, 1 true positive — most filters are
 right, and most say why in prose). A plan's `(goal)` check is never filtered this way
-(`gate-authoring.md` § The plan's goal is a check from the first gate).
+(`gate-authoring.md` § The plan's goal is one check, in the final gate).
 
 ## Worked example — a sweep is not licence to sweep twice
 

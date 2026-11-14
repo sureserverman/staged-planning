@@ -142,9 +142,13 @@ it triggers nothing. The section holds only one-line entries (or the `none` line
 
 ## Stage 1: [Name]
 
-**Outcomes:** [who uses the result — omit only when nobody outside the code meets it]
+**Outcomes:** [who uses the product — a person or another program]
 - Works: [what they get]
-- [a way it can fail] → [what they see]
+- [a failure that user can cause through the product] → [what they see]
+<!-- Outcomes name the person or program that uses the product. Write a failure line only
+     for a failure that user can cause through the product's own interface as this plan
+     changes it. A stage whose result only a later stage or the project's own tests consume
+     omits Outcomes. -->
 
 ### Task 1.1: [description]
 - **Status:** [ ]
@@ -158,7 +162,7 @@ it triggers nothing. The section holds only one-line entries (or the `none` line
 - **Red-Green max cycles:** 3
 
 ### Stage 1 Gate
-- [ ] **(goal)** [the plan's goal as one cheap sweep over the WHOLE artifact it is about, in every gate from the first one whose artifact exists — gate-authoring.md § The plan's goal is a check from the first gate]
+- [ ] **(goal)** [the plan's goal as one cheap sweep over the WHOLE artifact it is about; the one gate is the final gate — gate-authoring.md § The plan's goal is one check, in the final gate]
 - [ ] [Class predicate — the sweep that proves a set-wide property, e.g. `! grep -rl '<claim>' <scope>`]
 - [ ] Full existing test suite passes (regressions check)
 <!-- (judgment) only where a reader decides what no command can — it buys an evaluator; most

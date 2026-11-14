@@ -3336,6 +3336,28 @@ for v, want, name in (("not shown here", [], "a worksheet verdict 'not shown her
     else:
         bad(name, got)
 
+# The goal-command skip reads the gate's check lines, never its prose. Catches the Stage 1
+# gate of 2026-11-13-scripts-and-plan-size: a handoff note naming `(judgment)` in passing was
+# read as a gate check, so a recorded skip would have been refused.
+_out = "Works: the sum reaches the caller."
+_goal = "- [x] **(goal)** the sum is right: `python3 tests/test_calc.py`"
+_splan = ("# Plan\n\n## Stage 1: calc\n\n**Outcomes:** the caller\n- " + _out
+          + "\n\n### Stage 1 Gate\n{gate}\n")
+_skip = ("Evaluator: skipped — goal command `python3 tests/test_calc.py` at 0123abcd\n\n"
+         "## Outcome 1\n> " + _out + "\nVerdict: holds\n"
+         "Decided by: `python3 tests/test_calc.py` at 0123abcd\n"
+         "Evidence:\n$ python3 tests/test_calc.py -> exit 0, sum 5\n")
+for name, gate, want in (
+        ("goal skip: accepted when only a handoff note names (judgment), in prose",
+         _goal + "\n\n**Stage 1 handoff:** no (judgment) check here", None),
+        ("goal skip: refused at a gate with a (judgment) box",
+         _goal + "\n- [x] **(judgment)** reads well", "(judgment)")):
+    got = _dm.demo_problems(_skip, [_out], _splan.format(gate=gate), "1")
+    if (not got) if want is None else any(want in g for g in got):
+        ok(name)
+    else:
+        bad(name, got)
+
 for d_ in _tmpdirs:
     shutil.rmtree(d_, ignore_errors=True)
 

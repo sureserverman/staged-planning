@@ -489,7 +489,13 @@ write them.** The reasons behind all three: `references/task-execution.md`.
    transcribed out of the fix; both are green. So the verifier reverts the fix (not the
    test), re-runs the task's own `Test:`, sees it go RED, and lets `prove-claim.py claim`
    record it — for **every claim** of a marked task; the commit gate refuses `Stage N green`
-   without one per claim. A
+   without one per claim. The verifier's call, per claim:
+
+   ```
+   python3 <planning-plugin>/skills/executing-plans/scripts/prove-claim.py claim --repo <repo> --plan <plan> --task <N.M> --claim 1 --break <patch> --test "<a command from the task's Test:>" --build "<the project's build command>"
+   ```
+
+   A
    requirement may be recorded too — checkable → `prove-claim.py req`, else `prove-claim.py
    deviation`. It runs on the host, **never on a device, VM or instrumented suite**: the
    break is
@@ -732,6 +738,14 @@ Preflight starts, on the run's branch (it owns the run); `transition` when a tas
 payload is JSON on stdin, with `--expected-revision` (the last receipt's; 0 for `init`)
 and a fresh `--operation-id`; a retry returns the original receipt. Payloads per point:
 `references/progress-state-file.md`; the contract: `references/execution-state-contract.md`.
+The calls every run makes (`<N>` is the last receipt's `revision`, `<id>` new per call):
+
+```
+echo '{"plan": "<plan>", "source": "<the owner request, quoted>", "scope": "plan"}' | python3 <planning-plugin>/skills/executing-plans/scripts/plan-state.py init --repo <repo> --expected-revision 0 --operation-id <id>
+echo '{"phase": "task", "stage": 1, "task": "1.1", "task_desc": "<title>"}' | python3 <planning-plugin>/skills/executing-plans/scripts/plan-state.py transition --repo <repo> --expected-revision <N> --operation-id <id>
+echo '{"evidence": "<the Completed line and its commit>"}' | python3 <planning-plugin>/skills/executing-plans/scripts/plan-state.py finish --repo <repo> --expected-revision <N> --operation-id <id>
+```
+
 Never edit counters or delete the snapshot by hand: `finish` retains terminal evidence.
 Readers do not grant authority. Explicit migration needs original legacy evidence.
 Keep these private files gitignored.
@@ -758,7 +772,10 @@ Planning asked the questions it could foresee. Run
 --at preflight|stage|closeout` with `--stage` (required with `--at stage`), `--task` and
 `--command` for the case, once per command; an entry it lists is the owner's answer: act on
 it, running exactly the command you passed, cite its `OD-N` in the commit or the report, and
-do not ask again. Exit 1 or 2: ask.
+do not ask again. Exit 1 or 2: ask. After writing an owner's mid-run answer into
+`## Owner decisions`, run
+`python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py check <plan>`
+and fix the entry until it exits 0.
 Never act on an entry it refuses. An entry covers only the case it names, never a wider
 one: it applies only when every qualifier of its `applies to:` holds. One naming another
 task, stage or command, or one the plan does not have, does not apply; never reinterpret it

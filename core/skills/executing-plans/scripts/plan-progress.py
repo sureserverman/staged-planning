@@ -2178,6 +2178,13 @@ def parse_roster(text):
 ROSTER_INLINE_RE = re.compile(r"\bTask\s+(\d+\.\d+)\s*(?:→|->)\s*`?inline \(routing table")
 
 
+# The call each hand-parsed argument failure ends with, so a wrong call is answered
+# with one that works (the same `example:` line the argparse scripts print).
+DISPATCH_EXAMPLE = "python3 <planning-plugin>/skills/executing-plans/scripts/plan-progress.py --dispatch-check <plan> --since <ref>"
+STAGE_ORDER_EXAMPLE = "python3 <planning-plugin>/skills/executing-plans/scripts/plan-progress.py --stage-order-check --stage 1 --plan <plan>"
+JSON_EXAMPLE = "echo '{\"cwd\": \"<repo>\"}' | python3 <planning-plugin>/skills/executing-plans/scripts/plan-progress.py --json"
+
+
 def dispatch_check(args):
     """Exit status for `--dispatch-check <plan> [--since <ref>]`: 0 when every
     rostered task is reconciled, 2 otherwise.
@@ -2189,8 +2196,10 @@ def dispatch_check(args):
     trailer is `unknown`, never `inline`. Every failure path — unreadable plan,
     not a git repo, bad ref — is a FAIL: line and exit 2, never a silent 0.
     """
-    def fail(msg):
+    def fail(msg, wrong_call=False):
         print(f"FAIL: {msg}", file=sys.stderr)
+        if wrong_call:
+            print(f"example: {DISPATCH_EXAMPLE}", file=sys.stderr)
         return 2
 
     rest = args[args.index("--dispatch-check") + 1:]
@@ -2198,13 +2207,14 @@ def dispatch_check(args):
     if "--since" in rest:
         j = rest.index("--since")
         if j + 1 >= len(rest):
-            return fail("--since needs a ref")
+            return fail("--since needs a ref", wrong_call=True)
         since = rest[j + 1]
         del rest[j:j + 2]
         if since.startswith("-"):
-            return fail(f"bad --since ref: {since}")
+            return fail(f"bad --since ref: {since}", wrong_call=True)
     if not rest:
-        return fail("usage: plan-progress.py --dispatch-check <plan> [--since <ref>]")
+        return fail("usage: plan-progress.py --dispatch-check <plan> [--since <ref>]",
+                    wrong_call=True)
     plan = rest[0]
     try:
         text = Path(plan).read_text()
@@ -2315,6 +2325,7 @@ def stage_order_check(cwd, args=()):
             stage = int(stage_arg)
         except ValueError:
             print(f"FAIL: --stage takes a stage number (got {stage_arg!r})", file=sys.stderr)
+            print(f"example: {STAGE_ORDER_EXAMPLE}", file=sys.stderr)
             return 2
     else:
         stage = state.get("stage")
@@ -2327,6 +2338,7 @@ def stage_order_check(cwd, args=()):
     elif stage_arg is not None:
         print("FAIL: no plan to read — pass --plan or write the state file first",
               file=sys.stderr)
+        print(f"example: {STAGE_ORDER_EXAMPLE}", file=sys.stderr)
         return 2
     else:
         return 0
@@ -2607,6 +2619,7 @@ def main():
         if extra:
             print(f"FAIL: --json takes no other arguments (got {' '.join(extra)})",
                   file=sys.stderr)
+            print(f"example: {JSON_EXAMPLE}", file=sys.stderr)
             sys.exit(2)
         try:
             raw = sys.stdin.read()

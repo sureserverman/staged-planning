@@ -120,7 +120,8 @@ plan's TASK fields:
                         and the gap surfaces only at the first reader of the plan goal,
                         usually the plan's demo at its last gate. It checks
                         presence, not placement: one `(goal)` check in the final gate reports
-                        zero, so placement from the first gate is the author's to check.
+                        zero, the intended shape; whether an earlier gate needs the repeat
+                        is the author's to check.
                         ADVISORY, because the corpus plans were written without the marker:
                         goal-check-missing: measured 2026-10-08 over 800 plans in one owner's records
                         homes: 735 hits (512 plans and 223 master register entries; 2 plans
@@ -1416,8 +1417,32 @@ def commands_after_dash(text):
     return out
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="validate-gate-checks")
+    ap = ExampleParser(prog="validate-gate-checks",
+                       example='python3 <planning-plugin>/skills/planning-projects/scripts/validate-gate-checks.py <plan>')
     ap.add_argument("plans", nargs="+", type=pathlib.Path)
     ap.add_argument("--quiet", action="store_true",
                     help="print counts and failures only")
@@ -1563,9 +1588,8 @@ def main(argv=None):
         whose = ("no gate check" if where == "plan"
                  else f"{where}'s **Gate:** block has no check")
         print(f"\nnote: {path.name}: {whose} marked (goal) — add one that sweeps the "
-              f"goal over the whole artifact it is about, in every gate from the first one "
-              f"whose artifact exists (gate-authoring.md § The plan's goal is a check from "
-              f"the first gate)")
+              f"goal over the whole artifact it is about, in the plan's final gate "
+              f"(gate-authoring.md § The plan's goal is one check, in the final gate)")
 
     # Advisory, never a failure: no measured rate makes it blocking (see the docstring).
     for path, line, spans in dash_notes:

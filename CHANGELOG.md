@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.3.0 — 2026-11-14
+
+- **A wrong script call is answered with a working one.** When a plugin script an executor
+  or planner calls gets a missing or wrong argument, its stderr ends with an `example:`
+  line holding a complete call that the same script accepts. `prove-claim.py` answers a
+  claim's text passed to `--claim` with "--claim takes the claim's number". Exit codes and
+  accepted input are unchanged.
+- **The skill shows the calls it mandates.** Every host's `executing-plans` trunk carries a
+  literal `prove-claim.py claim` call and the `plan-state.py` calls for `init`, a task
+  `transition` and `finish`, each with its payload. After writing an owner's mid-run answer
+  into `## Owner decisions`, the run checks it with `owner-decision.py check`.
+- **The owner-decisions reference lists every refusal `owner-decision.py check` reports**: an
+  `applies to:` word the reader cannot place, a code span that holds no command, and a line
+  that voids the section. `check` already reported these; the run now calls it after writing
+  a mid-run answer, so a refusal shows when the entry is written, not when `match` needs it.
+  `check` and `match` accept the same input as before.
+- **The recommended option is the smallest that meets the request.** A larger option says
+  what it adds, in tasks or stages. It is marked Recommended only when the request asks for
+  it.
+- **Outcomes cover what the request's user can meet.** They name the person or program that
+  uses the product. A failure line is written only for a failure that user can cause through
+  the product. A stage whose result only a later stage or the project's own tests consume
+  has no Outcomes.
+- **The goal check is written once.** A plan carries one `(goal)` check, in its final gate.
+  An earlier gate repeats it only when that stage's own tasks can make it fail.
+  `validate-gate-checks.py` still checks only that one is present.
+- **An existing plan needs no change.** A plan with a `(goal)` check in every gate, or with
+  Outcomes for every way of failing, still validates and still runs.
+
 ## 2.2.0 — 2026-11-14
 
 - **A task owes a proof only when its plan marks it `Proof: required`.** Any other task goes

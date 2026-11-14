@@ -7,11 +7,14 @@ PROSE contract, not behavior: it asserts that every planning-projects file carry
 of the rule states that part, using the shared negation screening. What it pins:
 
   1. gate-authoring.md owns the rule: the goal check sweeps the WHOLE artifact, never a
-     subset by category; it sits in every gate from the first whose artifact exists; it is
-     cheap; `(judgment)` is allowed on it only where no command decides the goal; and the
-     reason for the first-gate position is stated.
+     subset by category; it is
+     cheap; `(judgment)` is allowed on it only where no command decides the goal; a plan
+     carries one, in its final gate, and an earlier gate repeats it only when that stage's
+     own tasks can make it fail; both reasons are stated (the filtered sweep a stage can
+     fail, and the 2026-11-13 audit's checks that could not fail after their first stage).
   2. The three templates (Standard, master register entry, Light) carry a `(goal)` line in
-     their gate blocks, and master-plan-format.md says the sub-plan's own gates carry one too.
+     their final gate block; an earlier Standard gate's `(goal)` line is conditional on that
+     stage's own tasks; master-plan-format.md says the sub-plan's final gate carries one too.
   3. authoring-checklist.md asks for zero GOAL-CHECK-MISSING on Standard, master and Light
      plans, and the Light "goal-level end-to-end check" item is gone — replaced, not doubled.
   4. set-valued-checks.md names the filtered-subset shape and `(scoped)` as its answer.
@@ -79,7 +82,7 @@ def gate_blocks(text):
 
 def main():
     ga = read(REF, "gate-authoring.md")
-    sec = section(ga, r"^## The plan's goal is a check from the first gate")
+    sec = section(ga, r"^## The plan's goal is one check, in the final gate")
     check("gate-authoring: the (goal) section is present", bool(sec))
     check("gate-authoring: every plan format and master entry carries a (goal) check",
           affirms_claim(sec, ws(r"Every Standard plan, Light plan and master register entry "
@@ -91,9 +94,16 @@ def main():
     check("gate-authoring: never a subset by category",
           re.search(ws(r"never a subset by category"), sec) is not None,
           "the subset prohibition is absent")
-    check("gate-authoring: it sits in every gate from the first one whose artifact exists",
-          affirms_claim(sec, ws(r"It sits in every gate from the first one whose artifact exists")),
+    check("gate-authoring: a plan carries one (goal) check, in its final gate",
+          affirms_claim(sec, ws(r"A plan carries one `\(goal\)` check, in its final gate")),
           "the rule's position is absent or negated")
+    check("gate-authoring: an earlier gate repeats it only where its stage can make it fail",
+          affirms_claim(sec, ws(r"An earlier gate repeats it only when that stage's own tasks "
+                                r"can make it fail")),
+          "the repeat condition is absent or negated")
+    check("gate-authoring: the old every-gate position is gone",
+          re.search(ws(r"every gate from the first one " r"whose artifact exists"), ga) is None,
+          "the old position survives")
     check("gate-authoring: it must be cheap",
           affirms_claim(sec, ws(r"It must be cheap")), "the cost bound is absent or negated")
     check("gate-authoring: (judgment) only where no command can decide the goal",
@@ -103,11 +113,15 @@ def main():
     check("gate-authoring: a new plan is presented with zero GOAL-CHECK-MISSING",
           affirms_claim(sec, ws(r"A \*\*new\*\* plan is presented with zero GOAL-CHECK-MISSING")),
           "the new-plan bar is absent or negated")
-    check("gate-authoring: states why the goal check sits from the first gate",
+    check("gate-authoring: states why a stage that can fail the goal repeats it",
           re.search(ws(r"Raising the remediation budget buys repair attempts, not earlier "
                        r"detection"), sec) is not None
           and "$4 ~ /public/" in sec,
           "the reason (filter, budget) is not stated")
+    check("gate-authoring: states why the goal check is not in every gate",
+          re.search(ws(r"three plans whose `\(goal\)` check was a grep that became true in "
+                       r"the first stage and could not fail afterwards"), sec) is not None,
+          "the 2026-11-13 audit's three cases are not beside the rule")
 
     check("gate-authoring: says the validator checks presence, not placement",
           # a stated limit carries its own "not", so it is pinned by presence, like the
@@ -122,9 +136,13 @@ def main():
 
     tpl = read(REF, "plan-document-template.md")
     tblocks = gate_blocks(tpl)
-    check("plan-document-template: every gate block carries a (goal) line",
-          len(tblocks) >= 2 and all("**(goal)**" in b for b in tblocks),
-          f"{sum('**(goal)**' not in b for b in tblocks)} of {len(tblocks)} gate block(s) lack one")
+    check("plan-document-template: the final gate block carries a (goal) line",
+          len(tblocks) >= 2 and "**(goal)**" in tblocks[-1], "the last gate block lacks one")
+    early = [ln for b in tblocks[:-1] for ln in b.splitlines() if "**(goal)**" in ln]
+    check("plan-document-template: an earlier gate's (goal) line is conditional on its stage",
+          all(re.search(ws(r"only where this stage's own tasks can make the plan's goal fail"), ln)
+              for ln in early),
+          f"{len(early)} earlier (goal) line(s), some unconditional")
 
     mpf = read(REF, "master-plan-format.md")
     blocks = gate_blocks(mpf)
@@ -133,7 +151,7 @@ def main():
                                if re.search(r"^- \[ \]", b, re.M)),
           "a template register entry's Gate block has no (goal) line")
     check("master-plan-format: the sub-plan's own gates carry one too",
-          affirms_claim(mpf, ws(r"the sub-plan's own gates carry a `\(goal\)` check")),
+          affirms_claim(mpf, ws(r"the sub-plan's final gate carries a `\(goal\)` check")),
           "the sub-plan half of the rule is absent or negated")
 
     lpf = read(REF, "light-plan-format.md")

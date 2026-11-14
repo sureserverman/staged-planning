@@ -482,8 +482,32 @@ def fmt(v):
 
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="context-usage")
+    ap = ExampleParser(prog="context-usage",
+                       example='python3 <planning-plugin>/skills/executing-plans/scripts/context-usage.py --plan <plan>')
     ap.add_argument("--session", help="OpenCode session id (default: newest top-level for cwd)")
     ap.add_argument("--transcript", help="opencode.db path (default: the XDG data dir's)")
     ap.add_argument("--models", help="models.json path (default: the XDG cache dir's)")

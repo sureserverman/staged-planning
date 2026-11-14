@@ -112,7 +112,7 @@ Position: once, when the check is built or its trigger changes. The measurement 
 of real plans runs in the building task's test, never in a repo validator: a repo's checks
 may not go red on a corpus outside the repo.
 
-## The plan's goal is a check from the first gate
+## The plan's goal is one check, in the final gate
 
 Every Standard plan, Light plan and master register entry carries at least one gate check
 marked `(goal)`. It is the plan's goal written as a sweep over the **whole** artifact the goal
@@ -123,9 +123,10 @@ has not left the plan's goal short.
   restricted by a filter (`awk '$4 ~ /public/'`, `git ls-files | grep -v …`) checks the members
   the filter keeps and none of the rest. Where the subset really is the whole set, say so with
   `(scoped)` (`set-valued-checks.md` § The sixth error).
-- **It sits in every gate from the first one whose artifact exists.** That is its position
-  under the name-the-tier rule, and it makes a gap fail at the stage that made it rather than at close-out.
-- **It must be cheap.** A sweep, not a suite: it runs at every gate of every execution.
+- **A plan carries one `(goal)` check, in its final gate.** An earlier gate repeats it only
+  when that stage's own tasks can make it fail, and the line says which tasks. There it makes
+  a gap fail at the stage that made it rather than at close-out.
+- **It must be cheap.** A sweep, not a suite: it runs at every gate that carries it.
 - **`(judgment)` is allowed on it only where no command can decide the goal.** Write
   `**(goal)** **(judgment)** …` and name what the reader decides.
 - `(goal)` is orthogonal to shape. The check is still classified, so an instance-shaped goal
@@ -135,16 +136,21 @@ has not left the plan's goal short.
 GOAL-CHECK-MISSING, and a filtered sweep as FILTERED-SUBSET. Both are advisory notes.
 A **new** plan is presented with zero GOAL-CHECK-MISSING, as it is with zero INSTANCE-SHAPED.
 It checks presence, not placement: a plan whose one `(goal)` check sits in its final gate
-reports zero. Placement from the first gate is the author's to check; no reviewer brief
-asks for it.
+reports zero, which is the intended shape. Whether an earlier gate needs the repeat is the
+author's to check; no reviewer brief asks for it.
 
-**Why from the first gate.** Suppose a sub-plan whose Goal ends "every endpoint in the
+**Why repeat it where a stage can fail it.** Suppose a sub-plan whose Goal ends "every endpoint in the
 inventory then has a named owner", and whose stage gate sweeps `awk -F'|' '$4 ~ /public/'`, the
 `public` rows only, while `internal` rows need owners too. No check sweeps the goal over the
 whole inventory, so every gate passes, later gates spend remediation rounds on symptoms, and the
 gap surfaces only at the first reader given the plan goal, usually the plan's demo at its last gate.
 Raising the remediation budget buys repair attempts, not earlier detection; a `(goal)` check
-at the first gate fails there.
+at the gate of the stage that builds the inventory fails there.
+
+**Why not in every gate.** The 2026-11-13 execution audit found three plans whose `(goal)`
+check was a grep that became true in the first stage and could not fail afterwards, yet ran
+at every later gate; across 72 recent plans, 628 gate checks stood for 504 tasks. A check no
+later task can change decides nothing after the gate where it first passed.
 
 ## When a stage gate fails
 

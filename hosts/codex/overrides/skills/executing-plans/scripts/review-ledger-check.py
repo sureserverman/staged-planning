@@ -327,9 +327,10 @@ def gate_boxes(plan_text, stage):
 
 
 def gate_has_judgment(plan_text, stage):
-    """A `(judgment)` line that needs a reader other than the executor."""
-    return any("(judgment)" in line.lower() and not CONFORMANCE.search(line)
-               for line in gate_region(plan_text, stage))
+    """A `(judgment)` box that needs a reader other than the executor. Boxes only: a
+    handoff note naming the marker in its prose is not a gate check."""
+    return any("(judgment)" in text.lower() and not CONFORMANCE.search(text)
+               for _, text in gate_boxes(plan_text, stage))
 
 
 def declared_tier(plan_text):
@@ -545,9 +546,41 @@ def unstopped(args):
     return 1 if running else 0
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
+def call_problem(args):
+    """What a call needs beyond what argparse states: the parser and main() both ask."""
+    if args.unstopped or (args.plan and args.stage is not None):
+        return None
+    return "--plan and --stage are required (or --unstopped)"
+
+
 def main(argv=None):
     _warn_if_stale()
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = ExampleParser(description=__doc__.split("\n\n")[0], example=(
+        'python3 <planning-plugin>/skills/executing-plans/scripts/review-ledger-check.py --plan <plan> --stage 1 --repo <repo>'),
+        check=call_problem)
     ap.add_argument("--repo", required=True)
     ap.add_argument("--plan")
     ap.add_argument("--stage", type=int)
@@ -557,8 +590,9 @@ def main(argv=None):
     try:
         if args.unstopped:
             return unstopped(args)
-        if not args.plan or args.stage is None:
-            raise Usage("--plan and --stage are required (or --unstopped)")
+        problem = call_problem(args)
+        if problem:
+            raise Usage(problem)
         return gate(args)
     except Usage as e:
         print(f"review-ledger-check: {e}", file=sys.stderr)

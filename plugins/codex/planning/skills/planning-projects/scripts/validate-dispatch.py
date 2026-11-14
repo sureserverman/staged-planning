@@ -492,8 +492,32 @@ def check_master(path, lines, fails):
     return subs
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="validate-dispatch",
+    ap = ExampleParser(prog="validate-dispatch",
+                       example='python3 <planning-plugin>/skills/planning-projects/scripts/validate-dispatch.py <plan>',
                                  description="Check Dispatch:/Parallel: fields against "
                                              "dependencies and Scope: sets.")
     ap.add_argument("plans", nargs="+", type=pathlib.Path)

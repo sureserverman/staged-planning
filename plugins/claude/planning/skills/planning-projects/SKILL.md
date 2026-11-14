@@ -38,6 +38,8 @@ Read the repo first.
 Then ask only what would change the plan and the repo cannot answer: scope, target environment, constraints, success criteria.
 State an inferred answer as an assumption, and do not ask it.
 Batch the questions in the host's question tool, each multiple choice with the recommended option first.
+The option marked Recommended is the smallest one that meets the request as the owner wrote it.
+An option that adds scope says what it adds, in tasks or stages, and carries the mark only when the request asks for it.
 Stop once you know enough not to build the wrong thing.
 If the prompt is specific enough to plan against, skip straight to Phase -0.5.
 The questions execution would stop for wait for § Ask execution's questions now.
@@ -286,10 +288,11 @@ The dispatch checks are the *executor's* rules; the author's job is to carry the
 
 Divide the project into sequential stages. Each stage is a coherent unit of work that produces a testable milestone — something you can point to and say "this works end-to-end."
 
-**Write each stage's Outcomes before its tasks.** Name the person or program that meets
-the result. Write what they get when it works, and for every way it can fail (input refused,
-input unreadable or not granted, too large, nothing usable left, a dependency missing) what
-they see. "Nothing — it closes" is a bug written down, not an outcome. Use the Research
+**Write each stage's Outcomes before its tasks.** Outcomes name the person or program that
+uses the product. Write what they get when it works. Write a failure line only for a failure
+that user can cause through the product's own interface as this plan changes it, with what
+they see. "Nothing — it closes" is a bug written down, not an outcome. A stage whose result
+only a later stage or the project's own tests consume omits Outcomes. Use the Research
 Summary: a promise there ("until X, the app shows a clear 'file too large' result") belongs
 in the Outcomes of the stage that meets it. The executor builds every Outcomes line, not
 only what the `Test:` lines reach, and the gate's evaluator grades the stage against them
@@ -301,9 +304,10 @@ the code drops that case silently and every test still passes.
 ```
 Stage N: [Name]
   Goal:       What this stage achieves, naming who it is for (one sentence)
-  Outcomes:   Who uses the result (a person, another app, a later stage, a worker), then
-              one line for what they get when it works and one per way it can fail, each
-              with what they see. Omit only when nobody outside the code meets the result
+  Outcomes:   Who uses the product (a person or another program), then one line for
+              what they get when it works and one per failure that user can cause
+              through the product, each with what they see. Omit when only a later
+              stage or the project's own tests consume the result
   Depends on: Stage(s) that must be green first
   Blocks:     Stage(s) that cannot start until this stage's gate passes
   Risk:       LOW | MEDIUM | HIGH — why

@@ -589,11 +589,27 @@ try:
     rc, out = run("check", nonep)
     expect(rc == 0, "check passes the `none` line", out)
 
+    # Catches the 2026-11-13 audit's refusals (remote-agents OD-10 'gate', cli-runner
+    # OD-20 'master'): check names the entry, its line and the word when the entry is
+    # written, not match at the moment the answer is needed.
+    worded = plan("worded-plan.md", {1: ["1.1"]}, [
+        f"- **OD-1** — merge — {Q} — applies to: the Stage 1 gate",
+        f"- **OD-2** — merge — {Q} — applies to: the master close-out",
+        f"- **OD-3** — run it — {Q} — applies to: Stage 1 (` `)",
+    ])
+    rc, out = run("check", worded)
+    expect(rc == 1 and "worded-plan.md:7: OD-1:" in out and "cannot place: 'gate'" in out,
+           "check reports 'applies to: the Stage 1 gate' with its line and the word", out)
+    expect("worded-plan.md:8: OD-2:" in out and "cannot place: 'master'" in out,
+           "check reports 'the master close-out' with its line and the word", out)
+    expect("worded-plan.md:9: OD-3:" in out and "empty code span" in out,
+           "check reports a code span that holds no command", out)
+
     # --- the property: check and match agree ----------------------------------------
 
     # Catches I4 and every false accept the battery holds: an entry check calls clean
     # must be listed at its own place, and one check flags must refuse everywhere.
-    battery = [deny, na, cmd, two, good, one, after, quoted, exact]
+    battery = [deny, na, cmd, two, good, one, after, quoted, exact, worded]
     cases = [["--at", "preflight"], ["--at", "closeout"]] + [["--at", "stage", "--stage", s] for s in "12"] \
         + [["--at", "stage", "--stage", t.split(".")[0], "--task", t] for t in ("1.1", "1.2", "1.3", "2.1")]
     cmds = [[], ["--command", "git merge feat/x"], ["--command", "./migrate up"], ["--command", "./deploy"],

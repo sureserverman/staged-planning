@@ -56,8 +56,11 @@ checkboxes: a raw `- [ ]` there would read as deferred work to the plan parser.
   answers are only as honest as the plan that records them. Before the
   plan is presented, run
   `python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py check <plan>`:
-  it reports, with its line, each entry naming a stage, task or sub-plan the plan lacks, or
-  carrying neither the owner's words nor `ask at execution`. Exit 0 is clean.
+  it reports, with its line, each entry `match` would refuse for its form, by `match`'s own
+  rule: one naming a stage, task or sub-plan the plan lacks; one carrying neither the owner's
+  words nor `ask at execution`; an `applies to:` word the reader cannot place, which it names
+  (`gate` in "the Stage 1 gate"); a code span that holds no command; and a line that is not
+  an entry, which voids every entry in the section. Exit 0 is clean.
 - **A declined question is recorded `ask at execution`**, so the executor knows it was asked
   and stops there as it would have.
 - **A plan the catalog triggers nothing for** carries one bullet:
@@ -71,6 +74,10 @@ checkboxes: a raw `- [ ]` there would read as deferred work to the plan parser.
   one; more questions take more prompts in the same round.
 - **Each question is multiple choice**, the recommended option first, with what each
   option makes the run do. "Other" stays open for the owner's own words.
+- **The option marked Recommended is the smallest one that meets the request as the owner
+  wrote it.** An option that adds scope says what it adds, in tasks or stages, and carries
+  the mark only when the request asks for it. The mark is advice; the answer stays the
+  owner's.
 - **A follow-up round only for what the answers raise** — a new branch name, a command the
   owner narrowed.
 - **Scope questions are not in this round.** They come first, batched, in `../SKILL.md` § Phase -1

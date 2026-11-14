@@ -565,8 +565,8 @@ def demo_skip_problems(report, outcomes, plan_text, stage):
     if declared_tier(plan_text) == "high":
         probs.append("the plan declares review-scope high, where the evaluator always runs")
     boxes = gate_boxes(plan_text, stage)
-    if any(JUDGMENT.search(line) and not CONFORMANCE.search(line)
-           for line in gate_region(plan_text, stage)):
+    # Boxes only: a handoff note naming the marker in its prose is not a gate check.
+    if any(JUDGMENT.search(text) and not CONFORMANCE.search(text) for _, text in boxes):
         probs.append(f"the Stage {stage} gate has a (judgment) line: a reader decides it, so "
                      "the evaluator runs")
     cmd = " ".join(m.group("cmd").split())
@@ -2347,15 +2347,22 @@ def resolve_since(repo, rel, explicit):
 
 # --------------------------------------------------------------------- main
 
+def call_problem(args):
+    """What a call needs beyond what argparse states: the parser and build() both ask."""
+    if args.vocab_replace and not args.vocab_file:
+        return "--vocab-replace requires --vocab-file (alone it is a silent no-op)"
+    if args.flip_threshold < 1:
+        return "--flip-threshold must be >= 1 (0 would silently disable the bulk-flip check)"
+    return None
+
+
 def build(args):
     path = Path(args.plan)
     if not path.is_file():
         die(f"plan file not found: {path}")
-    if args.vocab_replace and not args.vocab_file:
-        die("--vocab-replace requires --vocab-file (alone it is a silent no-op)")
-    if args.flip_threshold < 1:
-        die("--flip-threshold must be >= 1 "
-            "(0 would silently disable the bulk-flip check)")
+    problem = call_problem(args)
+    if problem:
+        die(problem)
     try:
         text = path.read_text(errors="replace")
     except OSError as e:
@@ -2521,9 +2528,34 @@ def report(doc, args):
     return 0
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main():
     _warn_if_stale()
-    ap = argparse.ArgumentParser(add_help=True)
+    ap = ExampleParser(add_help=True, example=(
+        'python3 <planning-plugin>/skills/executing-plans/scripts/plan-flip-audit.py <plan> --repo <repo> --require-all-checks'),
+        check=call_problem)
     ap.add_argument("plan")
     ap.add_argument("--since")
     ap.add_argument("--flip-threshold", type=int, default=6)

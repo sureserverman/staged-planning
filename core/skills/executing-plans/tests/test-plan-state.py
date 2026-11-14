@@ -98,8 +98,11 @@ def stage_open_cases(Case):
             self.assertEqual(self.state()['task'], '2.1')
             self.call('transition', {'phase': 'task', 'stage': 2})
             env = {**os.environ, 'STAGED_PLANNING_CONFIG': str(self.repo/'no-config.yaml')}
+            # Its own stdin: the renderer reads stdin to EOF, and an inherited one (a
+            # harness's open socket) never ends, so the call would wait out its timeout.
             out = subprocess.run([sys.executable, str(PROGRESS)], cwd=self.repo, env=env,
-                                 capture_output=True, text=True, timeout=20).stdout
+                                 stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                 timeout=20).stdout
             self.assertIn('S2/2', out)
             self.assertNotIn('T1.4', out)
             self.assertNotIn('T2.1', out)

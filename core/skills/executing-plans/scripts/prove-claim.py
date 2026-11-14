@@ -155,7 +155,16 @@ class Refused(Exception):
 
 
 class Usage(Exception):
-    """Usage or IO error: exit 2."""
+    """Usage or IO error: exit 2. `wrong_call`: the call itself is wrong, so the error
+    ends with the example for its subcommand."""
+
+    def __init__(self, message, wrong_call=False):
+        super().__init__(message)
+        self.wrong_call = wrong_call
+
+
+# The example of the subcommand being run, for a wrong call found after parsing.
+CALL_EXAMPLE = None
 
 
 class RestoreFailed(Exception):
@@ -1023,6 +1032,21 @@ def _on_signal(signum, _frame):
 
 # ------------------------------------------------------------------- modes
 
+def check_call_rules(check, brk, build, no_build):
+    """What a `req --check` call needs beyond what argparse states."""
+    if not check or check.strip() in TRIVIAL_BUILD:
+        raise Usage(f"--check {check!r} checks nothing")
+    if not brk:
+        raise Usage("--check needs --break PATCH: a check is evidence only if it fails "
+                    "when the requirement is broken (`echo ok` never does)")
+    require_build(build, no_build)
+
+
+def why_rule(why):
+    if not why or len(why.strip()) < 10:
+        raise Usage("--why must say what differs and why (10+ characters)")
+
+
 def require_build(build, no_build):
     if build is not None and build.strip() in TRIVIAL_BUILD:
         raise Usage(f"--build {build!r} builds nothing — give the project's build, or "
@@ -1237,12 +1261,7 @@ def req(repo, plan, task, index, check, covered_by, timeout, brk=None, build=Non
                 # Covered by a claim, the requirement is bound to what that claim proves.
                 rec[key] = crec[key]
     else:
-        if not check or check.strip() in TRIVIAL_BUILD:
-            raise Usage(f"--check {check!r} checks nothing")
-        if not brk:
-            raise Usage("--check needs --break PATCH: a check is evidence only if it fails "
-                        "when the requirement is broken (`echo ok` never does)")
-        require_build(build, no_build)
+        check_call_rules(check, brk, build, no_build)
         seen = observe(repo, brk, check, build, no_build, timeout, text)
         rec.update({"check": check, "build": build, "no_build_reason": no_build, **seen})
     return write_record(repo, plan, task, "req", index, rec)
@@ -1257,8 +1276,7 @@ def deviation(repo, plan, task, index, why, target="req"):
         text = pick(PFA.claim_clauses(block["test"]), index, "claim")
     else:
         text = pick(PFA.requirement_clauses(block["desc"]), index, "requirement")
-    if not why or len(why.strip()) < 10:
-        raise Usage("--why must say what differs and why (10+ characters)")
+    why_rule(why)
     if target != "claim":
         make_room(repo, plan, task, index, PFA.requirement_clauses(block["desc"]))
     kind = "claim-deviation" if target == "claim" else "deviation"
@@ -1523,13 +1541,65 @@ def break_file(repo, given):
     if not brk.is_file() and not Path(given).is_absolute() and (repo / given).is_file():
         brk = (repo / given).resolve()
     if not brk.is_file():
-        raise Usage(f"--break file not found: {brk} (--break takes a file holding the diff, not the diff itself: write it to the repo's top-level .claude/, e.g. .claude/break-1.patch)")
+        raise Usage(f"--break file not found: {brk} (--break takes a file holding the diff, not the diff itself: write it to the repo's top-level .claude/, e.g. .claude/break-1.patch)",
+                    wrong_call=True)
     return brk
+
+
+def number_of(flag, what="claim"):
+    """`type=` for a claim or requirement number: the commonest wrong call passes its text."""
+    def parse(value):
+        try:
+            return int(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError(
+                f"{flag} takes the {what}'s number (1 is the task's first {what}), not its text")
+    return parse
+
+
+def rules(*checks):
+    """`check=` for ExampleParser from functions of the namespace that raise Usage."""
+    def check(ns):
+        for rule in checks:
+            try:
+                rule(ns)
+            except Usage as e:
+                return str(e)
+        return None
+    return check
+
+
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
 
 
 def main():
     _warn_if_stale()
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    pc = 'python3 <planning-plugin>/skills/executing-plans/scripts/prove-claim.py'
+    on = "--repo <repo> --plan <plan> --task 1.1"
+    build = '--build "<the project\'s build command>"'
+    claim_example = (f'{pc} claim {on} --claim 1 --break <patch> '
+                     f'--test "<a command from the task\'s Test:>" {build}')
+    ap = ExampleParser(description=__doc__.split("\n\n")[0], example=claim_example)
     sub = ap.add_subparsers(dest="mode", required=True)
 
     def common(p, task_required=True):
@@ -1538,33 +1608,46 @@ def main():
         p.add_argument("--task", required=task_required)
         p.add_argument("--timeout", type=int, default=3600)
 
-    c = sub.add_parser("claim"); common(c)
-    c.add_argument("--claim", type=int, required=True)
+    c = sub.add_parser("claim", example=claim_example,
+                       check=rules(lambda ns: require_build(ns.build, ns.no_build)))
+    common(c)
+    c.add_argument("--claim", type=number_of("--claim"), required=True)
     c.add_argument("--break", dest="brk", required=True, metavar="PATCH",
                    help="the break: a FILE holding the unified diff, outside the work tree (e.g. under $TMPDIR) or in the repo's top-level .claude/, which this tool leaves aside — use .claude/ where the host refuses writes outside the workspace. A relative path that does not exist from the cwd resolves against --repo")
     c.add_argument("--test", required=True)
     g = c.add_mutually_exclusive_group()
     g.add_argument("--build")
     g.add_argument("--no-build-step", dest="no_build")
-    r = sub.add_parser("req"); common(r)
-    r.add_argument("--req", type=int, required=True)
+    r = sub.add_parser("req", example=(f'{pc} req {on} --req 1 --check "<a command>" '
+                                       f'--break <patch> {build}'),
+                       check=rules(lambda ns: ns.check is None or check_call_rules(
+                           ns.check, ns.brk, ns.build, ns.no_build)))
+    common(r)
+    r.add_argument("--req", type=number_of("--req", "requirement"), required=True)
     g = r.add_mutually_exclusive_group(required=True)
     g.add_argument("--check")
-    g.add_argument("--covered-by-claim", type=int, dest="covered")
+    g.add_argument("--covered-by-claim", type=number_of("--covered-by-claim"),
+                   dest="covered")
     r.add_argument("--break", dest="brk", metavar="PATCH",
                    help="the break of the requirement: a FILE holding the unified diff, outside the work tree (e.g. under $TMPDIR) or in the repo's top-level .claude/, which this tool leaves aside — use .claude/ where the host refuses writes outside the workspace. A relative path that does not exist from the cwd resolves against --repo")
     g2 = r.add_mutually_exclusive_group()
     g2.add_argument("--build")
     g2.add_argument("--no-build-step", dest="no_build")
-    d = sub.add_parser("deviation"); common(d)
+    d = sub.add_parser("deviation", example=(
+        f'{pc} deviation {on} --claim 1 --why "<why no host-side test can prove it>"'),
+        check=rules(lambda ns: why_rule(ns.why)))
+    common(d)
     g = d.add_mutually_exclusive_group(required=True)
-    g.add_argument("--req", type=int)
-    g.add_argument("--claim", type=int)
+    g.add_argument("--req", type=number_of("--req", "requirement"))
+    g.add_argument("--claim", type=number_of("--claim"))
     d.add_argument("--why", required=True)
-    rp = sub.add_parser("replay"); common(rp, task_required=False)
-    fpp = sub.add_parser("fingerprint")
+    rp = sub.add_parser("replay", example=f"{pc} replay --repo <repo> --plan <plan>")
+    common(rp, task_required=False)
+    fpp = sub.add_parser("fingerprint", example=f"{pc} fingerprint --repo <repo>")
     fpp.add_argument("--repo", required=True)
     a = ap.parse_args()
+    global CALL_EXAMPLE
+    CALL_EXAMPLE = sub.choices[a.mode].example
 
     repo = Path(a.repo).resolve()
     if git(repo, "rev-parse", "--show-toplevel", check=False).stdout.strip() != str(repo):
@@ -1608,6 +1691,8 @@ if __name__ == "__main__":
         sys.exit(3)
     except Usage as e:
         print(f"prove-claim: {e}", file=sys.stderr)
+        if e.wrong_call and CALL_EXAMPLE:
+            print(f"example: {CALL_EXAMPLE}", file=sys.stderr)
         sys.exit(2)
     except KeyboardInterrupt as e:
         print(f"prove-claim: interrupted ({e}); touched files were restored before exit",

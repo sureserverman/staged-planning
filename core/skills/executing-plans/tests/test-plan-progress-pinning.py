@@ -104,8 +104,11 @@ class Pinning(unittest.TestCase):
         return path
 
     def model(self, cwd=None):
+        # Its own stdin: the renderer reads stdin to EOF, and an inherited one (a
+        # harness's open socket) may never end. Every call here passes one.
         p = subprocess.run([sys.executable, str(PROGRESS), '--json'], cwd=cwd or self.repo,
-                           capture_output=True, text=True, timeout=30, env=self.env)
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           timeout=30, env=self.env)
         self.assertEqual(p.returncode, 0, p.stderr)
         return json.loads(p.stdout)
 
@@ -230,7 +233,7 @@ class Pinning(unittest.TestCase):
         self.legacy_state(self.worktree('live'), live)
         subprocess.run(['rm', '-rf', str(wt_gone)], check=True)
         p = subprocess.run([sys.executable, str(PROGRESS)], cwd=self.repo, env=self.env,
-                           capture_output=True, text=True, timeout=30)
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
         self.assertEqual(p.returncode, 0)
         self.assertNotIn(str(wt_gone), p.stdout)
         doc = self.model()
@@ -256,7 +259,8 @@ class Pinning(unittest.TestCase):
                  for s in g['tail_spans'] if 'close-out pending' in s['text']]
         self.assertTrue(spans and spans[0]['dim'], spans)
         text = subprocess.run([sys.executable, str(PROGRESS)], cwd=self.repo, env=self.env,
-                              capture_output=True, text=True, timeout=30).stdout
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=30).stdout
         line = [l for l in text.splitlines() if '2026-11-08-finished' in l]
         self.assertTrue(line and '◌ close-out pending' in line[0], text)
         pinned_plan = self.plan('2026-11-10-pinned-plan.md', 'xxx')
@@ -284,7 +288,7 @@ class Pinning(unittest.TestCase):
         self.legacy_state(self.worktree('run'), plan)
         p = subprocess.run([sys.executable, str(PROGRESS)], cwd=self.repo, timeout=30,
                            env={**self.env, 'PLAN_PROGRESS_TEST_STALL_S': '10'},
-                           capture_output=True, text=True)
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True)
         self.assertEqual((p.returncode, p.stdout), (0, ''))
 
     def test_in_tree_records_in_a_linked_worktree_stay_its_own(self):

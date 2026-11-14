@@ -858,8 +858,32 @@ def cmd_remove(force):
     return 0
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main():
-    parser = argparse.ArgumentParser(
+    parser = ExampleParser(
+        example='python3 <planning-plugin>/skills/executing-plans/scripts/statusline-install.py --status',
         description="Manage the statusLine key in ~/.cursor/cli-config.json."
     )
     parser.add_argument("--install", action="store_true", help="write/repair the pointer (default)")

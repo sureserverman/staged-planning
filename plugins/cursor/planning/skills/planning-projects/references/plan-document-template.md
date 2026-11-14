@@ -57,11 +57,14 @@ above. An entry covers only the case it names; execution still stops on anything
 ## Stage 1: [Name]
 
 **Goal:** [one sentence, naming who it is for]
-**Outcomes:** [who uses the result — a person, another app, a later stage]
+**Outcomes:** [who uses the product — a person or another program]
 - Works: [what they get]
-- [a way it can fail] → [what they see]
-- [another way it can fail] → [what they see]
-<!-- Keep only Outcomes bullets under the field; indent a wrapped line. The commit hook
+- [a failure that user can cause through the product] → [what they see]
+<!-- Outcomes name the person or program that uses the product. Write a failure line only
+     for a failure that user can cause through the product's own interface as this plan
+     changes it. A stage whose result only a later stage or the project's own tests consume
+     omits Outcomes.
+     Keep only Outcomes bullets under the field; indent a wrapped line. The commit hook
      refuses any other line there rather than drop the bullets after it. -->
 **Depends on:** none
 **Blocks:** Stage 2
@@ -110,7 +113,7 @@ checks and records it in the worksheet, never a second worksheet. A fixture cann
      `**Blocked-accepted:** <date> — <why>` line beside the close-out line. That is
      the author's answer, and it is the ONLY thing that retires such a plan; do not
      edit the `[~]` to `[x]`, which falsifies the record the marker exists to keep. -->
-- [ ] **(goal)** [the plan's goal as one cheap sweep over the WHOLE artifact it is about, in every gate from the first one whose artifact exists — gate-authoring.md § The plan's goal is a check from the first gate]
+- [ ] **(goal)** [only where this stage's own tasks can make the plan's goal fail: the final gate's goal sweep, naming those tasks; delete the line otherwise, unless this is the plan's final gate. A plan carries one `(goal)` check, in its final gate; an earlier gate repeats it only when that stage's own tasks can make it fail — gate-authoring.md § The plan's goal is one check, in the final gate]
 - [ ] [Integration check]
 - [ ] [Class predicate — the sweep that proves a set-wide property, e.g. `! grep -rl '<the stale claim>' <scope>`]
 - [ ] [No regressions in touched scope (stage-scope — see references/test-scope-tiers.md)]
@@ -137,7 +140,7 @@ checks and records it in the worksheet, never a second worksheet. A fixture cann
 [Tasks with Depends on / Blocks / Dispatch fields...]
 
 ### Stage 2 Gate
-- [ ] **(goal)** [the same goal sweep as Stage 1 — every gate from the first one whose artifact exists repeats it]
+- [ ] **(goal)** [the plan's goal as one cheap sweep over the WHOLE artifact it is about — the final gate carries it]
 [Checks...] — if Stage 2 is the plan's final stage, its gate replaces the
 regression check above with the plan-scope bullet instead:
 - [ ] [Full clean test pass (plan-scope — the plan's single full run)]

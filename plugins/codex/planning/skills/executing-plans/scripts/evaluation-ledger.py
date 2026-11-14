@@ -229,8 +229,32 @@ def execute(args,payload):
         finally: os.close(lock)
 
 
+class ExampleParser(argparse.ArgumentParser):
+    """An argument error ends with `example: <a call this parser accepts>`. `check`
+    (namespace -> problem or None) holds the rules argparse cannot state, such as a flag
+    another flag needs, so they fail here, with the example, before the script acts."""
+
+    def __init__(self, *args, example=None, check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.example = example
+        self.check = check
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, extras = super().parse_known_args(args, namespace)
+        problem = self.check(namespace) if self.check else None
+        if problem:
+            self.error(problem)
+        return namespace, extras
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        tail = f"example: {self.example}\n" if self.example else ""
+        self.exit(2, f"{self.prog}: error: {message}\n{tail}")
+
+
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('operation',choices=('record','summarize','check-reuse'))
+    parser=ExampleParser(example=("echo '{}' | "
+        'python3 <planning-plugin>/skills/executing-plans/scripts/evaluation-ledger.py summarize --repo <repo> --plan <plan-name> --experiment <experiment>'));parser.add_argument('operation',choices=('record','summarize','check-reuse'))
     parser.add_argument('--repo',type=Path,default=Path.cwd());parser.add_argument('--plan',required=True)
     parser.add_argument('--experiment',required=True);args=parser.parse_args()
     try:

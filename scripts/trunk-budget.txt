@@ -52,7 +52,9 @@
 #     stops, `state_error` is an instrument error, a Stop is recorded with
 #     `plan-state.py set-blocker`, and `finish` retains terminal evidence;
 #   - stage Outcomes and premise-first at Step 3.0, and their two Stop conditions;
-#   - a supersede is the decisions skill's supersede operation.
+#   - a supersede is the decisions skill's supersede operation;
+#   - the calls it mandates, written out: prove-claim.py claim, plan-state.py init,
+#     a task transition and finish, and owner-decision.py check after a mid-run answer.
 # The rationale lives in references (stage-gate.md, dispatch-fidelity.md,
 # bug-is-a-class.md) and in honest-gates. Per-section sizes:
 # core/skills/executing-plans/references/extraction-classification.md.
@@ -69,7 +71,9 @@
 # Lowered 56577 -> 56427 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 56427 -> 56426 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
 # Lowered 56421 -> 56408 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
-core/skills/executing-plans/SKILL.md 56408
+# Raised 56408 -> 57547 (2.3.0): the trunk shows the calls it mandates, literally — `prove-claim.py claim` (rule 4a) and `plan-state.py` `init`, a task `transition` and `finish` with their stdin payloads (§ Progress state file) — and § Stop conditions runs `owner-decision.py check <plan>` on an owner's mid-run answer until it exits 0. A call is copied at the moment it is made, where a pointer to references/progress-state-file.md is the same as no rule: the 2026-11-13 audit counted 307 `--help` runs, 1,065 plan-state calls for 468 task commits and 138 prove-claim argument errors, and two owner decisions refused for their wording that nothing checked when written.
+# Raised 57547 -> 57587 (2.3.0): the prove-claim call carries its build flag (`--build`), which the script requires (Stage 1 gate review).
+core/skills/executing-plans/SKILL.md 57587
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -107,7 +111,16 @@ core/skills/executing-plans/SKILL.md 56408
 # Lowered 40598 -> 40499 (1.2.0): the description states triggers only; its step order and outcome are gone.
 # Lowered 40499 -> 39482 (2.0.0): Phase -1 states its rule in one paragraph.
 # Lowered 39482 -> 39472 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-core/skills/planning-projects/SKILL.md 39464
+# Raised 39464 -> 39681 (2.3.0): Phase -1 — the option marked Recommended is the smallest that meets
+#   the request as written, and a larger one says what it adds; it binds as each question is
+#   written, when a pointer read afterwards is the same as no rule (2026-11-13 audit: 6-36% of
+#   tasks came from the larger option marked Recommended).
+# Raised 39681 -> 39821 (2.3.0): Phase 2 — Outcomes name the product's user, a failure line only
+#   for a failure that user can cause through the product, and none for a stage only a later
+#   stage or the project's tests consume; it binds as each stage's Outcomes are written (the
+#   audit's costliest gate demoed Outcomes about the test harness). The five generic failure
+#   kinds it replaces are gone.
+core/skills/planning-projects/SKILL.md 39821
 
 # honest-gates.
 # Its rules are WRITE-TIME disciplines: each has to be in front of whoever is writing
@@ -202,7 +215,9 @@ hosts/codex/overrides/skills/architecting-projects/SKILL.md 13632
 # Lowered 66151 -> 66001 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 66001 -> 66000 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
 # Lowered 65995 -> 65982 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
-hosts/codex/overrides/skills/executing-plans/SKILL.md 65982
+# Raised 65982 -> 67121 (2.3.0): as core/skills/executing-plans/SKILL.md.
+# Raised 67121 -> 67161 (2.3.0): as core/skills/executing-plans/SKILL.md.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 67161
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
@@ -231,7 +246,9 @@ hosts/cursor/overrides/skills/brainstorming/SKILL.md 5824
 # Lowered 69159 -> 69127 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
 # Lowered 69114 -> 69100 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
 # Lowered 69100 -> 69095 (2.2.0): the Cursor ref hook reads `demo.md` at the last stage only.
-hosts/cursor/overrides/skills/executing-plans/SKILL.md 69095
+# Raised 69095 -> 70266 (2.3.0): as core/skills/executing-plans/SKILL.md; its prove-claim call is the claim-verifier's, per claim.
+# Raised 70266 -> 70306 (2.3.0): as core/skills/executing-plans/SKILL.md.
+hosts/cursor/overrides/skills/executing-plans/SKILL.md 70306
 hosts/cursor/overrides/skills/honest-gates/SKILL.md 15437
 # Lowered 39953 -> 39952 (1.0.3): "nine" Light items became "ten", as core.
 # Lowered 39952 -> 39944 (1.0.5): the Light list grew to eleven items; its pointer line was tightened.
@@ -239,7 +256,9 @@ hosts/cursor/overrides/skills/honest-gates/SKILL.md 15437
 # Lowered 41111 -> 41012 (1.2.0): as core/skills/planning-projects/SKILL.md.
 # Lowered 41012 -> 39995 (2.0.0): Phase -1 states its rule in one paragraph.
 # Lowered 39995 -> 39985 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
-hosts/cursor/overrides/skills/planning-projects/SKILL.md 39977
+# Raised 39977 -> 40194 (2.3.0): Phase -1's smallest-option rule, as core.
+# Raised 40194 -> 40334 (2.3.0): Phase 2's Outcomes rule, as core.
+hosts/cursor/overrides/skills/planning-projects/SKILL.md 40334
 # Lowered 14437 -> 14275 (1.2.0): as core/skills/project-maturity/SKILL.md.
 # Raised 14275 -> 14377 (1.2.0): as core/skills/project-maturity/SKILL.md.
 hosts/cursor/overrides/skills/project-maturity/SKILL.md 14377
@@ -262,4 +281,6 @@ hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13492
 # Lowered 63443 -> 63293 (2.0.0): its Sources section and reference-map row moved to docs/sources.md.
 # Lowered 63293 -> 63274 (2.0.0): the trunk dispatches per `references/dispatch.md`; the dispatching skill is folded into executing-plans.
 # Lowered 63244 -> 63241 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
-hosts/opencode/overrides/skills/executing-plans/SKILL.md 63241
+# Raised 63241 -> 64380 (2.3.0): as core/skills/executing-plans/SKILL.md.
+# Raised 64380 -> 64420 (2.3.0): as core/skills/executing-plans/SKILL.md.
+hosts/opencode/overrides/skills/executing-plans/SKILL.md 64420
