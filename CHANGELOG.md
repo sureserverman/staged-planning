@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.4.0 — 2026-11-17
+
+- **Four standing questions are asked in every plan, and their answers cover the whole
+  plan.** The question round asks what the run does when an Outcome cannot be shown here,
+  when it finds a defect outside the plan's tasks, when a gate has spent its fix rounds, and
+  when a check cannot run as written. Each answer is one `Rule <kind>` entry in
+  `## Owner decisions`; in a master it covers every sub-plan. The previous plan's answer is
+  offered first.
+- **The run reads a standing answer before it asks.** At those four events it runs
+  `owner-decision.py match --plan <plan> --rule <kind>`, acts on the entry it lists and cites
+  its `OD-N`. A standing answer never confirms a command: the merge still needs its own entry.
+- **A question the run does ask names what each option changes**: the gate checks, the
+  decisions in force and the later stages or sub-plans, so one answer settles them.
+- **An Outcome the session cannot show carries a `needs:` note.** It ends with
+  `*(needs: <what a person would need to show it>)*`. The demo sheet records it as
+  `not shown here` with that need, and the evaluator leaves it as written.
+- **A new Standard plan records its dry run.** Before it is presented the planner runs the
+  Preflight checks that only read, probes each `Test:` and gate command, and checks each
+  HIGH-risk premise, and records what came back in a `**Dry run**` block in `## Preflight`.
+  `validate-gate-checks.py --authoring` checks for the block and reports `DRY-RUN-MISSING`.
+- **The record audit no longer counts probed Preflight boxes.** A Preflight of any length
+  backed by a committed probe file is not a bulk tick (finding 1). With no probe file the
+  boxes count as before.
+- **An existing plan needs no change.** Execution runs the validator without
+  `--authoring`, so a plan with no dry-run block reports what it did under 2.3.0, and a plan
+  with no `Rule` entry is asked as before.
+
 ## 2.3.0 — 2026-11-14
 
 - **A wrong script call is answered with a working one.** When a plugin script an executor

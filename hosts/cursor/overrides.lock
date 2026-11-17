@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: ff2ef9cf8e12e6787c68f55d29b0422d6ac1cd7ce50d95ee71b0c7988f0d6c69
+  base_sha256: 3ee270a10c20a28efcae749a38c87685a59c29a8913ce48817c900c08074a909
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -35,9 +35,9 @@ skills/architecting-projects/SKILL.md:
 skills/brainstorming/SKILL.md:
   base_sha256: f28b9bd84399f7ea7776b9ad0dfc87c4cf5af4e653d26ec916b75f0545e90365
 skills/executing-plans/SKILL.md:
-  base_sha256: f3e11cfe0ce4071cc4216f02174f51441bf258e314e785b6dc1bbe394dd8c086
+  base_sha256: 913457cf22a80254829ae25ce2411fc14ee6f91086881e44d56be76403322d55
 skills/executing-plans/references/close-out.md:
-  base_sha256: d616defd506d422db97487b1a587f6d3973b28afac43164a6a81ac4cdc1b868a
+  base_sha256: b95914aa2cf0f08c40cee18853c94f642ef0cc19dca54b81c43f027bcbd3de0b
 skills/executing-plans/references/dispatch.md:
   base_sha256: e14fff9a65b17652f1c8f52fe3493249c072578f6480bfd82fe422445420e0fd
 skills/executing-plans/references/light-plans.md:
@@ -47,7 +47,7 @@ skills/executing-plans/references/master-plans.md:
 skills/executing-plans/references/plan-continue-hook.md:
   base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
 skills/executing-plans/references/preflight-checks.md:
-  base_sha256: dce2921011f25d9ec1436da43df755d0a2a23550995ef1c7411627594ab7f7ed
+  base_sha256: cfd1008a97183389c84d3bde580196164260a3d5e95340c3c37b731c300dfcab
 skills/executing-plans/references/progress-state-file.md:
   base_sha256: d50973840bbf7813e22b8e7fecfd65d33dea23083ab0c17dd2aeb758fc8d99b3
 skills/executing-plans/references/review-scope.md:
@@ -57,11 +57,11 @@ skills/executing-plans/references/session-handoff.md:
 skills/executing-plans/references/stack-routing.md:
   base_sha256: 0916fcc1be50cf86fde0dbe717266ab4978b8a4c2fed8675c10bda4b43f93962
 skills/executing-plans/references/stage-gate.md:
-  base_sha256: 160d1b8ae62e8472afc2106925cecffe38a1bf9a64a4f8b6eeb72131e85b8633
+  base_sha256: 38949adcba5bec66d01bf16e90a7c2b970397c8f2a456a65ca991320f395c8a3
 skills/executing-plans/references/task-execution.md:
   base_sha256: cffa3caf1c533bcf88b02dded5f7b0e7d8638a7fa326dab3e2802107efdf1dbd
 skills/executing-plans/scripts/plan-flip-audit.py:
-  base_sha256: f9a11911f95011470dabbde1a38a48e5a9bf56cb72b16e0fc30d521d797a7f90
+  base_sha256: 0e88c203a5cd0797655055a0686f340b255e078dcbf19d3fd26a5a53679abbf5
   host_fact: 'The Cursor proof model of the hooks/git-ref-gate.sh fork (every claim, once per stage at the gate): findings 8 and 9 hold every claim of a ticked task to a record and skip the tasks of the stage still in flight, read through the hooks'' state reader, so the audit and the Cursor commit gate count the same set. It also carries unrecorded_gate(), which core has none of: the Cursor stop hook asks it whether a stage claimed done (stage-complete, closeout, or ticked gate boxes) lacks its Stage N green commit.'
   depends_on:
     hooks/plan_continue_classify.py: da899becc6b710ca5ea2c67d1e366710ae5cf4c66afd33f4e70b3485e4a9f949
@@ -81,6 +81,6 @@ skills/executing-plans/scripts/validate-stack-routing.py:
 skills/honest-gates/SKILL.md:
   base_sha256: 66ec5001aa3225e800a4e062373716ddc7e49e5a06e2a9b7af56c9084e7d678f
 skills/planning-projects/SKILL.md:
-  base_sha256: 18387bf63af9005b3b649204ecdd022bd2fc314c37f5bf18d018018657584606
+  base_sha256: 10d9c1286d01839ffd56889f7acae251ea5dbd9ca06abc4d92e35cd6ff98cfda
 skills/project-maturity/SKILL.md:
   base_sha256: 40a8ab78a2515420f8ed3184e8f004936eff894399a56615911219bc26e9caff

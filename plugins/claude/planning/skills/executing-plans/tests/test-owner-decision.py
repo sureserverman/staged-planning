@@ -605,13 +605,247 @@ try:
     expect("worded-plan.md:9: OD-3:" in out and "empty code span" in out,
            "check reports a code span that holds no command", out)
 
+    # --- standing rules: Rule <kind> ------------------------------------------------
+
+    # Catches the stop the 2026-11-17 measurement counted most: a run asking at an event
+    # the owner already answered, because an entry could name only one position.
+    KINDS = ("unshown-outcome", "outside-defect", "spent-rounds", "wrong-check")
+    rules = plan("rules-plan.md", {1: ["1.1"], 2: ["2.1"]}, [
+        f"- **OD-1** — list it and merge — {Q} — applies to: Rule unshown-outcome",
+        f"- **OD-2** — one more round — {Q} — applies to: Rule spent-rounds",
+        f"- **OD-3** — {MERGE} — {Q} — applies to: close-out (`git merge feat/x`)",
+    ])
+
+    # Claim 1: a standing answer never confirms a command.
+    rc, out = run("match", "--plan", rules, "--at", "closeout", "--command", "git merge feat/x")
+    expect(rc == 0 and listed(out) == ["OD-3"], "a case with --command lists the command's entry, no Rule entry", out)
+    expect("OD-1" in out and "never confirms a command" in out,
+           "a Rule entry is refused at a --command case because it never confirms a command", out)
+    rc, out = run("match", "--plan", rules, "--at", "closeout", "--require-command")
+    expect(rc == 1 and listed(out) == [] and out.count("never confirms a command") == 2,
+           "a case with --require-command lists no Rule entry", out)
+    for flag in (["--command", "git merge feat/x"], ["--require-command"]):
+        rc, out = run("match", "--plan", rules, "--rule", "spent-rounds", *flag)
+        expect(rc == 2 and listed(out) == [] and "--rule" in out and "example:" in out,
+               f"--rule with {flag[0]} is a usage error (exit 2)", out)
+
+    # Claim 2: --rule lists the entry wherever the run is, and needs no --at.
+    rc, out = run("match", "--plan", rules, "--rule", "unshown-outcome")
+    expect(rc == 0 and listed(out) == ["OD-1"], "match --rule lists the kind's entry with no --at and no run", out)
+    expect("OD-2" in out and "Rule spent-rounds" in out, "an entry for another kind is refused, naming its kind", out)
+    expect("OD-3" in out and "not a standing rule" in out, "a position entry is refused at a --rule case", out)
+    rc, out = run("match", "--plan", rules, "--at", "stage", "--stage", "1")
+    expect(rc == 1 and listed(out) == [] and "pass --rule" in out,
+           "a position case without --rule lists no Rule entry", out)
+    steps = [("preflight", []),
+             ("task", [("transition", {"phase": "task", "stage": 2, "task": "2.1"})]),
+             ("gate", [("transition", {"phase": "task", "stage": 2, "task": "2.1"}),
+                       ("transition", {"phase": "gate", "stage": 2})]),
+             ("close-out", [("transition", {"phase": "closeout"})])]
+    for n, (where, st) in enumerate(steps):
+        rrepo = repo(f"rule-repo-{n}")
+        rplan = plan(f"rule-repo-{n}/rules-plan.md", {1: ["1.1"], 2: ["2.1"]},
+                     [f"- **OD-1** — list it and merge — {Q} — applies to: Rule unshown-outcome"])
+        run_at(rrepo, "rules-plan.md", *st)
+        rc, out = run("match", "--plan", rplan, "--rule", "unshown-outcome", cwd=rrepo)
+        expect(rc == 0 and listed(out) == ["OD-1"], f"match --rule lists the entry with the run at {where}", out)
+
+    # Claim 3: check refuses a Rule it cannot read, with the line.
+    wrong = plan("wrong-rules-plan.md", {1: ["1.1"]}, [
+        f"- **OD-1** — go on — {Q} — applies to: Rule late-merge",
+        f"- **OD-2** — go on — {Q} — applies to: Rule spent-rounds at Stage 1",
+        f"- **OD-3** — go on — {Q} — applies to: Rule wrong-check (`git merge feat/x`)",
+        f"- **OD-4** — go on — {Q} — applies to: Rule outside-defect and Rule wrong-check",
+        f"- **OD-5** — go on — {Q} — applies to: Rule unshown-outcome",
+        f"- **OD-6** — stop — {Q} — applies to: Rule unshown-outcome",
+    ])
+    rc, out = run("check", wrong)
+    expect(rc == 1 and "wrong-rules-plan.md:7: OD-1:" in out and "late-merge" in out
+           and all(k in out.split("wrong-rules-plan.md:7:")[1].splitlines()[0] for k in KINDS),
+           "check refuses an unknown kind with its line and names the four kinds", out)
+    expect("wrong-rules-plan.md:8: OD-2:" in out and "beside" in out.split("wrong-rules-plan.md:8:")[1].splitlines()[0],
+           "check refuses a Rule beside a Stage, with its line", out)
+    expect("wrong-rules-plan.md:9: OD-3:" in out and "beside" in out.split("wrong-rules-plan.md:9:")[1].splitlines()[0],
+           "check refuses a Rule beside a command, with its line", out)
+    expect("wrong-rules-plan.md:10: OD-4:" in out and "more than one" in out.split("wrong-rules-plan.md:10:")[1].splitlines()[0],
+           "check refuses an entry naming two kinds", out)
+    expect("wrong-rules-plan.md:11: OD-5:" in out and "wrong-rules-plan.md:12: OD-6:" in out
+           and "two entries for Rule unshown-outcome" in out,
+           "check refuses two answered entries for one kind in one section, each with its line", out)
+    rc, out = run("match", "--plan", wrong, "--rule", "unshown-outcome")
+    expect(rc == 1 and listed(out) == [], "match lists neither of two answered entries for one kind", out)
+    twice = plan("twice-rules-plan.md", {1: ["1.1"]}, [
+        f"- **OD-1** — go on — {Q} — applies to: Rule unshown-outcome",
+        "- **OD-2** — stop — ask at execution — applies to: Rule unshown-outcome",
+    ])
+    rc, out = run("match", "--plan", twice, "--rule", "unshown-outcome")
+    expect(rc == 1 and listed(out) == [] and "neither answers" in out,
+           "an answer beside an `ask at execution` entry for one kind answers nothing: the run asks", out)
+    rc, out = run("check", twice)
+    expect(rc == 1 and "twice-rules-plan.md:7: OD-1:" in out and "neither answers" in out,
+           "check reports an answer beside an `ask at execution` entry for one kind", out)
+
+    # Claim 4: a master's Rule entry binds every sub-plan; a sub-plan's own replaces it.
+    rmaster = TMP / "2026-11-17-r-master-plan.md"
+    rmaster.write_text("\n".join([
+        "# Master Plan: r", "Date: 2026-11-17", "",
+        "## Owner decisions", "",
+        f"- **OD-1** — one more round — {Q} — applies to: Rule spent-rounds",
+        f"- **OD-2** — file it — {Q} — applies to: Rule outside-defect",
+        f"- **OD-3** — list it — {Q} — applies to: Rule unshown-outcome",
+        f"- **OD-4** — hold the merge — {Q} — applies to: Rule unshown-outcome in Sub-plan 2",
+        "", "## Sub-plans", "",
+        "### Sub-plan 1: a", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-r-sub-01-a-plan.md", "",
+        "### Sub-plan 2: b", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-r-sub-02-b-plan.md", "",
+    ]))
+    rsub1 = plan("2026-11-17-r-sub-01-a-plan.md", {1: ["1.1"]}, [
+        f"- **OD-1** — stop — {Q} — applies to: Rule outside-defect",
+    ], head="# Project Plan: a", extra="Master: ./2026-11-17-r-master-plan.md")
+    rsub2 = plan("2026-11-17-r-sub-02-b-plan.md", {1: ["1.1"]}, ["- none — the catalog triggered no question (swept 2026-11-17)"],
+                 head="# Project Plan: b", extra="Master: ./2026-11-17-r-master-plan.md")
+    for sp in (rsub1, rsub2):
+        rc, out = run("match", "--plan", sp, "--rule", "spent-rounds")
+        expect(rc == 0 and listed(out) == ["OD-1"] and "r-master-plan.md" in out.split("applies OD-1")[1].splitlines()[0],
+               f"a master Rule entry naming no Sub-plan is listed for {sp.name}", out)
+    rc, out = run("match", "--plan", rsub1, "--rule", "outside-defect")
+    expect(rc == 0 and listed(out) == ["OD-1"] and "a-plan.md:" in out.split("applies OD-1")[1].splitlines()[0]
+           and "replaced" in out, "a sub-plan's own Rule entry replaces the master's for that kind", out)
+    rc, out = run("match", "--plan", rsub2, "--rule", "outside-defect")
+    expect(rc == 0 and listed(out) == ["OD-2"], "the master's entry still binds a sub-plan with no own entry", out)
+    rc, out = run("match", "--plan", rsub2, "--rule", "unshown-outcome")
+    expect(rc == 0 and listed(out) == ["OD-4"], "a master Rule entry naming the sub-plan replaces the general one", out)
+    rc, out = run("match", "--plan", rsub1, "--rule", "unshown-outcome")
+    expect(rc == 0 and listed(out) == ["OD-3"], "a master Rule entry naming another sub-plan does not bind this one", out)
+    rc, out = run("check", rmaster)
+    expect(rc == 0 and "note: no entry for Rule wrong-check" in out and out.count("note: no entry") == 1,
+           "check passes a master's Rule entries with and without a Sub-plan, noting the missing kind", out)
+    rc, out = run("check", rsub1)
+    expect(rc == 0 and out.count("note: no entry") == 1 and "Rule wrong-check" in out,
+           "check counts the kinds a sub-plan inherits from its master", out)
+
+    # Catches the Tier-1 review's Critical: a master entry for the sub-plan that declines
+    # (`ask at execution`), or two answers for it, let the general answer through. A
+    # named entry replaces the general one whatever it says, so the run asks.
+    nmaster = TMP / "2026-11-17-n-master-plan.md"
+    nmaster.write_text("\n".join([
+        "# Master Plan: n", "Date: 2026-11-17", "",
+        "## Owner decisions", "",
+        f"- **OD-1** — one more round — {Q} — applies to: Rule spent-rounds",
+        "- **OD-2** — ask — ask at execution — applies to: Rule spent-rounds, Sub-plan 2",
+        f"- **OD-3** — file it — {Q} — applies to: Rule outside-defect",
+        f"- **OD-4** — fix it — {Q} — applies to: Rule outside-defect in Sub-plan 2",
+        f"- **OD-5** — file it — {Q} — applies to: Rule outside-defect in Sub-plan 2",
+        f"- **OD-6** — amend it — {Q} — applies to: Rule wrong-check in Sub-plan 2",
+        "", "## Sub-plans", "",
+        "### Sub-plan 1: a", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-n-sub-01-a-plan.md", "",
+        "### Sub-plan 2: b", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-n-sub-02-b-plan.md", "",
+    ]))
+    nsub1 = plan("2026-11-17-n-sub-01-a-plan.md", {1: ["1.1"]}, ["- none — the catalog triggered no question (swept 2026-11-17)"],
+                 head="# Project Plan: a", extra="Master: ./2026-11-17-n-master-plan.md")
+    nsub2 = plan("2026-11-17-n-sub-02-b-plan.md", {1: ["1.1"]}, ["- none — the catalog triggered no question (swept 2026-11-17)"],
+                 head="# Project Plan: b", extra="Master: ./2026-11-17-n-master-plan.md")
+    rc, out = run("match", "--plan", nsub2, "--rule", "spent-rounds")
+    expect(rc == 1 and listed(out) == [] and "replaced by the master's OD-2" in out,
+           "a master entry declining for the sub-plan replaces the general answer: the run asks", out)
+    rc, out = run("match", "--plan", nsub1, "--rule", "spent-rounds")
+    expect(rc == 0 and listed(out) == ["OD-1"], "the general answer still binds the other sub-plan", out)
+    rc, out = run("match", "--plan", nsub2, "--rule", "outside-defect")
+    expect(rc == 1 and listed(out) == [] and "replaced by the master's OD-4" in out,
+           "two answers for the sub-plan answer nothing and still replace the general one", out)
+    rc, out = run("check", nmaster)
+    expect(rc == 1 and "OD-4" in out and "OD-5" in out and "note: no entry for Rule wrong-check" in out
+           and "note: no entry for Rule unshown-outcome" in out and out.count("note:") == 2,
+           "check on a master notes a kind answered only for one sub-plan", out)
+    # Catches the re-review's Important: a decline naming two sub-plans let the general
+    # answer through for each of them.
+    mmaster = TMP / "2026-11-17-mm-master-plan.md"
+    mmaster.write_text("\n".join([
+        "# Master Plan: mm", "Date: 2026-11-17", "",
+        "## Owner decisions", "",
+        f"- **OD-1** — one more round — {Q} — applies to: Rule spent-rounds",
+        "- **OD-2** — ask — ask at execution — applies to: Rule spent-rounds, Sub-plan 1, Sub-plan 2",
+        f"- **OD-3** — file it — {Q} — applies to: Rule outside-defect",
+        "- **OD-4** — ask — ask at execution — applies to: Rule outside-defect",
+        "", "## Sub-plans", "",
+        "### Sub-plan 1: a", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-mm-sub-01-a-plan.md", "",
+        "### Sub-plan 2: b", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-mm-sub-02-b-plan.md", "",
+    ]))
+    for n in (1, 2):
+        sp = plan(f"2026-11-17-mm-sub-0{n}-{'ab'[n - 1]}-plan.md", {1: ["1.1"]},
+                  ["- none — the catalog triggered no question (swept 2026-11-17)"],
+                  head="# Project Plan: x", extra="Master: ./2026-11-17-mm-master-plan.md")
+        rc, out = run("match", "--plan", sp, "--rule", "spent-rounds")
+        expect(rc == 1 and listed(out) == [] and "replaced by the master's OD-2" in out,
+               f"a decline naming Sub-plans 1 and 2 replaces the general answer for sub-plan {n}", out)
+        rc, out = run("match", "--plan", sp, "--rule", "outside-defect")
+        expect(rc == 1 and listed(out) == [] and "neither answers" in out,
+               f"a general answer beside a general decline answers nothing for sub-plan {n}", out)
+    # Catches the second re-review's Important, and the class behind all three review
+    # rounds: one entry decides a kind for a sub-plan, or the run asks. A named answer
+    # beside a decline naming that Sub-plan among others, or an entry naming two Rules,
+    # leaves the run asking, and check reports the answer it would refuse.
+    omaster = TMP / "2026-11-17-o-master-plan.md"
+    omaster.write_text("\n".join([
+        "# Master Plan: o", "Date: 2026-11-17", "",
+        "## Owner decisions", "",
+        f"- **OD-1** — one more round — {Q} — applies to: Rule spent-rounds, Sub-plan 1",
+        "- **OD-2** — ask — ask at execution — applies to: Rule spent-rounds, Sub-plan 1, Sub-plan 2",
+        f"- **OD-3** — file it — {Q} — applies to: Rule outside-defect",
+        f"- **OD-4** — fix it — {Q} — applies to: Rule outside-defect, Rule wrong-check, Sub-plan 2",
+        "", "## Sub-plans", "",
+        "### Sub-plan 1: a", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-o-sub-01-a-plan.md", "",
+        "### Sub-plan 2: b", "- **Status:** [ ]", "- **Plan:** ./2026-11-17-o-sub-02-b-plan.md", "",
+    ]))
+    osubs = [plan(f"2026-11-17-o-sub-0{n}-{'ab'[n - 1]}-plan.md", {1: ["1.1"]},
+                  ["- none — the catalog triggered no question (swept 2026-11-17)"],
+                  head="# Project Plan: x", extra="Master: ./2026-11-17-o-master-plan.md") for n in (1, 2)]
+    rc, out = run("match", "--plan", osubs[0], "--rule", "spent-rounds")
+    expect(rc == 1 and listed(out) == [] and "neither answers" in out,
+           "a named answer beside a decline naming the same Sub-plan among others answers nothing", out)
+    rc, out = run("check", omaster)
+    expect(rc == 1 and "OD-1:" in out and "neither answers" in out,
+           "check on the master reports the named answer a wider decline overlaps", out)
+    rc, out = run("match", "--plan", osubs[1], "--rule", "outside-defect")
+    expect(rc == 1 and listed(out) == [] and "replaced by the master's OD-4" in out,
+           "an entry naming two Rules and the Sub-plan still replaces the general answer: the run asks", out)
+    rc, out = run("match", "--plan", osubs[0], "--rule", "outside-defect")
+    expect(rc == 0 and listed(out) == ["OD-3"], "the general answer binds the sub-plan the refused entry does not name", out)
+    rc, out = run("match", "--plan", HERE / "fixtures" / "standing-rules-plan.md",
+                  "--rule", "spent-rounds", "--at", "stage")
+    expect(rc == 0 and len(listed(out)) == 1, "--rule with --at stage and no --stage still reads the rule", out)
+
+    # Claim 5: a plan with no Rule entry asks as before.
+    rc, out = run("match", "--plan", good, "--rule", "spent-rounds")
+    expect(rc == 1 and listed(out) == [] and "ask the owner" in out, "match --rule on a plan with no Rule entry exits 1", out)
+    rc, out = run("check", good)
+    expect(rc == 0 and all(f"note: no entry for Rule {k}" in out for k in KINDS) and out.count("note:") == 4,
+           "check on a plan with no Rule entry prints four notes and keeps exit 0", out)
+    rc, out = run("check", none)
+    expect(rc == 1 and out.count("note: no entry for Rule") == 4,
+           "check on a plan with no section prints the four notes and keeps exit 1", out)
+    rc, out = run("check", rules)
+    expect(rc == 0 and out.count("note: no entry for Rule") == 2
+           and "Rule outside-defect" in out and "Rule wrong-check" in out,
+           "check notes only the kinds the plan leaves out", out)
+
+    # The shipped fixture the stage gates read.
+    fixture = HERE / "fixtures" / "standing-rules-plan.md"
+    rc, out = run("check", fixture)
+    expect(rc == 0 and "note:" not in out, "the standing-rules fixture passes check with no note", out)
+    for k in KINDS:
+        rc, out = run("match", "--plan", fixture, "--rule", k)
+        expect(rc == 0 and len(listed(out)) == 1, f"the fixture lists one entry for Rule {k}", out)
+    rc, out = run("match", "--plan", fixture, "--rule", "no-such-kind")
+    expect(rc == 2 and "example:" in out, "--rule takes only the four kinds", out)
+
     # --- the property: check and match agree ----------------------------------------
 
     # Catches I4 and every false accept the battery holds: an entry check calls clean
     # must be listed at its own place, and one check flags must refuse everywhere.
-    battery = [deny, na, cmd, two, good, one, after, quoted, exact, worded]
+    battery = [deny, na, cmd, two, good, one, after, quoted, exact, worded, rules, wrong, twice]
     cases = [["--at", "preflight"], ["--at", "closeout"]] + [["--at", "stage", "--stage", s] for s in "12"] \
-        + [["--at", "stage", "--stage", t.split(".")[0], "--task", t] for t in ("1.1", "1.2", "1.3", "2.1")]
+        + [["--at", "stage", "--stage", t.split(".")[0], "--task", t] for t in ("1.1", "1.2", "1.3", "2.1")] \
+        + [["--rule", k] for k in KINDS]
     cmds = [[], ["--command", "git merge feat/x"], ["--command", "./migrate up"], ["--command", "./deploy"],
             ["--command", "git push --force origin x"], ["--command", "git branch -d x"],
             ["--command", 'rm -rf "my  dir"'], ["--command", "rm -rf '*'"], ["--command", "git merge feat/x"]]

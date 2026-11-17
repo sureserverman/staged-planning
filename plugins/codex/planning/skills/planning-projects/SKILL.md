@@ -30,6 +30,7 @@ The trunk carries the authoring decisions. These load when their condition is me
 | `references/authoring-checklist.md` | running the pre-presentation checklist — the full item list, Standard and Light |
 | `references/test-scope-tiers.md` | declaring the plan's test-scope commands |
 | `references/owner-decisions.md` | the draft exists — the questions execution would stop for, and how answers are recorded |
+| `references/dry-run.md` | the draft exists, before it is presented — what the planner runs now and records as `**Dry run**` |
 
 ---
 
@@ -304,7 +305,9 @@ Divide the project into sequential stages. Each stage is a coherent unit of work
 uses the product. Write what they get when it works. Write a failure line only for a failure
 that user can cause through the product's own interface as this plan changes it, with what
 they see. "Nothing — it closes" is a bug written down, not an outcome. A stage whose result
-only a later stage or the project's own tests consume omits Outcomes. Use the Research
+only a later stage or the project's own tests consume omits Outcomes. An Outcome the session
+cannot show by its user's route, with what exists today, ends with
+`*(needs: <what a person would need to show it>)*`. Use the Research
 Summary: a promise there ("until X, the app shows a clear 'file too large' result") belongs
 in the Outcomes of the stage that meets it. The executor builds every Outcomes line, not
 only what the `Test:` lines reach, and the gate's evaluator grades the stage against them
@@ -586,11 +589,12 @@ applies to Standard plans (and, with the decomposition addendum, Master plans).
 Before showing the plan to the user, verify **every** item in
 `references/authoring-checklist.md` — that file is the full list, and most items name the
 section that owns the rule they enforce. **It is a mandatory read on the Standard path.**
-Five command-decided items are restated here:
+Six command-decided items are restated here:
 
 - [ ] `python3 scripts/validate-gate-checks.py <plan>` reports **zero INSTANCE-SHAPED** and **zero GOAL-CHECK-MISSING** — no check names one artifact where the goal spans many items or widens past its set; a `(goal)` check sweeps the goal (`references/set-valued-checks.md`, `gate-authoring.md`)
 - [ ] **Every gate check can pass as authored**: the same validator reports **zero SELECTOR-UNMATCHED** — every `pytest <file> -k <expr>` selector in a gate is one some task's `Test:` builds toward, so no gate names a filter that collects nothing (`executing-plans` re-checks it at Preflight with `--collect-only`)
 - [ ] **No task's own `Test:` runs the whole suite**: on a plan declaring expensive-suite tiering, the same validator reports **zero TASK-TEST-UNSCOPED** — every task `Test:` is path- or suite-scoped, or its task carries an explicit `full-suite: accepted` (`references/test-scope-tiers.md`)
+- [ ] `python3 scripts/validate-gate-checks.py --authoring <plan>` reports **zero DRY-RUN-MISSING** — the planner ran what the plan's checks can run today and recorded it in `## Preflight` (`references/dry-run.md`)
 - [ ] `python3 scripts/validate-dispatch.py <plan>` exits 0 (§ Phase 5 — Dispatch)
 - [ ] The plan is saved to the project's `<records home>/plans/`, resolved through `lib/records_home.py --for-write` (exit 2 stopped the save and created nothing)
 

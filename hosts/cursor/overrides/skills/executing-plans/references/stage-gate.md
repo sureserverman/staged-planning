@@ -76,6 +76,10 @@ ACTION NEEDED: <one line naming the decision>
   2. <option>
 ```
 
+**Each option names what it would change**: the gate checks, the decisions in force and the
+later stages or sub-plans it touches, so one answer settles all of them and the run does not
+come back with the same decision in another shape.
+
 **A report carrying an `ACTION NEEDED:` block does not also say it is proceeding.** "Two
 things for you" in one paragraph and "proceeding to Stage 3" in the next is the shape that
 draws a *"what do you want from me?"* reply: the reader cannot tell whether the run stopped, and the cost of guessing wrong is asymmetric —
@@ -404,7 +408,11 @@ honest report is that the gate is blocked, not that the backlog grew.
 
 **And the valve is evidenced, not asserted — the same bar the review opt-out sets.**
 Escalating names the *missing thing* (`escalated: cannot reproduce without a physical
-device`), which is checkable against the session. If the user then decides to file it, that
+device`), which is checkable against the session. A defect outside the plan's tasks is
+answered in advance when `python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match --plan <plan> --rule outside-defect` lists an entry: that entry is the
+owner's words the valve asks for, so the run acts on it (fix it, or file it and go on) and
+cites its `OD-N`; a "file it" answer is quoted in the backlog entry
+(`OD-N, owner: "<their words>"`). If the user then decides to file it, that
 decision is recorded by **quoting their words**, exactly as a review opt-out is:
 
 ```

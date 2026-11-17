@@ -5,6 +5,7 @@ exactly the command it passed as --command.
 
     owner-decision.py match --plan P [--at preflight|stage|closeout]
                             [--stage N] [--task N.M] [--command C] [--require-command] [--json]
+    owner-decision.py match --plan P --rule KIND [--json]
     owner-decision.py check P
 
 THE CASE comes from the run state while a run of P is in flight: the state of the
@@ -55,6 +56,7 @@ once, last, and may hold only:
   Task N.M                             within that stage, or alone (a task implies one)
   Sub-plan N                           in a master's entry: the sub-plan it binds
   `a command`                          every code span; --command must equal one exactly
+  Rule KIND                            a standing rule, alone (see below)
   and  only  the  at  in  of  on       connectors; punctuation , ; . ( ) * - and dashes
 
 A command matches only as the same characters (outer spaces aside): `rm -rf '*'` is not
@@ -65,6 +67,19 @@ entry naming no command, so a command is covered only by an entry naming it;
 A sub-plan also reads its master's section (its `Master:` backlink). A master entry
 applies to a sub-plan only when it names that `Sub-plan N`; its Stage and Task names then
 refer to that sub-plan.
+
+A STANDING RULE answers one kind of event for the whole plan, wherever the run meets it.
+`Rule KIND` names one of KINDS and nothing else (no position, no command), except
+`Sub-plan N` in a master's entry. Only `match --rule KIND` lists it: no --at is needed,
+and with a run in flight it is read at the run's case, whatever the stage. --rule never
+goes with --command or --require-command, and a case with a command never lists a Rule
+entry, so a standing answer never confirms a command. ONE ENTRY DECIDES A KIND, or the run
+asks: the plan's own entries naming the kind, if any; else, in a sub-plan, the master's
+entries naming this Sub-plan; else the master's entries naming none. An entry counts there
+whatever its state (answered, declined, refused for its form), and the answer is listed
+only when it is the one entry there. `check` reports an answer that shares its place with
+another entry, and notes each kind the plan, with its master, leaves unanswered
+(`note: no entry for Rule KIND`) without changing its exit code.
 
 `match` exits 0 when at least one entry applies, 1 when none does (ask the owner), 2 on a
 usage error or an unreadable plan (ask the owner too). `check` reports every line and every
@@ -120,13 +135,18 @@ OWNER = re.compile(r"\bowner,\s*\d{4}-\d{2}-\d{2}:\s*\"[^\"]+\"")
 DECLINED = re.compile(r"\bask\s+at\s+execution\b", re.I)
 MARKER = re.compile(r"\bapplies to:", re.I)
 SPAN = re.compile(r"`([^`]*)`")
+# The four kinds of event a standing rule answers (`applies to: Rule <kind>`). The catalog
+# asks one standing question per kind; a kind added here is added there too.
+KINDS = ("unshown-outcome", "outside-defect", "spent-rounds", "wrong-check")
 PLACE = re.compile(r"\bPreflight\b|\bclose-?out\b|\bStage\s+0*(\d+)\b|\bTask\s+(\d+\.\d+)\b"
-                   r"|\bSub-plan\s+0*(\d+)\b", re.I)
+                   r"|\bSub-plan\s+0*(\d+)\b|\bRule\s+([A-Za-z][\w-]*)", re.I)
 WORD = re.compile(r"[^\s,;.()\-–—:*]+")
 CONNECTORS = {"and", "only", "the", "at", "in", "of", "on"}
 AT = ("preflight", "stage", "closeout")
 MATCH_EXAMPLE = ('python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match '
                  '--plan <plan> --at stage --stage 1 --task 1.1 --command "<the command>"')
+RULE_EXAMPLE = ('python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match '
+                '--plan <plan> --rule spent-rounds')
 
 
 class Unreadable(Exception):
@@ -230,7 +250,7 @@ def parse_places(applies):
     commands = {s.strip() for s in SPAN.findall(applies)}
     rest = SPAN.sub(" ", applies)
     p = {"preflight": False, "closeout": False, "stages": set(), "tasks": set(),
-         "subplans": set(), "commands": commands}
+         "subplans": set(), "commands": commands, "rules": []}
     for m in PLACE.finditer(rest):
         w = m.group(0).lower()
         if w == "preflight":
@@ -243,6 +263,8 @@ def parse_places(applies):
             p["tasks"].add(m.group(2))
         elif m.group(3):
             p["subplans"].add(int(m.group(3)))
+        elif m.group(4):
+            p["rules"].append(m.group(4).lower())
     rest = PLACE.sub(" ", rest)
     unread = [w for w in WORD.findall(rest) if w.lower() not in CONNECTORS]
     return p, unread
@@ -277,6 +299,8 @@ def structural(text, stages, tasks, sub=None, master_reg=None, bad=()):
         return None, why + (f"; and the plan has {', '.join(missing)}" if missing else "")
     if any(not c for c in p["commands"]):
         return None, "an empty code span in `applies to:`"
+    if p["rules"]:
+        return rule_structural(p, sub, master_reg, bad)
     if p["subplans"] and master_reg is None and sub is None:
         return None, "names a Sub-plan, outside a master's section"
     positions = [k for k in ("preflight", "closeout") if p[k]] + (["stage"] if p["stages"] or p["tasks"] else [])
@@ -314,8 +338,86 @@ def structural(text, stages, tasks, sub=None, master_reg=None, bad=()):
     return p, None
 
 
+def rule_structural(p, sub, master_reg, bad):
+    """structural() for an entry naming `Rule <kind>`."""
+    if len(p["rules"]) > 1:
+        return None, "names more than one Rule; one entry answers one kind"
+    kind = p["rules"][0]
+    if kind not in KINDS:
+        return None, f"names Rule {kind}; the kinds are {', '.join(KINDS)}"
+    beside = (["Preflight"] if p["preflight"] else []) + (["close-out"] if p["closeout"] else []) \
+        + [f"Stage {s}" for s in sorted(p["stages"])] + [f"Task {t}" for t in sorted(p["tasks"])] \
+        + [f"`{c}`" for c in sorted(p["commands"])]
+    if beside:
+        return None, (f"names {', '.join(beside)} beside Rule {kind}; a standing rule names its "
+                      "kind alone, covers every position and never a command")
+    if p["subplans"]:
+        if master_reg is None and sub is None:
+            return None, "names a Sub-plan, outside a master's section"
+        if len(p["subplans"]) > 1:
+            return None, "names more than one Sub-plan; one entry covers one"
+        if master_reg is not None:
+            for s in sorted(p["subplans"] - set(master_reg)):
+                return None, f"names Sub-plan {s}; the register has no Sub-plan {s}"
+        elif p["subplans"] != {sub}:
+            return None, f"names Sub-plan {next(iter(p['subplans']))}; this is Sub-plan {sub}"
+    if bad:
+        return None, f"the section holds a line that is not an entry (line {bad[0][0]}), so no entry in it is read"
+    return p, None
+
+
+def rule_kind(text):
+    """The one kind an entry's `applies to:` names as `Rule <kind>`, else None. Read
+    whether or not the entry is an answer, so an `ask at execution` entry is seen too."""
+    _, applies = split_entry(text)
+    if applies is None:
+        return None
+    rules = parse_places(applies)[0]["rules"]
+    return rules[0] if len(rules) == 1 else None
+
+
+def mentions(r, kind):
+    """Whether an entry's `applies to:` names `Rule <kind>`, among other Rules or not,
+    read whatever the entry's state (answered, declined or refused for its form)."""
+    return kind in parse_places(split_entry(r["text"])[1] or "")[0]["rules"]
+
+
+def tier(kind, recs, plan_path, sub):
+    """(the entries that decide Rule `kind` here, whose they are, which Sub-plan they
+    name). The plan's own entries for the kind, if any; else, in a sub-plan, the master's
+    entries naming this Sub-plan; else the master's entries naming none. Every entry
+    counts whatever its state, so a doubtful one still leads to asking."""
+    own = [r for r in recs if r["src"] == plan_path and mentions(r, kind)]
+    if own:
+        return own, f"{plan_path.name}'s own", ""
+    master = [r for r in recs if r["src"] != plan_path and mentions(r, kind)]
+    named = [r for r in master if sub in rule_subplans(r)]
+    if named:
+        return named, "the master's", f" (naming Sub-plan {sub})"
+    return [r for r in master if not rule_subplans(r)], "the master's", ""
+
+
+def conflict(kind, members):
+    """The reason every entry of a tier holding more than one entry is refused."""
+    ids = ", ".join(r["id"] for r in members)
+    count = "two" if len(members) == 2 else str(len(members))
+    return f"{count} entries for Rule {kind} apply here ({ids}); {'neither' if len(members) == 2 else 'none'} answers"
+
+
 def judge(p, case):
     """None when parsed places `p` cover `case`, else the reason they do not."""
+    rule = case.get("rule")
+    if p["rules"]:
+        kind = p["rules"][0]
+        if (case.get("command") is not None) or case.get("require_command"):
+            return "a standing rule never confirms a command"
+        if rule is None:
+            return f"a standing rule (Rule {kind}); pass --rule {kind}"
+        if rule != kind:
+            return f"answers Rule {kind}; the case is Rule {rule}"
+        return None
+    if rule is not None:
+        return f"names a position, not a standing rule; --rule {rule} lists only Rule entries"
     at = case["at"]
     if p["preflight"] and at != "preflight":
         return f"names Preflight; the case is at {at}"
@@ -534,29 +636,41 @@ def cmd_match(a):
     except Refused as e:
         print(f"owner-decision: {e}", file=sys.stderr)
         return e.code
-    if at is None:
+    if at is None and not a.rule:
         print("owner-decision: --at is needed when no run of this plan is in flight", file=sys.stderr)
         print(f"example: {MATCH_EXAMPLE}", file=sys.stderr)
         return 2
-    if at == "stage" and stage is None:
+    if at == "stage" and stage is None and not a.rule:
         print("owner-decision: --at stage needs --stage", file=sys.stderr)
         print(f"example: {MATCH_EXAMPLE}", file=sys.stderr)
         return 2
     case = {"at": at, "stage": stage, "task": task, "command": a.command,
-            "require_command": a.require_command}
+            "require_command": a.require_command, "rule": a.rule}
     text = read(plan_path)
     stages, tasks = plan_places(text)
     is_master = pu.is_master_plan(text, plan_path)
     _, own, bad = entries(text)
     cands = [(plan_path, n, i, t, None, bad) for n, i, t in own] + master_entries(text, plan_path)
-    applies, refused = [], []
+    applies, refused, recs = [], [], []
     for src, n, i, t, sub, src_bad in cands:
         reg = register(text, plan_path) if is_master and src == plan_path else None
         p, why = structural(t, stages, tasks, sub, reg, src_bad)
+        recs.append({"src": src, "n": n, "id": i, "text": t, "sub": sub, "reg": reg, "p": p, "why": why})
+    sub = next((r["sub"] for r in recs if r["sub"] is not None), None)
+    for r in recs:
+        src, n, i, p, why, reg = r["src"], r["n"], r["id"], r["p"], r["why"], r["reg"]
         if p is not None and reg is not None:
             why = "a master entry binds the sub-plan it names; run match on that sub-plan"
         elif p is not None:
             why = judge(p, case)
+        if why is None and p["rules"]:
+            # A standing answer is listed only as the one entry that decides its kind here.
+            kind = p["rules"][0]
+            members, whose, naming = tier(kind, recs, plan_path, sub)
+            if r not in members:
+                why = f"replaced by {whose} {', '.join(m['id'] for m in members)}{naming} for Rule {kind}"
+            elif len(members) > 1:
+                why = conflict(kind, members)
         rec = {"id": i, "file": str(src), "line": n}
         if why is None:
             applies.append(rec)
@@ -574,6 +688,12 @@ def cmd_match(a):
     return 0 if applies else 1
 
 
+def rule_subplans(o):
+    """The Sub-plans an entry's `applies to:` names, read whatever the entry's state
+    (answered, declined or refused), so a doubtful entry still counts toward asking."""
+    return parse_places(split_entry(o["text"])[1] or "")[0]["subplans"]
+
+
 def cmd_check(a):
     plan_path = Path(a.plan)
     text = read(plan_path)
@@ -585,20 +705,57 @@ def cmd_check(a):
         problems.append((0, "-", "no `## Owner decisions` section (write the `none` line when nothing triggered)"))
     elif not own and not bad and not any(NONE.match(l) for _, l in section(text)[1]):
         problems.append((0, "-", "an empty `## Owner decisions` section (write the `none` line when nothing triggered)"))
+    covered, recs = set(), []
     for n, i, t in own:
         p, why = structural(t, stages, tasks, None, reg, bad)
+        recs.append({"src": plan_path, "n": n, "id": i, "text": t, "p": p, "why": why})
         if why and why != "declined: ask at execution":
             problems.append((n, i, why))
+        elif rule_kind(t) and (reg is None or not rule_subplans({"text": t})):
+            # In a master, only an entry naming no Sub-plan answers the kind for every one.
+            covered.add(rule_kind(t))
+    # The entries that would decide each kind, where more than one does: every answer
+    # among them is refused by match, so check reports it. A master is read per sub-plan.
+    subs = sorted(reg) if reg is not None else [None]
+    flagged = {}
+    for kind in KINDS:
+        for sp in subs:
+            members, _, _ = tier(kind, recs if reg is None else
+                              [{**r, "src": "master"} for r in recs], plan_path, sp)
+            if len(members) > 1:
+                for m in members:
+                    if m["p"] is not None:
+                        flagged[m["n"]] = (m["n"], m["id"], conflict(kind, members))
+    problems += list(flagged.values())
     out = [f"{plan_path.name}:{n}: {i}: {why}" for n, i, why in sorted(problems)]
     # The section a sub-plan inherits is checked too, so check agrees with match.
+    mrecs = []
     for src, n, i, t, sub, mbad in master_entries(text, plan_path):
         p, why = structural(t, stages, tasks, sub, None, mbad)
+        mrecs.append({"src": src, "n": n, "id": i, "text": t, "p": p, "why": why})
         if why and why != "declined: ask at execution" and not why.startswith("names Sub-plan") \
                 and why != "a master entry that names no Sub-plan":
             out.append(f"{Path(src).name}:{n}: {i}: {why}")
             problems.append((n, i, why))
+        elif not why or why == "declined: ask at execution":
+            if rule_kind(t):
+                covered.add(rule_kind(t))
+    msub = next((s_ for _, _, _, _, s_, _ in master_entries(text, plan_path)), None)
+    for kind in KINDS:
+        if any(r["src"] == plan_path for r in recs if mentions(r, kind)):
+            continue
+        members, _, _ = tier(kind, mrecs, plan_path, msub)
+        if len(members) > 1:
+            for m in members:
+                if m["p"] is not None:
+                    why = conflict(kind, members)
+                    out.append(f"{Path(m['src']).name}:{m['n']}: {m['id']}: {why}")
+                    problems.append((m["n"], m["id"], why))
     for line in out:
         print(line)
+    for kind in KINDS:
+        if kind not in covered:
+            print(f"note: no entry for Rule {kind} (the plan's standing question for it was not answered)")
     if not problems:
         print(f"{plan_path.name}: {len(own)} owner decision(s), no problem")
     return 1 if problems else 0
@@ -632,13 +789,16 @@ def main(argv=None):
     ap = ExampleParser(prog="owner-decision.py", description=__doc__.split("\n\n")[0],
                        example=MATCH_EXAMPLE)
     sub = ap.add_subparsers(dest="op", required=True)
-    m = sub.add_parser("match", example=MATCH_EXAMPLE)
+    m = sub.add_parser("match", example=MATCH_EXAMPLE, check=lambda ns: (
+        "--rule cannot be passed with --command or --require-command: a standing rule never "
+        "confirms a command" if ns.rule and (ns.command is not None or ns.require_command) else None))
     m.add_argument("--plan", required=True)
     m.add_argument("--at", choices=AT)
     m.add_argument("--stage", type=int)
     m.add_argument("--task")
     m.add_argument("--command")
     m.add_argument("--require-command", action="store_true")
+    m.add_argument("--rule", choices=KINDS)
     m.add_argument("--json", action="store_true")
     c = sub.add_parser("check", example='python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py check <plan>')
     c.add_argument("plan")

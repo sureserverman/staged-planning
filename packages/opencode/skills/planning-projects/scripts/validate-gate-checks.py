@@ -245,9 +245,18 @@ reading carefully here:
     declared set; it cannot tell whether the sweep actually covers the set the `Scope:`
     names, only that the stage has one.
 
+One finding asked only of a plan being written, under `--authoring`:
+
+    DRY-RUN-MISSING  a plan with a `## Preflight` section has no `**Dry run**` block in it,
+                     the block lacks its `Preflight:`, `Commands:` or `Premises:` bullet, or
+                     a stage whose `**Risk:**` starts with HIGH is not named by `Premises:`.
+                     Fails the run. Without the flag it is never read or counted, so
+                     execution's advisory run on an existing plan is unchanged.
+
 Usage:
     validate-gate-checks.py <plan.md> [<plan.md> ...]
     validate-gate-checks.py --quiet <plan.md>     # counts + failures only
+    validate-gate-checks.py --authoring <plan.md> # a new plan: also its dry-run record
 """
 import argparse
 import pathlib
@@ -923,6 +932,47 @@ GOAL_MARKER = re.compile(r"\(goal\)", re.I)
 SUB_PLAN_HEADING = re.compile(r"^###\s+Sub-plan\s+(\S+?):?\s", re.MULTILINE)
 
 
+PREFLIGHT_SECTION = re.compile(r"(?ms)^##[ \t]+Preflight\b[^\n]*\n(.*?)(?=^## |\Z)")
+DRY_RUN_LABEL = re.compile(r"(?m)^\*\*Dry run\*\*")
+DRY_RUN_END = re.compile(r"(?m)^(?:#{1,4}\s|\*\*[^*\n]+\*\*|---\s*$)")
+DRY_RUN_LINES = ("Preflight", "Commands", "Premises")
+DRY_RUN_BULLET = re.compile(r"(?m)^\s*[-*+]\s+(Preflight|Commands|Premises):")
+STAGE_HEAD = re.compile(r"(?m)^## Stage (\d+)\b")
+HIGH_RISK = re.compile(r"(?m)^\s*(?:[-*]\s+)?\*\*Risk:\*\*\s*HIGH\b")
+
+
+def dry_run_missing(text):
+    """-> the parts of a new plan's dry-run record that are missing, each a phrase naming
+    it; [] when the record is whole or the plan is not asked. Read only under
+    `--authoring`. Asked of a plan with a `## Preflight` section (a Standard plan or a
+    sub-plan; a Light plan and a master have none): a `**Dry run**` block inside that
+    section, holding a `Preflight:`, a `Commands:` and a `Premises:` bullet, where the
+    `Premises:` bullet names every `## Stage N` whose `**Risk:**` starts with HIGH."""
+    pf = PREFLIGHT_SECTION.search(text)
+    if not pf:
+        return []
+    label = DRY_RUN_LABEL.search(pf.group(1))
+    if not label:
+        return ["no **Dry run** block in ## Preflight"]
+    rest = pf.group(1)[label.end():]
+    end = DRY_RUN_END.search(rest)
+    block = rest[: end.start()] if end else rest
+    found, out = {}, []
+    marks = list(DRY_RUN_BULLET.finditer(block))
+    for i, m in enumerate(marks):
+        stop = marks[i + 1].start() if i + 1 < len(marks) else len(block)
+        found.setdefault(m.group(1), block[m.end():stop])
+    out += [f"the **Dry run** block has no `{name}:` line" for name in DRY_RUN_LINES
+            if name not in found]
+    heads = list(STAGE_HEAD.finditer(text))
+    for i, h in enumerate(heads):
+        body = text[h.end(): heads[i + 1].start() if i + 1 < len(heads) else len(text)]
+        if HIGH_RISK.search(body) and "Premises" in found and not re.search(
+                rf"\bStage {h.group(1)}\b", found["Premises"]):
+            out.append(f"Stage {h.group(1)} is HIGH risk and the `Premises:` line does not name it")
+    return out
+
+
 def goal_check_missing(text, path=None):
     """-> ["plan"] for a plan with no `(goal)` check in any gate, or the `Sub-plan N` label of
     every master register entry whose `**Gate:**` block has none. A plan with no gate checks
@@ -1442,10 +1492,13 @@ class ExampleParser(argparse.ArgumentParser):
 
 def main(argv=None):
     ap = ExampleParser(prog="validate-gate-checks",
-                       example='python3 <planning-plugin>/skills/planning-projects/scripts/validate-gate-checks.py <plan>')
+                       example='python3 <planning-plugin>/skills/planning-projects/scripts/validate-gate-checks.py --authoring <plan>')
     ap.add_argument("plans", nargs="+", type=pathlib.Path)
     ap.add_argument("--quiet", action="store_true",
                     help="print counts and failures only")
+    ap.add_argument("--authoring", action="store_true",
+                    help="a plan being written: also ask for its dry-run record "
+                         "(DRY-RUN-MISSING); execution runs without it")
     args = ap.parse_args(argv)
 
     totals = {"EXECUTABLE": 0, "JUDGMENT": 0, "SCOPED": 0, "INSTANCE-SHAPED": 0, "PROSE": 0}
@@ -1461,6 +1514,7 @@ def main(argv=None):
     examined_files = 0
     empty_files = []
     scope_notes = []
+    dry_run_failures = []
 
     for path in args.plans:
         if not path.is_file():
@@ -1487,6 +1541,9 @@ def main(argv=None):
             goal_notes.append((path, where))
         for line, spans in commands_after_dash(raw):
             dash_notes.append((path, line, spans))
+        if args.authoring:
+            for part in dry_run_missing(raw):
+                dry_run_failures.append((path, part))
         examined_files += 1
         if not checks:
             empty_files.append(path.name)
@@ -1531,6 +1588,15 @@ def main(argv=None):
         for path, task, cmd, why in task_test_failures:
             print(f"  {path.name}: {task[:80]}\n      → `{cmd[:96]}` — {why}",
                   file=sys.stderr)
+
+    # Only under --authoring: a plan being written owes its dry-run record; execution's
+    # run on an existing plan never reads it, so its output is what it was before.
+    if dry_run_failures:
+        print(f"\nFAIL: {len(dry_run_failures)} dry-run-missing — a new plan records what its "
+              f"planner ran, in ## Preflight (planning-projects references/dry-run.md):",
+              file=sys.stderr)
+        for path, part in dry_run_failures:
+            print(f"  {path.name}: DRY-RUN-MISSING — {part}", file=sys.stderr)
 
     # Advisory, never a failure: it changes no exit code. See the docstring for the
     # measurement that settled that — the identical syntax is correct for a secret or
@@ -1619,7 +1685,9 @@ def main(argv=None):
         print(f"goal-check-missing {len(goal_notes)} (advisory — see notes above)")
     if dash_notes:
         print(f"test-command-after-dash {len(dash_notes)} (advisory — see notes above)")
-    return 1 if (failures or selector_failures or task_test_failures) else 0
+    if dry_run_failures:
+        print(f"dry-run-missing {len(dry_run_failures)} (--authoring — see above)")
+    return 1 if (failures or selector_failures or task_test_failures or dry_run_failures) else 0
 
 
 if __name__ == "__main__":

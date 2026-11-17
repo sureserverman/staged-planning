@@ -1,7 +1,7 @@
 # Pre-presentation checklist — the full item list
 
 `../SKILL.md` § Checklist — Before Presenting the Plan carries the imperative (run every item)
-and restates five of them — **the five a command decides rather than a reading**. This file
+and restates six of them — **the six a command decides rather than a reading**. This file
 is the list itself.
 
 Most items name the section that owns the rule they enforce, so a failed item is fixed at its
@@ -24,7 +24,7 @@ Run every item before showing the plan to the user.
 - [ ] Tasks within each stage follow their dependency order
 - [ ] No task depends on something from a later stage
 - [ ] Every stage has a risk flag with a reason (`task-fields.md`)
-- [ ] Outcomes name the person or program that uses the product: what they get when it works, and a failure line only for a failure that user can cause through the product's own interface as the plan changes it; a stage whose result only a later stage or the project's own tests consume omits Outcomes; every promise in the Research Summary lands in some stage's Outcomes (`../SKILL.md` § Phase 2 — Stage Breakdown)
+- [ ] Outcomes name the person or program that uses the product: what they get when it works, and a failure line only for a failure that user can cause through the product's own interface as the plan changes it; a stage whose result only a later stage or the project's own tests consume omits Outcomes; an Outcome the session cannot show by its user's route, with what exists today, ends with `*(needs: <what a person would need to show it>)*`; every promise in the Research Summary lands in some stage's Outcomes (`../SKILL.md` § Phase 2 — Stage Breakdown)
 - [ ] Every stage has a rollback note (`task-fields.md`)
 - [ ] Every stage has a gate with specific checks (`../SKILL.md` § Phase 4 — Stage Gates)
 - [ ] No stage has more than 7 tasks (`../SKILL.md` § Stage sizing)
@@ -49,6 +49,7 @@ Run every item before showing the plan to the user.
 - [ ] The research summary has actual findings, not placeholders (`../SKILL.md` § Research summary)
 - [ ] Preflight checks cover all tools, deps, and access needed by the plan, each checked where the build looks for it rather than at an assumed path (`../SKILL.md` § Preflight checklist)
 - [ ] If the project's full suite is expensive (>~5 min): the plan declares its stage-scope and plan-scope commands, only the final gate runs the full clean pass, and any single test >~2 min is quarantined behind an opt-in filter (`test-scope-tiers.md`)
+- [ ] The plan was tried before it is presented: every Preflight check that only reads was run, every `Test:` and gate command probed, every HIGH-risk or outside-the-code premise checked on the real environment, and the results recorded in `## Preflight`'s `**Dry run**` block — `../scripts/validate-gate-checks.py --authoring <plan>` reports zero DRY-RUN-MISSING (`dry-run.md`)
 - [ ] The declared stage-scope command runs in under ~5 min — the trees the stages touch or depend on, not every tree the project owns; a stage-scope that is the full suite renamed pays plan-scope cost at every gate (`test-scope-tiers.md` § A declared stage-scope command is subject to the same cost threshold)
 
 **Task fields**
@@ -67,7 +68,7 @@ Run every item before showing the plan to the user.
 - [ ] Workflow specs in scope were read; any altered or removed behavior is declared on the corresponding task (`Changes WF-NNN` / `Removes WF-NNN`); new flows have a capture/extend task (`../SKILL.md` § Workflow-spec scan)
 - [ ] If an architecture doc exists for this topic: every structure-creating task cites its ARCH-ID, the final stage gate carries the architecture-conformance check, and no task contradicts an approved ARCH section (`../SKILL.md` § Architecture doc scan)
 - [ ] The decisions scan ran and its result is written into `## Decisions in force` (including the explicit `none — registers consulted: …` form, and `project register: absent` on a new project); tasks constrained by an entry cite it (`Honors DEC-NNN`), any deliberate override cites it (`Supersedes …— <why>`), and the final stage gate carries the decisions-conformance check (`../SKILL.md` § Decisions scan)
-- [ ] Before the plan was presented, the draft was swept against `owner-decisions.md` and every question it triggers was asked in one batched round; each answer is in `## Owner decisions` as `OD-N`, quoted and dated, naming the case it covers in the place words `owner-decisions.md` § The record lists, and `owner-decision.py check <plan>` exits 0 — or the section carries the `none` bullet (`../SKILL.md` § Ask execution's questions now)
+- [ ] Before the plan was presented, the draft was swept against `owner-decisions.md` and every question it triggers was asked in one batched round; each answer is in `## Owner decisions` as `OD-N`, quoted and dated, naming the case it covers in the place words `owner-decisions.md` § The record lists, and `owner-decision.py check <plan>` exits 0 — or the section carries the `none` bullet; the four standing questions (`owner-decisions.md` § Standing rules) were asked, and `check` prints no `note: no entry for Rule` line (`../SKILL.md` § Ask execution's questions now)
 
 ## Additionally, for a decomposed project (master plan + sub-plans)
 
@@ -86,13 +87,13 @@ these twelve — the Standard checklist does not apply:
 - [ ] Every task has a concrete, runnable `Test:` that asserts the outcome and could go red — the same bar as any plan
 - [ ] Tasks are in dependency order; any `Depends on` points only backward within the stage
 - [ ] Exactly one stage, with 2–5 tasks (a 6th task or a second stage means re-issue as Standard)
-- [ ] Outcomes name the person or program that uses the product, with a failure line only for a failure that user can cause through the product's own interface as the plan changes it; a stage whose result only a later stage or the project's own tests consume omits Outcomes (`../SKILL.md` § Phase 2 — Stage Breakdown)
+- [ ] Outcomes name the person or program that uses the product, with a failure line only for a failure that user can cause through the product's own interface as the plan changes it; a stage whose result only a later stage or the project's own tests consume omits Outcomes; an Outcome the session cannot show by its user's route, with what exists today, ends with `*(needs: <what a person would need to show it>)*` (`../SKILL.md` § Phase 2 — Stage Breakdown)
 - [ ] The single `### Stage 1 Gate` includes "full existing test suite passes" and a `(goal)` check sweeping the plan's goal over the whole artifact — `../scripts/validate-gate-checks.py` reports zero GOAL-CHECK-MISSING (`gate-authoring.md` § The plan's goal is one check, in the final gate)
 - [ ] A gate check over what a commit range changed (`git diff --name-only <base>..HEAD`) leaves out the files the executor commits itself — `proof/` records and any `.gitignore` git bootstrap writes — or it fails on the run's own bookkeeping
 - [ ] A task that adds a member to a closed set (an enum, event list, migration count, snapshot baseline) updates every test that pins that set, in the same task (`task-fields.md` § `Test:`)
 - [ ] The `Format: Light — …` line is present at the top; the file is saved to `<records home>/plans/` as `*-light-plan.md`
 - [ ] Open backlog items in scope were reviewed (the scan runs at every size); folded-in items carry `Closes BL-NNN`
-- [ ] `## Owner decisions` records the batched round's answers, or the `none` bullet, and `owner-decision.py check <plan>` exits 0 — the catalog sweep runs at every size, like the scans (`owner-decisions.md`)
+- [ ] `## Owner decisions` records the batched round's answers, or the `none` bullet, and `owner-decision.py check <plan>` exits 0 — the catalog sweep runs at every size, like the scans, and the four standing questions were asked, so `check` prints no `note: no entry for Rule` line (`owner-decisions.md`)
 - [ ] If `docs/workflows/` exists and the change touches a documented flow, the altered/removed behavior is declared on the task (`Changes WF-NNN` / `Removes WF-NNN`) — behavior contracts don't get a size exemption
 - [ ] On an expensive-suite project, every task's `Test:` is path- or suite-scoped, or the **task** carries a `full-suite: accepted` field with a reason — the same bar as any plan, and an **authoring-time** check (`test-scope-tiers.md`). A Light plan has task `Test:` fields, so this is not one of the items the format drops; it also carries the `**Test-scope commands**` block that arms the check (`light-plan-format.md` § Preflight collapses into the gate), without which this item is unenforceable
 

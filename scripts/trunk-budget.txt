@@ -73,7 +73,9 @@
 # Lowered 56421 -> 56408 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
 # Raised 56408 -> 57547 (2.3.0): the trunk shows the calls it mandates, literally — `prove-claim.py claim` (rule 4a) and `plan-state.py` `init`, a task `transition` and `finish` with their stdin payloads (§ Progress state file) — and § Stop conditions runs `owner-decision.py check <plan>` on an owner's mid-run answer until it exits 0. A call is copied at the moment it is made, where a pointer to references/progress-state-file.md is the same as no rule: the 2026-11-13 audit counted 307 `--help` runs, 1,065 plan-state calls for 468 task commits and 138 prove-claim argument errors, and two owner decisions refused for their wording that nothing checked when written.
 # Raised 57547 -> 57587 (2.3.0): the prove-claim call carries its build flag (`--build`), which the script requires (Stage 1 gate review).
-core/skills/executing-plans/SKILL.md 57587
+# Raised 57587 -> 58286 (2.4.0): § Stop conditions shows the standing-rule call literally, `owner-decision.py match --plan <plan> --rule <kind>`, and names the four events it is run at (an Outcome not shown, a defect outside the plan's tasks, a gate out of fix rounds, a check that cannot run as written). The call is made at the moment the run would ask, where a pointer to a reference is the same as no rule: the 2026-11-17 measurement counted 77 stops in 44 runs, about half of them these four kinds.
+# Raised 58286 -> 58451 (2.4.0): the standing answer never confirms a command, so the merge still needs its own entry; a mid-run answer edits the kind's existing entry and names the sub-plan it was asked in (Stage 1 gate review: an added entry left neither answering, an unnamed one bound every sub-plan).
+core/skills/executing-plans/SKILL.md 58451
 
 # planning-projects.
 # planning-projects is read once per plan and almost every section fires on that
@@ -120,7 +122,16 @@ core/skills/executing-plans/SKILL.md 57587
 #   stage or the project's tests consume; it binds as each stage's Outcomes are written (the
 #   audit's costliest gate demoed Outcomes about the test harness). The five generic failure
 #   kinds it replaces are gone.
-core/skills/planning-projects/SKILL.md 39821
+# Raised 39821 -> 40167 (2.4.0): § Checklist — Before Presenting the Plan restates a sixth
+#   command-decided item, `python3 scripts/validate-gate-checks.py --authoring <plan>` reporting
+#   zero DRY-RUN-MISSING, and the reference map routes to references/dry-run.md. The call is run
+#   as the plan is presented, where a pointer read afterwards is the same as no rule: the
+#   2026-11-17 measurement found checks that could not run and premises that were false only
+#   after the owner had left the run alone (a run waited 409 minutes on one).
+# Raised 40167 -> 40309 (2.4.0): Phase 2 — an Outcome the session cannot show ends with a
+#   `*(needs: …)*` note; it binds as each stage's Outcomes are written, and the checklist and
+#   catalog cite § Phase 2 for it (Stage 3 demo: no trunk stated it).
+core/skills/planning-projects/SKILL.md 40309
 
 # honest-gates.
 # Its rules are WRITE-TIME disciplines: each has to be in front of whoever is writing
@@ -217,7 +228,9 @@ hosts/codex/overrides/skills/architecting-projects/SKILL.md 13632
 # Lowered 65995 -> 65982 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
 # Raised 65982 -> 67121 (2.3.0): as core/skills/executing-plans/SKILL.md.
 # Raised 67121 -> 67161 (2.3.0): as core/skills/executing-plans/SKILL.md.
-hosts/codex/overrides/skills/executing-plans/SKILL.md 67161
+# Raised 67161 -> 67860 (2.4.0): as core/skills/executing-plans/SKILL.md.
+# Raised 67860 -> 68025 (2.4.0): as core/skills/executing-plans/SKILL.md.
+hosts/codex/overrides/skills/executing-plans/SKILL.md 68025
 
 # Cursor and OpenCode overrides: whole-file host versions of core trunks, shipped in
 # those builds. Each ceiling is the trunk's measured size; the same ratchet applies.
@@ -248,7 +261,9 @@ hosts/cursor/overrides/skills/brainstorming/SKILL.md 5824
 # Lowered 69100 -> 69095 (2.2.0): the Cursor ref hook reads `demo.md` at the last stage only.
 # Raised 69095 -> 70266 (2.3.0): as core/skills/executing-plans/SKILL.md; its prove-claim call is the claim-verifier's, per claim.
 # Raised 70266 -> 70306 (2.3.0): as core/skills/executing-plans/SKILL.md.
-hosts/cursor/overrides/skills/executing-plans/SKILL.md 70306
+# Raised 70306 -> 71005 (2.4.0): as core/skills/executing-plans/SKILL.md.
+# Raised 71005 -> 71170 (2.4.0): as core/skills/executing-plans/SKILL.md.
+hosts/cursor/overrides/skills/executing-plans/SKILL.md 71170
 hosts/cursor/overrides/skills/honest-gates/SKILL.md 15437
 # Lowered 39953 -> 39952 (1.0.3): "nine" Light items became "ten", as core.
 # Lowered 39952 -> 39944 (1.0.5): the Light list grew to eleven items; its pointer line was tightened.
@@ -258,7 +273,9 @@ hosts/cursor/overrides/skills/honest-gates/SKILL.md 15437
 # Lowered 39995 -> 39985 (2.0.0): its pointers name executing-plans' dispatch reference and routing table.
 # Raised 39977 -> 40194 (2.3.0): Phase -1's smallest-option rule, as core.
 # Raised 40194 -> 40334 (2.3.0): Phase 2's Outcomes rule, as core.
-hosts/cursor/overrides/skills/planning-projects/SKILL.md 40334
+# Raised 40334 -> 40680 (2.4.0): the checklist's sixth item (--authoring) and the dry-run.md map row, as core.
+# Raised 40680 -> 40822 (2.4.0): Phase 2's needs: note, as core.
+hosts/cursor/overrides/skills/planning-projects/SKILL.md 40822
 # Lowered 14437 -> 14275 (1.2.0): as core/skills/project-maturity/SKILL.md.
 # Raised 14275 -> 14377 (1.2.0): as core/skills/project-maturity/SKILL.md.
 hosts/cursor/overrides/skills/project-maturity/SKILL.md 14377
@@ -283,4 +300,6 @@ hosts/opencode/overrides/skills/architecting-projects/SKILL.md 13492
 # Lowered 63244 -> 63241 (2.2.0): one demo per plan: the gate evaluator runs at the plan's last gate (and at a `(judgment)` gate), an Outcome it cannot show is a residual, and no close-out evaluator.
 # Raised 63241 -> 64380 (2.3.0): as core/skills/executing-plans/SKILL.md.
 # Raised 64380 -> 64420 (2.3.0): as core/skills/executing-plans/SKILL.md.
-hosts/opencode/overrides/skills/executing-plans/SKILL.md 64420
+# Raised 64420 -> 65119 (2.4.0): as core/skills/executing-plans/SKILL.md.
+# Raised 65119 -> 65284 (2.4.0): as core/skills/executing-plans/SKILL.md.
+hosts/opencode/overrides/skills/executing-plans/SKILL.md 65284

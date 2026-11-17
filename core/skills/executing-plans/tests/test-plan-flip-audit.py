@@ -1949,9 +1949,8 @@ for label, probed, want in (("hist-pre-probed", True, False), ("hist-pre-unprobe
         bad("history mode must back Preflight boxes by a probe in their own commit",
             json.dumps(f1)[:400])
 
-# The exemption's bounds. A probe file is blind to which
-# box it backs, so it clears at most N Preflight boxes; it never touches a non-Preflight
-# box, even one repeating a Preflight line's text; and in history mode a probe counts
+# The exemption's bounds. A probe file clears Preflight boxes, however many; it never
+# touches a non-Preflight box, even one repeating a Preflight line's text; and in history mode a probe counts
 # from the commit that adds it onward, never backwards.
 def bounds_plan(label, n_pre, n_tasks, gate_dupes=0):
     plans_dir = newdir(f"{label}-plans")
@@ -1982,8 +1981,53 @@ def bounds_case(label, n_pre, n_tasks, gate_dupes=0):
     return findings_of(doc, 1) if doc else []
 
 
+# A probe file backs a Preflight of any length: no cap (2.4.0). Nine Preflight boxes and
+# four task ticks over a probe and four task commits is an honest first gate (real plans
+# carry seven- and nine-item Preflights); the same ticks with no probe,
+# and seven task ticks behind two task commits, are still bulk flips.
+def long_preflight(label, mode, n_pre, n_tasks, task_commits, probed):
+    if mode == "snapshot":
+        plan = bounds_plan(label, n_pre, n_tasks)
+        proj, env = newrepo(f"{label}-proj")
+        (proj / "README").write_text("x\n"); commit(proj, env, "chore: initial commit")
+        snap(plan, proj)
+        cwd, args = None, (str(plan), "--repo", str(proj))
+    else:
+        proj, env = newrepo(label)
+        plan = proj / "p.md"
+        plan.write_text(bounds_plan(f"{label}-src", n_pre, n_tasks).read_text())
+        base = commit(proj, env, "authored")
+        cwd, args = proj, (str(plan), "--since", base)
+    for i in range(1, task_commits + 1):
+        (proj / f"f{i}.txt").write_text(f"{i}\n"); commit(proj, env, f"Stage 1 Task 1.{i}: work")
+    if probed:
+        (proj / "evidence").mkdir()
+        (proj / "evidence" / "preflight-probe.txt").write_text("tool0 1.0\n")
+        commit(proj, env, "Preflight probe output")
+    tick_all(plan)
+    if mode == "history":
+        commit(proj, env, "progress")
+    r, doc = run_json(*args, cwd=cwd)
+    return findings_of(doc, 1) if doc else ["no json"]
+
+
+for mode in ("snapshot", "history"):
+    for label, args, want, why in (
+            ("long-probed", (9, 4, 4, True), False,
+             "9 Preflight + 4 task ticks over a probe file and 4 task commits is not a bulk flip"),
+            ("long-unprobed", (9, 4, 4, False), True,
+             "the same ticks with no probe file still fire finding 1"),
+            ("tasks7-probed", (0, 7, 2, True), True,
+             "7 task ticks in one commit behind 2 task commits fire finding 1, probe or not"),
+            ("tasks7-unprobed", (0, 7, 2, False), True,
+             "7 task ticks in one commit behind 2 task commits fire finding 1 with no probe")):
+        f1 = long_preflight(f"{label}-{mode[:4]}", mode, *args)
+        if bool(f1) == want:
+            ok(f"{mode}: {why}")
+        else:
+            bad(f"{mode}: {why} (red if the cap is restored)", json.dumps(f1)[:300])
+
 for label, args, why in (
-        ("bl-cap", (8, 0), "8 probed Preflight boxes exceed the cap of 6"),
         ("bl-nonpre", (2, 7), "7 task ticks are not cleared by a Preflight probe"),
         ("bl-dupe", (1, 0, 7), "7 gate boxes repeating a Preflight line are not Preflight boxes")):
     f1 = bounds_case(label, *args)
@@ -3335,6 +3379,64 @@ for v, want, name in (("not shown here", [], "a worksheet verdict 'not shown her
         ok(name)
     else:
         bad(name, got)
+
+# An Outcome the session cannot show ends with `*(needs: <what a person would need>)*`.
+# The quoted Outcome is the same with and without it (Step 3.0's worksheet and the demo
+# compare that quote); stage_outcome_needs() holds each bullet's need, in step.
+_NEEDS_PLAN = ("# P\n\n## Stage 1: a\n\n**Goal:** g\n**Outcomes:** u\n- Works: plain one.\n"
+               "- Works: shown on a phone{note}\n- Works: wrapped, and when b fails\n"
+               "  the user sees c{note2}\n**Risk:** LOW\n")
+_bare = _dm.stage_outcomes(_NEEDS_PLAN.format(note="", note2=""), 1)
+_noted_text = _NEEDS_PLAN.format(note=" *(needs: a phone with the app installed)*",
+                                 note2=" *(needs: a second machine)*")
+_noted = _dm.stage_outcomes(_noted_text, 1)
+if _noted == _bare == ["Works: plain one.", "Works: shown on a phone",
+                       "Works: wrapped, and when b fails the user sees c"]:
+    ok("a needs: note leaves the quoted Outcome unchanged, on one line and on a wrapped bullet")
+else:
+    bad("a needs: note must be stripped from the quoted Outcome (red if the note is kept)",
+        (_bare, _noted))
+_needs = getattr(_dm, "stage_outcome_needs", lambda *a: None)(_noted_text, 1)
+if _needs == [None, "a phone with the app installed", "a second machine"]:
+    ok("stage_outcome_needs holds each bullet's need, in step with stage_outcomes")
+else:
+    bad("stage_outcome_needs", _needs)
+if getattr(_dm, "stage_outcome_needs", lambda *a: None)(_NEEDS_PLAN.format(note="", note2=""), 1) \
+        == [None, None, None]:
+    ok("a stage with no needs: notes has no needs")
+else:
+    bad("stage_outcome_needs with no notes")
+# A needs: note in the middle of a bullet is part of the Outcome, not a note on it.
+_mid = _dm.stage_outcomes("## Stage 1: a\n\n**Outcomes:** u\n- Works: x *(needs: y)* then z.\n", 1)
+if _mid == ["Works: x *(needs: y)* then z."]:
+    ok("only a needs: note that ends the bullet is a note")
+else:
+    bad("a mid-bullet needs: is not a note", _mid)
+# The sheet stage-brief.py pre-fills for a noted Outcome passes the hook as written,
+# however short the need.
+_pre = "## Outcome 1\n> Works: one.\nVerdict: not shown here\nEvidence: needs: a phone\n"
+_np = "## Stage 1: a\n\n**Outcomes:** u\n- Works: one.{note}\n"
+if not _dm.demo_problems(_pre, ["Works: one."], _np.format(note=" *(needs: a phone)*"), 1):
+    ok("a pre-filled 'not shown here' with 'Evidence: needs: <text>' passes the hook "
+       "when the plan's Outcome carries the note")
+else:
+    bad("the pre-filled needs: evidence must pass the hook",
+        _dm.demo_problems(_pre, ["Works: one."], _np.format(note=" *(needs: a phone)*"), 1))
+# Catches: the short form accepted for an Outcome the plan never marked (Stage 2 Tier-2).
+for name, args in (("an Outcome the plan does not mark", (_np.format(note=""), 1)),
+                   ("no plan to read the note from", ())):
+    if any("no evidence" in g for g in _dm.demo_problems(_pre, ["Works: one."], *args)):
+        ok(f"a short needs: evidence is refused for {name}")
+    else:
+        bad(f"a short needs: evidence must be refused for {name}")
+for name, rep in (("an empty needs: is still no evidence",
+                   "## Outcome 1\n> Works: one.\nVerdict: not shown here\nEvidence: needs:\n"),
+                  ("a short needs: under 'holds' is still no evidence",
+                   "## Outcome 1\n> Works: one.\nVerdict: holds\nEvidence: needs: a phone\n")):
+    if any("no evidence" in g for g in _dm.demo_problems(rep, ["Works: one."])):
+        ok(name)
+    else:
+        bad(name, _dm.demo_problems(rep, ["Works: one."]))
 
 # The goal-command skip reads the gate's check lines, never its prose. Catches the Stage 1
 # gate of 2026-11-13-scripts-and-plan-size: a handoff note naming `(judgment)` in passing was

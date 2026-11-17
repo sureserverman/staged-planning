@@ -3,7 +3,7 @@
 Classifies every trunk heading for extraction: what stays in the trunk, and what may move
 to a reference file. The `bytes` column is each section's size in the trunk, measured with
 `python3 scripts/trunk-sections.py --all-levels core/skills/executing-plans/SKILL.md`:
-**56923 B** across **31 headings**, plus 664 B of scaffolding (title, preamble, and rules
+**57787 B** across **31 headings**, plus 664 B of scaffolding (title, preamble, and rules
 sitting outside any heading); the two sum to the file size exactly. The `markers` column
 counts the section's rows in the retention-marker table. Both are re-taken from the current
 tree, and a figure here that disagrees with the command is stale.
@@ -62,7 +62,7 @@ enforces set equality against the trunk's real headings.
 `bytes` is the section's size in the trunk and `markers` its retention-marker count, both
 measured as stated at the top of this file.
 
-### unconditional — 15 sections, 22545 B
+### unconditional — 15 sections, 23409 B
 
 | bytes | markers | section | reason |
 |---|---|---|---|
@@ -70,7 +70,7 @@ measured as stated at the top of this file.
 | 2249 | 3 | The plan is the authorization — dispatch without a confirmation turn | dispatch-bound obligation; binds every dispatch decision |
 | 1883 | 1 | Reference map | the index — without it no reference is reachable |
 | 1412 | 3 | Phase 2 — Preflight | phase header + the check list itself |
-| 3390 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all |
+| 4254 | 3 | Stop conditions | must bind every run, whole — never a pointer; it carries the read-the-owner-decisions-first rule, which decides whether each stop asks at all, and the standing-rule call (`--rule <kind>`) the run makes at four kinds of event |
 | 1165 | 3 | Run to completion — don't stop until you have to | governs every turn of every run |
 | 951 | 2 | What this skill expects | the format contract; every run validates against it |
 | 1329 | 3 | Safety rails | branch/destructive/secrets/shared-infra — every run |

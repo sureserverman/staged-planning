@@ -39,6 +39,7 @@ above. An entry covers only the case it names; execution still stops on anything
 
 - **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [one place: Preflight, close-out, Stage N or Task N.M] (`[each command it covers]`)
 - **OD-2** — [the decision] — ask at execution — applies to: [the case]
+- **OD-3** — [the answer] — owner, YYYY-MM-DD: "[their words]" — applies to: Rule spent-rounds
 
 ## Preflight
 
@@ -52,6 +53,11 @@ above. An entry covers only the case it names; execution still stops on anything
 - stage-scope: [cheap checks in full + expensive suites for touched modules; no clean]
 - plan-scope:  [the single full clean pass, quarantined tests included]
 
+**Dry run** ([date], at [short sha] on `[branch]` — what the planner ran before presenting, per dry-run.md):
+- Preflight: [n of m checks run now, and what came back; not run: which, and why]
+- Commands: [what each Test: and gate command's probe returned; a command that could not start, and what changed]
+- Premises: [Stage N — the assumption — the command — what came back — holds / false / not checkable here]
+
 ---
 
 ## Stage 1: [Name]
@@ -64,6 +70,9 @@ above. An entry covers only the case it names; execution still stops on anything
      for a failure that user can cause through the product's own interface as this plan
      changes it. A stage whose result only a later stage or the project's own tests consume
      omits Outcomes.
+     An Outcome the session cannot show by its user's route, with what exists today,
+     ends with `*(needs: <what a person would need to show it>)*`: the demo sheet records
+     it as `not shown here` and the owner is asked about the merge while the plan is written.
      Keep only Outcomes bullets under the field; indent a wrapped line. The commit hook
      refuses any other line there rather than drop the bullets after it. -->
 **Depends on:** none

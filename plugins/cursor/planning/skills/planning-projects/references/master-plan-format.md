@@ -74,6 +74,7 @@ here; an entry naming a sub-plan's task or stage binds that sub-plan. The sectio
 ## Owner decisions
 
 - **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [Sub-plan N and one place: Preflight, close-out, Stage N or Task N.M] (`[each command it covers]`)
+- **OD-2** — [the answer] — owner, YYYY-MM-DD: "[their words]" — applies to: Rule spent-rounds
 
 ## Sub-plans
 

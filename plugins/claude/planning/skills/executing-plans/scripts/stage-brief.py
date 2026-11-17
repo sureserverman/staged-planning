@@ -232,12 +232,17 @@ def demo(plan, repo, stage, text):
     env = ", ".join(devices()) if kind == "android" else "(see below)"
     lines = [f"# Plan demo — {Path(plan).stem}", "", f"Environment: {env}", "",
              "Fill in Verdict and Evidence under each Outcome. Do not edit the quoted lines.", ""]
-    k = 0
+    k, noted = 0, []
     for s, outcomes in by_stage:
         lines += [f"# Stage {s}", ""]
-        for o in outcomes:
+        for o, need in zip(outcomes, PFA.stage_outcome_needs(text, s)):
             k += 1
-            lines += [f"## Outcome {k}", f"> {o}", "Verdict: ", "Evidence:", "", ""]
+            if need:
+                noted.append((k, o, need))
+                lines += [f"## Outcome {k}", f"> {o}", "Verdict: not shown here",
+                          f"Evidence: needs: {need}", "", ""]
+            else:
+                lines += [f"## Outcome {k}", f"> {o}", "Verdict: ", "Evidence:", "", ""]
     made = write_new(path, "\n".join(lines))
     rel = path.relative_to(repo)
     print(f"# {'wrote' if made else 'exists'}: {path}")
@@ -264,6 +269,11 @@ Plan goal, as its gate checks it: {' / '.join(goals) if goals else '(no (goal) c
         for o in outcomes:
             k += 1
             print(f"    {k}. {o}")
+    if noted:
+        print("The plan says these Outcomes cannot be shown in this session. Their sheet "
+              "sections are filled in already: leave them as written and do not try them.")
+        for k, o, need in noted:
+            print(f"    {k}. {o} — needs: {need}")
     print(f"""Premises not checked yet: {'; '.join(unchecked) if unchecked else 'none'}
 Environment: {env}
 Repo: {repo}

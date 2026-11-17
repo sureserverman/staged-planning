@@ -1,7 +1,7 @@
 # Extraction classification — `../SKILL.md`
 
 What each `../SKILL.md` section keeps in the trunk and where its elaboration lives.
-The trunk is **39821 B** across **35 headings**, of which 787 B is scaffolding
+The trunk is **40309 B** across **35 headings**, of which 787 B is scaffolding
 (frontmatter, title, and the preamble that precedes the first heading). Every `bytes`
 figure is re-taken by
 `python3 scripts/trunk-sections.py --all-levels core/skills/planning-projects/SKILL.md`;
@@ -51,14 +51,14 @@ short by compressing justification, not by relocating procedure.
 `bytes` is the section's current size in the trunk. `elaboration` names the file in
 this directory that holds what the trunk does not, or `—` where the section has none.
 
-### unconditional — 14 sections, 11096 B
+### unconditional — 14 sections, 11368 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
 | 1706 | — | Stage structure | the literal task/stage field template every plan is built from |
 | 1392 | `set-valued-checks.md` | Write a set-valued check as the sweep that proves it | binds every gate check an author writes |
 | 1659 | `task-fields.md` | Task and stage fields | a pointer at task-fields.md plus six load-bearing rules — among them `Depends on`/`Blocks` required and symmetric, intra-stage dependency order with no forward reference, and a consistent `Dispatch`, because a rule that survives only as a noun in a pointer sentence binds nothing |
-| 1156 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
+| 1286 | — | Reference map | the index — without it no reference is reachable; it carries a row for every reference a run of this skill loads (`extraction-classification.md` and `plan-parser.md` are maintenance documents, read by their guards and by other references, not by a run) |
 | 468 | `plan-document-template.md` | Plan Document Format | a pointer at the template fixture |
 | 646 | `task-fields.md` | Phase 3 — The Red-Green Loop | a pointer plus its five obligations: a runnable test, a cycle budget, a test of the promised outcome, a claim that goes red when false, and a preparing task testing that it prepared |
 | 877 | — | Phase -1 — Clarification | the clarification rule in one paragraph: ask only what would change the plan and the repo cannot answer, state an inferred answer as an assumption, batch the questions, mark the smallest option that meets the request Recommended; runs before every plan |
@@ -67,15 +67,15 @@ this directory that holds what the trunk does not, or `—` where the section ha
 | 243 | — | Phase 4 — Stage Gates | phase header |
 | 233 | — | Phase 0 — Research | phase header |
 | 230 | — | Stage sizing | the >7-tasks rule; one sentence, binds every stage |
-| 1096 | — | Phase 2 — Stage Breakdown | phase header plus the write-Outcomes-first rule (the product's user, failures that user can cause, none for a stage only later stages or tests consume), which binds every stage |
+| 1238 | — | Phase 2 — Stage Breakdown | phase header plus the write-Outcomes-first rule (the product's user, failures that user can cause, none for a stage only later stages or tests consume, a `needs:` note on one the session cannot show), which binds every stage |
 | 198 | — | Phase 1 — Preflight | phase header |
 
-### rule+elaboration — 20 sections, 27732 B
+### rule+elaboration — 20 sections, 27948 B
 
 | bytes | elaboration | section | reason |
 |---|---|---|---|
 | 3181 | `format-triage.md` | Phase -0.5 — Format triage | keeps the format table, the size-each-request rule, round-up and record-the-call; the per-format prose and the batch worked example are elaboration |
-| 2304 | `authoring-checklist.md` | Checklist — Before Presenting the Plan | keeps the imperative to run every item, with the items that restate no other trunk section (the validator commands, the records-home save item, the master addendum); the full item list restates rules stated in their own sections |
+| 2520 | `authoring-checklist.md` | Checklist — Before Presenting the Plan | keeps the imperative to run every item, with the items that restate no other trunk section (the validator commands, `--authoring` among them, the records-home save item, the master addendum); the full item list restates rules stated in their own sections |
 | 2668 | `test-scope-tiers.md` | Preflight checklist | keeps the checklist bullets, which ARE the rule, the test-scope declaration among them; the rationale is elaboration |
 | 1671 | `gate-authoring.md` | A plan that adds an obligation names what it removes | keeps Removes/Replaces/Adds-net, the has-it-caught-a-defect test and the name-the-tier rule; the accretion argument and the measured example are elaboration |
 | 1710 | `research-scans.md` | Decisions scan | keeps call `relevant`, contradiction-is-a-planning-bug, record-what-was-consulted and the new-project rule; the sample block and the why are elaboration |

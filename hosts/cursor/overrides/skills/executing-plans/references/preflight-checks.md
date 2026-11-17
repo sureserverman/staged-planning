@@ -92,6 +92,13 @@ distinguishing "the rules moved" from "the executor wanted a cheaper run". Amend
 to make a *failing* gate pass is not recalibration under any reading; that is the gate-
 failure procedure, and it is not this.
 
+**A check that cannot run as written** — a wrong path, a wrong count, a selector that
+collects nothing — may be amended where `python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match --plan <plan> --rule wrong-check` lists an entry: the
+owner answered it in advance, and the annotation cites its `OD-N`. The three conditions for
+any amendment still hold (unexecuted checks only, the cited rule, the was-value kept), and the
+amended command proves the same claim as the old one. A check that ran
+and reported the product wrong is a failure, never this.
+
 **What never authorizes an amendment.** Cost, wall-clock and disk are real constraints and
 arguments for **re-scoping the plan** — never for re-scoping the evidence a written gate
 demands. A suite dropped from a gate command "for disk/time" does not make the gate cheaper;

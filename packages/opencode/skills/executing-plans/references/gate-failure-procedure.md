@@ -13,7 +13,12 @@ checkpoint (default two completed rounds), record strategy-review with defect-fa
 IDs, measured gain/false-rejection/cost or null and repair/redesign alternatives.
 This assessment neither resets spent work nor grants a round. An evidenced owner
 extension remains effective across restart. Continue already-authorized diagnosis;
-surface any proposed new architecture or scope through an owner decision. A no-go
+surface any proposed new architecture or scope through an owner decision. A gate out of
+fix rounds first runs `python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match --plan <plan> --rule spent-rounds`: an entry it lists is the owner's source
+for one `plan-state.py authorize` per gate, quoting the entry (`OD-N, owner: "<their
+words>"`) and holding to its terms (one more round when the cause of what remains is known,
+or stop), with the ceiling set to the rounds spent plus one; the round is cited by its `OD-N`. With none listed, the budget is spent and the
+run stops. A no-go
 qualification is separate from that disposition. Do not infer either from prose.
 The legacy counter procedure describes unowned legacy state only; never apply
 its manual writes to an owned v2 run.

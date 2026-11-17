@@ -33,7 +33,12 @@ procedure. Work the steps in order.
    funded it (`../references/review-scope.md`; `stage-gate.md` § Independent evaluator for
    non-command checks), and its findings were dispositioned there. Close-out dispatches no
    other. Each Outcome that demo graded `not shown here` goes into the close-out report's
-   `ACTION NEEDED:` block, with what a person would need to show it.
+   `ACTION NEEDED:` block, with what a person would need to show it. Before the merge, run
+   `python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match --plan <plan> --rule unshown-outcome`: an entry it lists is the owner's answer to whether the
+   merge waits for those Outcomes (list them and go on to step 10, or hold the merge), acted
+   on and cited by its `OD-N`; the Outcomes are still listed. It decides only whether to hold:
+   step 10's own entry for each command, or the owner's confirmation, is still required.
+   With none listed, the block asks.
 4. **Bump versions for what changed**, as part of close-out rather than a follow-up.
    Breaking/removed → major; new capability → minor; fix/docs/internal → patch. Bump it
    wherever the project records it **and every place that mirrors it** — grep the old version

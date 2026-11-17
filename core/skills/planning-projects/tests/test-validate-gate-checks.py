@@ -1037,6 +1037,88 @@ check(re.search(r"test-command-after-dash: measured \d{4}-\d\d-\d\d over .*?: \d
                 " ".join(vgc.__doc__.split())) is not None,
       "the docstring states the measured trigger rate in the gate-authoring.md form")
 
+print("group — the dry-run record a new plan carries (--authoring)")
+# A new Standard plan records, in its Preflight, what the planner ran before presenting it.
+# Only `--authoring` asks for it, so execution's advisory run on an existing plan sees
+# exactly what 2.3.0 printed.
+DRY = (pathlib.Path(HERE) / "fixtures" / "dry-run-plan.md").read_text()
+_BLOCK = re.compile(r"(?ms)^\*\*Dry run\*\*.*?(?=^---\s*$)")
+_NO_BLOCK = _BLOCK.sub("", DRY)
+check(_NO_BLOCK != DRY, "the fixture's **Dry run** block can be cut out")
+
+
+def _same_run(a, b, extra=()):
+    ra, rb = run(a, extra), run(b, extra)
+    return ra == rb and "DRY-RUN" not in ra[1] and "DRY-RUN" not in rb[1], (ra, rb)
+
+
+# Without the flag nothing new is reported, read or counted: every plan the suite holds
+# prints the same thing with or without a block (red if the finding runs without the flag).
+_held = sorted(SHAPES.glob("*.md")) + sorted(GOAL.glob("*.md")) + fixtures
+_bad = []
+for _f in _held:
+    _t = _f.read_text(encoding="utf-8")
+    _with = (_t.replace("## Preflight\n", "## Preflight\n\n" + _BLOCK.search(DRY).group(0), 1)
+             if "## Preflight\n" in _t else _t + "\n" + _BLOCK.search(DRY).group(0))
+    _ok, _got = _same_run(_t, _with)
+    _ok2, _got2 = _same_run(_t, _BLOCK.sub("", _t))
+    if not (_ok and _ok2):
+        _bad.append((_f.name, _got[0][1][-200:], _got[1][1][-200:]))
+check(not _bad and len(_held) >= 20,
+      f"without --authoring, all {len(_held)} held plans print the same with or without a "
+      f"block, and no DRY-RUN line {_bad[:1]}")
+_ok, _got = _same_run(DRY, _NO_BLOCK)
+check(_ok, f"without --authoring, the fixture with and without its block prints the same {_got[1][1][-300:] if not _ok else ''}")
+
+rc, out = run(DRY, ("--authoring",))
+check(rc == 0 and "DRY-RUN-MISSING" not in out,
+      f"with --authoring, the fixture plan passes ({rc}: {out[-300:]})")
+for name, text, want in (
+        ("no block", _NO_BLOCK, "**Dry run**"),
+        ("no Preflight: line", re.sub(r"(?m)^- Preflight: .*\n", "", DRY), "Preflight:"),
+        ("no Commands: line", re.sub(r"(?m)^- Commands: .*\n  .*\n", "", DRY), "Commands:"),
+        ("no Premises: line", re.sub(r"(?m)^- Premises: .*\n  .*\n", "", DRY), "Premises:"),
+        ("a HIGH-risk stage the block does not name",
+         DRY + "\n## Stage 3: More vendor calls\n\n**Goal:** g\n**Risk:** HIGH — the vendor again\n"
+               "\n### Stage 3 Gate\n- [ ] Every test passes: `python3 tests/run_all.py`\n",
+         "Stage 3"),
+        ("the block outside ## Preflight",
+         _NO_BLOCK.replace("### Stage 2 Gate", _BLOCK.search(DRY).group(0) + "\n### Stage 2 Gate"),
+         "**Dry run**")):
+    check(text != DRY, f"--authoring case '{name}' changes the fixture")
+    rc, out = run(text, ("--authoring",))
+    hits = [l for l in out.splitlines() if "DRY-RUN-MISSING" in l]
+    check(rc != 0 and hits and all(want in h for h in hits[:1]),
+          f"--authoring: {name} → DRY-RUN-MISSING naming {want!r} ({rc}: {hits})")
+rc, out = run(DRY.replace("**Risk:** LOW — display only", "**Risk:** HIGH — display only"),
+              ("--authoring",))
+check(rc != 0 and any("Stage 2" in l for l in out.splitlines() if "DRY-RUN-MISSING" in l)
+      and not any("Stage 1" in l for l in out.splitlines() if "DRY-RUN-MISSING" in l),
+      "--authoring: only the HIGH-risk stage the Premises line leaves out is named")
+# Catches: a Preflight heading with trailing text read as no Preflight, so the plan is
+# not asked at all (Stage 2 Tier-2). plan_parser.py's PREFLIGHT_RE accepts these forms.
+for heading in ("## Preflight (verified 2026-06-13)", "## Preflight — PASSED 2026-08-08",
+                "## Preflight record"):
+    rc, out = run(_NO_BLOCK.replace("## Preflight\n", heading + "\n", 1), ("--authoring",))
+    check(rc != 0 and "DRY-RUN-MISSING" in out,
+          f"--authoring: '{heading}' is a Preflight section, asked for its block ({rc})")
+    rc, out = run(DRY.replace("## Preflight\n", heading + "\n", 1), ("--authoring",))
+    check(rc == 0 and "DRY-RUN-MISSING" not in out,
+          f"--authoring: '{heading}' with its block passes ({rc}: {out[-200:]})")
+rc, out = run(_NO_BLOCK.replace("\n", "\r\n"), ("--authoring",))
+check(rc != 0 and "DRY-RUN-MISSING" in out, f"--authoring: a CRLF plan with no block is asked ({rc})")
+_LIGHT = ("# Light Plan: x\nDate: 2026-11-17\n\n## Stage 1: x\n\n**Goal:** g\n\n"
+          "### Task 1.1: t\n- **Status:** [ ]\n- **Test:** `python3 t.py` — works\n\n"
+          "### Stage 1 Gate\n- [ ] **(goal)** Every test passes: `python3 tests/run_all.py`\n")
+rc, out = run(_LIGHT, ("--authoring",))
+check(rc == 0 and "DRY-RUN" not in out, f"--authoring: a Light plan is not asked ({rc}: {out[-200:]})")
+r = subprocess.run([sys.executable, SCRIPT, "--authoring", str(GOAL / "master-missing-plan.md")],
+                   capture_output=True, text=True)
+check(r.returncode == 0 and "DRY-RUN" not in r.stdout + r.stderr,
+      f"--authoring: a master plan is not asked ({r.returncode}: {(r.stdout + r.stderr)[-200:]})")
+check("--authoring" in " ".join(vgc.__doc__.split()) and "--authoring" in open(SCRIPT).read().split("def main")[1].split("add_argument")[0],
+      "the docstring's usage and the parser's example name --authoring")
+
 print()
 if FAILURES:
     print(f"FAILED — {len(FAILURES)} check(s):")

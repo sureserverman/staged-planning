@@ -139,6 +139,7 @@ it triggers nothing. The section holds only one-line entries (or the `none` line
 ## Owner decisions
 
 - **OD-1** — [the decision, in one line] — owner, YYYY-MM-DD: "[their words]" — applies to: [one place: Preflight, close-out, Stage N or Task N.M] (`[each command it covers]`)
+- **OD-2** — [the answer] — owner, YYYY-MM-DD: "[their words]" — applies to: Rule spent-rounds
 
 ## Stage 1: [Name]
 
@@ -148,7 +149,10 @@ it triggers nothing. The section holds only one-line entries (or the `none` line
 <!-- Outcomes name the person or program that uses the product. Write a failure line only
      for a failure that user can cause through the product's own interface as this plan
      changes it. A stage whose result only a later stage or the project's own tests consume
-     omits Outcomes. -->
+     omits Outcomes.
+     An Outcome the session cannot show by its user's route, with what exists today,
+     ends with `*(needs: <what a person would need to show it>)*`: the demo sheet records
+     it as `not shown here` and the owner is asked about the merge while the plan is written. -->
 
 ### Task 1.1: [description]
 - **Status:** [ ]

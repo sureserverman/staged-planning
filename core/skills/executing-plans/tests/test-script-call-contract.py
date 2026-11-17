@@ -43,6 +43,9 @@ CHECK_RULE = re.compile(
     r"mid-run answer into `## Owner decisions`, run\s+"
     r"`python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision\.py check <plan>`"
     r"\s+and fix the entry until it exits 0")
+# The standing-rule call: § Stop conditions shows it literally, `<kind>` typed by the run.
+RULE_CALL = re.compile(re.escape(PREFIX) + r"owner-decision\.py match --plan <plan> --rule <kind>")
+KINDS_RE = re.compile(r"(?m)^KINDS = \(([^)]*)\)")
 
 passed = failed = 0
 
@@ -168,6 +171,28 @@ def main():
             (ok if good else bad)(f"{label}: {msg}")
         good, msg = agent_call(build)
         (ok if good else bad)(f"{build.relative_to(REPO)}: {msg}")
+        # Catches a trunk that names the standing rules in prose and leaves the run to
+        # guess the call, or shows one the script refuses (each kind filled in turn).
+        stops = " ".join(text.split("## Stop conditions", 1)[-1].split("\n## ", 1)[0].split())
+        rule = RULE_CALL.search(stops)
+        script = build / "skills/executing-plans/scripts/owner-decision.py"
+        km = KINDS_RE.search(script.read_text()) if script.is_file() else None
+        kinds = re.findall(r'"([^"]+)"', km.group(1)) if km else []
+        if not rule:
+            bad(f"{label}: § Stop conditions shows no `owner-decision.py match --plan <plan> --rule <kind>` call")
+        elif len(kinds) != 4:
+            bad(f"{label}: the owner-decision.py beside it declares {len(kinds)} kinds", kinds)
+        else:
+            refused = []
+            for kind in kinds:
+                words = UE.call_of(rule.group(0).replace("<kind>", kind), "skills/executing-plans/scripts/owner-decision.py")[1]
+                r = UE.wrapped("parse", script, words)
+                if r.returncode != 0 or not r.stdout.startswith("PARSED "):
+                    refused.append(f"{kind}: {r.stderr.strip()[-200:]}")
+            if refused:
+                bad(f"{label}: owner-decision.py refuses the trunk's --rule call", "\n".join(refused))
+            else:
+                ok(f"{label}: § Stop conditions shows the --rule call, accepted for each of the four kinds")
         if CHECK_RULE.search(" ".join(text.split())):
             ok(f"{label}: tells the run to check an owner decision it writes")
         else:

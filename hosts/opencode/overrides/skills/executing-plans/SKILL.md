@@ -801,6 +801,17 @@ one: it applies only when every qualifier of its `applies to:` holds. One naming
 task, stage or command, or one the plan does not have, does not apply; never reinterpret it
 to fit. `ask at execution` is no answer. A case no entry names stops and asks.
 
+**Four kinds of event take a standing answer instead**, written once for the whole plan
+(`Rule <kind>`): an Outcome the demo graded `not shown here`, before the merge
+(`unshown-outcome`); a defect outside the plan's tasks (`outside-defect`); a gate out of fix
+rounds (`spent-rounds`); a check that cannot run as written (`wrong-check`). At each, run
+`python3 <planning-plugin>/skills/executing-plans/scripts/owner-decision.py match --plan <plan> --rule <kind>`;
+an entry it lists is the owner's answer: act on it, cite its `OD-N`, and do not ask. It
+never confirms a command: the merge still needs its own entry or the owner's yes. Write an
+owner's mid-run answer to one of the four as a `Rule` entry, editing the kind's existing
+entry rather than adding a second, in the master's section naming the sub-plan it was asked
+in, unless the owner said it is for all.
+
 **Never guess through a stop condition.** Ask — with OpenCode's `question` tool where this
 session allows it (`opencode run` denies it), else as a numbered prose question in the
 `ACTION NEEDED:` form, after recording the stop with `plan-state.py set-blocker`; then end

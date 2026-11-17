@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: ff2ef9cf8e12e6787c68f55d29b0422d6ac1cd7ce50d95ee71b0c7988f0d6c69
+  base_sha256: 3ee270a10c20a28efcae749a38c87685a59c29a8913ce48817c900c08074a909
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -17,17 +17,17 @@ skills/applying-design-handoff/references/handoff-pack-format.md:
 skills/architecting-projects/SKILL.md:
   base_sha256: ed3ebb1b9a9b8f98802f1c5722aa1b45c0d46aafe2fe1329bbce35fcb1c3cbb5
 skills/executing-plans/SKILL.md:
-  base_sha256: f3e11cfe0ce4071cc4216f02174f51441bf258e314e785b6dc1bbe394dd8c086
+  base_sha256: 913457cf22a80254829ae25ce2411fc14ee6f91086881e44d56be76403322d55
 skills/executing-plans/references/close-out.md:
-  base_sha256: d616defd506d422db97487b1a587f6d3973b28afac43164a6a81ac4cdc1b868a
+  base_sha256: b95914aa2cf0f08c40cee18853c94f642ef0cc19dca54b81c43f027bcbd3de0b
 skills/executing-plans/references/dispatch-fidelity.md:
   base_sha256: b514f7aff3375cb207063cd249e10e46454d484c74f4f6ad2ca364438ff8dd11
 skills/executing-plans/references/dispatch.md:
   base_sha256: e14fff9a65b17652f1c8f52fe3493249c072578f6480bfd82fe422445420e0fd
 skills/executing-plans/references/extraction-classification.md:
-  base_sha256: a1bc08061e21576c5426f612c592a759ab72133ece5e3d1432d13094ae7de97d
+  base_sha256: 7d090ab3ee7dea78753ab6eebddbdc3b68063d433bf4fb1101664bd21f0970ed
 skills/executing-plans/references/gate-failure-procedure.md:
-  base_sha256: 15cb95e59d569bcc18340615d53f1ac48c37daeafc64fd0ecb2e3e631d34add6
+  base_sha256: 40c94d4e11fb51e0ad84dd0a54eb5d8f188809cf15b6f44bd881fdb2eab12ded
 skills/executing-plans/references/integration.md:
   base_sha256: 0d8e3069f8252fe215a6dcfd1a9a578c494d6e8d83588d0e33b915416d188cb5
 skills/executing-plans/references/master-plans.md:
@@ -35,7 +35,7 @@ skills/executing-plans/references/master-plans.md:
 skills/executing-plans/references/plan-continue-hook.md:
   base_sha256: 0541f7d8e1817bd4bb00418fc1cdd347698a753a0063a6322e6a670dafc253f5
 skills/executing-plans/references/preflight-checks.md:
-  base_sha256: dce2921011f25d9ec1436da43df755d0a2a23550995ef1c7411627594ab7f7ed
+  base_sha256: cfd1008a97183389c84d3bde580196164260a3d5e95340c3c37b731c300dfcab
 skills/executing-plans/references/progress-state-file.md:
   base_sha256: d50973840bbf7813e22b8e7fecfd65d33dea23083ab0c17dd2aeb758fc8d99b3
 skills/executing-plans/references/session-handoff.md:
@@ -43,7 +43,7 @@ skills/executing-plans/references/session-handoff.md:
 skills/executing-plans/references/stack-routing.md:
   base_sha256: 0916fcc1be50cf86fde0dbe717266ab4978b8a4c2fed8675c10bda4b43f93962
 skills/executing-plans/references/stage-gate.md:
-  base_sha256: 160d1b8ae62e8472afc2106925cecffe38a1bf9a64a4f8b6eeb72131e85b8633
+  base_sha256: 38949adcba5bec66d01bf16e90a7c2b970397c8f2a456a65ca991320f395c8a3
 skills/executing-plans/references/task-execution.md:
   base_sha256: cffa3caf1c533bcf88b02dded5f7b0e7d8638a7fa326dab3e2802107efdf1dbd
 skills/executing-plans/scripts/context-usage.py:

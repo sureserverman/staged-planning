@@ -13,8 +13,8 @@ that had not happened, or burn turns on one (10):
      N task commits in the range behind them — the bulk regex flip. The boxes
      under a `### Stage N Gate` heading are not counted once a `Stage N green`
      commit is in the range: ticking a gate with its commit is the procedure.
-     Nor are up to N Preflight boxes once a probe artefact backs them (finding 3's
-     evidence) in that commit or earlier; more than N is a bulk flip whatever is committed.
+     Nor are the Preflight boxes, however many, once a probe artefact backs them
+     (finding 3's evidence) in that commit or earlier.
   2. a ticked box whose own text carries what voids it. Two tiers: a STRONG
      phrase voids alone and is `blocking` (no device / soft residual / exit 2 /
      exit 78 / stubbed / mocked / waived / Not done: / shouted BLOCKED); a WEAK
@@ -440,9 +440,22 @@ def stage_fields(text, stage):
     return out
 
 
+NEEDS_NOTE = re.compile(r"\s*\*\(needs:\s*(.*?)\s*\)\*\s*$", re.S | re.I)
+
+
 def stage_outcomes(text, stage):
-    """The stage's Outcomes bullets, in plan order, notes stripped; [] if it has none."""
-    return stage_fields(text, stage).get("outcomes", {}).get("items", [])
+    """The stage's Outcomes bullets, in plan order, notes stripped; [] if it has none.
+    A closing `*(needs: …)*` is a note too: the quoted Outcome is the same with or
+    without it."""
+    items = stage_fields(text, stage).get("outcomes", {}).get("items", [])
+    return [NEEDS_NOTE.sub("", o) for o in items]
+
+
+def stage_outcome_needs(text, stage):
+    """In step with stage_outcomes(): each Outcome's `*(needs: <text>)*` — what a person
+    would need to show it, when the session cannot — or None."""
+    items = stage_fields(text, stage).get("outcomes", {}).get("items", [])
+    return [(m.group(1) or None) if (m := NEEDS_NOTE.search(o)) else None for o in items]
 
 
 def outcomes_stray(text, stage):
@@ -630,7 +643,9 @@ def demo_problems(report, outcomes, plan_text=None, stage=None):
 
     One `## Outcome K` per plan Outcome (numbered across the plan), its `> ` quote equal
     to the plan's text (whitespace aside), a first `Verdict:` of `holds` or `not shown
-    here`, and non-empty `Evidence:`. The
+    here`, and non-empty `Evidence:` (for `not shown here` on an Outcome whose plan bullet
+    ends with a `*(needs: …)*` note, the `needs: <text>` stage-brief.py pre-fills is
+    enough; without `plan_text` no Outcome has a note). The
     quote is what stops a brief or a report from paraphrasing an Outcome away: a
     written brief drops Outcomes and lets a test suite stand in for the demo. A report
     recording a skipped evaluator is also held to demo_skip_problems, against the plan's
@@ -639,6 +654,8 @@ def demo_problems(report, outcomes, plan_text=None, stage=None):
     if DEMO_SKIP_ANY.search(report or ""):
         probs += demo_skip_problems(report, outcomes, plan_text, stage)
     secs = _sections(report or "", "Outcome")
+    needs = ([n for s in stage_numbers(plan_text) for n in stage_outcome_needs(plan_text, s)]
+             if plan_text else [])
     for k, want in enumerate(outcomes, 1):
         body = secs.get(k)
         if body is None:
@@ -651,7 +668,10 @@ def demo_problems(report, outcomes, plan_text=None, stage=None):
         if not (HOLDS.match(verdict) or NOT_SHOWN.match(verdict)):
             probs.append(f"Outcome {k}: verdict is {verdict.lower() or 'empty'!r}, not 'holds' "
                          "or 'not shown here'")
-        if len(_label(body, "Evidence")) < 20:
+        evidence = _label(body, "Evidence")
+        noted = k <= len(needs) and needs[k - 1]
+        if len(evidence) < 20 and not (noted and NOT_SHOWN.match(verdict)
+                                       and re.match(r"needs:\s*\S", evidence, re.I)):
             probs.append(f"Outcome {k}: no evidence — the commands run and what was seen")
     return probs
 
@@ -1961,7 +1981,7 @@ def preflight_lines(text):
     return out
 
 
-def unbacked(entries, text, green, probed=False, cap=0):
+def unbacked(entries, text, green, probed=False):
     """Flips finding 1 counts: all but the gate boxes of a stage whose `Stage N green`
     commit is in the range. A gate's boxes are ticked together with that commit —
     that is the procedure, not a bulk flip — and counting them would make every
@@ -1969,18 +1989,17 @@ def unbacked(entries, text, green, probed=False, cap=0):
     7 > 6), and then never again once task commits reach the threshold.
 
     Likewise the Preflight boxes once a probe artefact backs them (`probed`: the same
-    evidence that clears finding 3) — but only up to `cap` of them. Six Preflight boxes
-    and three task ticks would make an honest first gate 9 > 6; a probe file is
-    blind to which box it backs, so it may not clear more Preflight boxes than the
-    threshold would tolerate with no evidence at all. Membership is by line, never by
-    text: a gate box repeating a Preflight line verbatim is not a Preflight box."""
+    evidence that clears finding 3), however many there are. Six Preflight boxes and
+    three task ticks would make an honest first gate 9 > 6, and a cap on the boxes a
+    probe clears only moved that alarm to plans with seven or nine of them, without
+    catching a bulk tick. Membership is by
+    line, never by text: a gate box repeating a Preflight line verbatim is not a
+    Preflight box."""
     gates = gate_box_stages(text)
     out = [e for e in entries if gates.get(e[2]) not in green]
     if probed:
         pre = preflight_lines(text)
-        pf = [e for e in out if e[2] in pre]
-        if len(pf) <= cap:
-            out = [e for e in out if e[2] not in pre]
+        out = [e for e in out if e[2] not in pre]
     return out
 
 
@@ -2050,7 +2069,7 @@ def history_findings(repo, rel, path, text, since, threshold):
             continue
         probed = any(PROBE_PATH.search(p) for p in touched)
         probed_by = first_probe is not None and position.get(sha, -1) >= first_probe
-        counted = unbacked(entries, file_at(repo, sha, rel) or "", green, probed_by, threshold)
+        counted = unbacked(entries, file_at(repo, sha, rel) or "", green, probed_by)
         total_flips += len(counted)
         short = sha[:8]
         msg = gout(repo, "log", "-1", "--format=%s%n%b", sha) or ""
@@ -2224,7 +2243,7 @@ def baseline_findings(root, path, text, base, threshold):
     task_commits = max(task_commits, len(task_numbers(task_ids) & proven_tasks(root, path)))
 
     out, where = [], "baseline..HEAD"
-    counted = unbacked(flips, text, green_stages(subjects), probed, threshold)
+    counted = unbacked(flips, text, green_stages(subjects), probed)
     if len(counted) > threshold and task_commits < threshold:
         out.append({
             "finding": 1, "severity": "blocking",

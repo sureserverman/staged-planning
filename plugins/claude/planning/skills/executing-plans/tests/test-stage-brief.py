@@ -67,6 +67,22 @@ def run(*args, repo):
                           capture_output=True, text=True)
 
 
+def fill_empty(report, verdict="holds", evidence="$ probe.sh share ... -> readable, 0 GPS tags"):
+    """fill(), touching only the sections whose Verdict is still empty."""
+    out, skip = [], False
+    for line in report.splitlines():
+        if line.startswith("## Outcome"):
+            skip = False
+        if line.startswith("Verdict:"):
+            skip = bool(line[len("Verdict:"):].strip())
+            if not skip:
+                line = f"Verdict: {verdict}"
+        out.append(line)
+        if line.startswith("Evidence:") and not skip:
+            out.append(evidence)
+    return "\n".join(out) + "\n"
+
+
 def fill(report, verdict="holds", evidence="$ probe.sh share ... -> readable, 0 GPS tags"):
     out = []
     for line in report.splitlines():
@@ -409,6 +425,40 @@ expect(blocking and not any("not shown here" in s.lower() for s in blocking)
 expect(re.search(r"not shown here.{0,200}what a person would need", " ".join(r.stdout.split()), re.I),
        "'not shown here' asks for what a person would need to show it", r.stdout[-900:])
 expect("do not substitute a test" in r.stdout, "the brief still forbids a test standing in for the demo")
+
+
+# ---- An Outcome the session cannot show says what it needs ----------------------
+print("\nneeds: notes")
+NOTED = THREE.replace("- Works: TWO-A holds.",
+                      "- Works: TWO-A holds. *(needs: a phone with the share app installed)*")
+noted = tmp / "2026-10-05-noted-plan.md"
+noted.write_text(NOTED)
+nrepo = tmp / "noted-repo"
+nrepo.mkdir()
+ndir = nrepo / "proof" / noted.stem / "stage-3"
+nevery = [o for s in (1, 2, 3) for o in PFA.stage_outcomes(NOTED, s)]
+expect(nevery == every, "the noted plan quotes the same Outcomes as the plain one", nevery)
+r = run("demo", "--plan", str(noted), "--stage", "3", repo=nrepo)
+nsheet = (ndir / "demo.md").read_text() if (ndir / "demo.md").is_file() else ""
+secs = PFA._sections(nsheet, "Outcome")
+two = secs.get(3, "")
+# Catches: the note dropped with the other notes, so the demo tries what it cannot show.
+expect("> Works: TWO-A holds." in two and PFA._label(two, "Verdict") == "not shown here"
+       and PFA._label(two, "Evidence") == "needs: a phone with the share app installed",
+       "the noted Outcome is pre-filled: not shown here, with its need as evidence", two)
+expect(all(PFA._label(secs.get(k, ""), "Verdict") == "" for k in (1, 2, 4)),
+       "the plain Outcomes' verdicts are left empty", nsheet[:900])
+expect(not PFA.demo_problems(fill_empty(nsheet), nevery, NOTED, 3),
+       "the sheet, its plain Outcomes filled as told, passes the hook's check, read with the plan",
+       PFA.demo_problems(fill_empty(nsheet), nevery, NOTED, 3))
+flat = " ".join(r.stdout.split())
+m = re.search(r"leave[^.]*as written[^.]*\.(.*?)(?:Premises not checked|$)", flat, re.I)
+expect(m and "TWO-A holds." in m.group(1) and "needs: a phone with the share app installed" in m.group(1)
+       and "ONE-A" not in m.group(1),
+       "the brief lists the noted Outcome under a line telling the evaluator to leave it",
+       r.stdout[-1500:])
+r = run("demo", "--plan", str(three), "--stage", "3", repo=tmp / "plain-repo")
+expect("as written" not in r.stdout, "a plan with no needs: note gets no leave-it line", r.stdout[-600:])
 
 subprocess.run(["rm", "-rf", str(tmp)])
 print(f"\npassed {passed}, failed {failed}")

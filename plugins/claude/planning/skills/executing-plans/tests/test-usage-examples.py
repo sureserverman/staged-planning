@@ -143,6 +143,10 @@ AFTER_PARSE = [
     ("review-ledger-check.py", ["--repo", "r"], "--plan and --stage are required"),
     ("plan-flip-audit.py", ["p", "--vocab-replace"], "requires --vocab-file"),
     ("plan-flip-audit.py", ["p", "--flip-threshold", "0"], "must be >= 1"),
+    ("owner-decision.py", ["match", "--plan", "p", "--rule", "spent-rounds", "--command", "c"],
+     "a standing rule never confirms a command"),
+    ("owner-decision.py", ["match", "--plan", "p", "--rule", "spent-rounds", "--require-command"],
+     "a standing rule never confirms a command"),
 ]
 
 

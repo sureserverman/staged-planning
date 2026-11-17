@@ -430,6 +430,88 @@ try:
                                   "1" if plan_given else None)
         ok = (not probs) if not want else any(want in p for p in probs)
         check(ok, f"goal skip: {name}", probs)
+
+    # ---- a probed Preflight of any length: finding 1, as core reads it (no cap)
+    def long_plan(n_pre, n_tasks):
+        lines = ["# Plan", "", "## Preflight", ""]
+        lines += [f"- [ ] Check {i}: `tool{i} --version` exits 0" for i in range(n_pre)]
+        lines += ["", "## Stage 1", ""]
+        for i in range(1, n_tasks + 1):
+            lines += [f"### Task 1.{i}: thing {i}", "- **Status:** [ ]", ""]
+        return "\n".join(lines) + "\n"
+
+    def f1_of(mode, n_pre, n_tasks, task_commits, probed):
+        proj = newrepo(f"long-{mode}")
+        with open(os.path.join(proj, "README"), "w") as fh:
+            fh.write("x\n")
+        commit(proj, "chore: initial commit")
+        if mode == "snapshot":
+            plan = os.path.join(newdir("long-plans"), "plan.md")
+            with open(plan, "w") as fh:
+                fh.write(long_plan(n_pre, n_tasks))
+            subprocess.run([sys.executable, AUDIT, plan, "--snapshot", "--repo", proj],
+                           capture_output=True, text=True, cwd=tmp, env=dict(env0))
+        else:
+            plan = os.path.join(proj, "p.md")
+            with open(plan, "w") as fh:
+                fh.write(long_plan(n_pre, n_tasks))
+            commit(proj, "authored")
+            base = git(proj, "rev-parse", "HEAD").strip()
+        for i in range(1, task_commits + 1):
+            with open(os.path.join(proj, f"f{i}.txt"), "w") as fh:
+                fh.write(f"{i}\n")
+            commit(proj, f"Stage 1 Task 1.{i}: work")
+        if probed:
+            os.makedirs(os.path.join(proj, "evidence"))
+            with open(os.path.join(proj, "evidence", "preflight-probe.txt"), "w") as fh:
+                fh.write("tool0 1.0\n")
+            commit(proj, "Preflight probe output")
+        with open(plan) as fh:
+            text = fh.read()
+        with open(plan, "w") as fh:
+            fh.write(text.replace("- [ ]", "- [x]").replace("**Status:** [ ]", "**Status:** [x]"))
+        if mode == "snapshot":
+            r, doc = audit(plan, proj)
+        else:
+            commit(proj, "progress")
+            r = subprocess.run([sys.executable, AUDIT, plan, "--since", base, "--json"],
+                               capture_output=True, text=True, cwd=proj, env=dict(env0))
+            doc = json.loads(r.stdout) if r.stdout.strip().startswith("{") else None
+        return [f for f in (doc or {}).get("findings", []) if f.get("finding") == 1] if doc else None
+
+    for mode in ("snapshot", "history"):
+        for args, want, why in (
+                ((9, 4, 4, True), False, "9 Preflight + 4 task ticks over a probe and 4 task commits: no finding 1"),
+                ((9, 4, 4, False), True, "the same ticks with no probe: finding 1"),
+                ((0, 7, 2, True), True, "7 task ticks behind 2 task commits: finding 1, probe or not")):
+            got = f1_of(mode, *args)
+            check(got is not None and bool(got) == want, f"probed Preflight, {mode}: {why}", got)
+
+    # ---- needs: notes: the fork reads an Outcome's need exactly as core does
+    cspec = importlib.util.spec_from_file_location(
+        "core_pfa", os.path.join(REPO, "core", REL, "plan-flip-audit.py"))
+    core = importlib.util.module_from_spec(cspec)
+    cspec.loader.exec_module(core)
+    nplan = ("# Plan\n\n## Stage 1: calc\n\n**Outcomes:** the caller\n- Works: plain.\n"
+             "- Works: on a phone *(needs: a phone with the app)*\n- Works: wrapped\n"
+             "  line *(needs: a second machine)*\n")
+    fork_needs = getattr(pfa, "stage_outcome_needs", lambda *a: "missing")(nplan, 1)
+    check(fork_needs == core.stage_outcome_needs(nplan, 1)
+          == [None, "a phone with the app", "a second machine"]
+          and pfa.stage_outcomes(nplan, 1) == core.stage_outcomes(nplan, 1)
+          == ["Works: plain.", "Works: on a phone", "Works: wrapped line"],
+          "needs: notes: the fork returns the same needs and quoted Outcomes as core",
+          (fork_needs, pfa.stage_outcomes(nplan, 1)))
+    pre = "## Outcome 1\n> Works: one.\nVerdict: not shown here\nEvidence: needs: a phone\n"
+    noted = "## Stage 1: a\n\n**Outcomes:** u\n- Works: one.{n}\n"
+    yes, no = noted.format(n=" *(needs: a phone)*"), noted.format(n="")
+    check(pfa.demo_problems(pre, ["Works: one."], yes, 1) == []
+          == core.demo_problems(pre, ["Works: one."], yes, 1)
+          and pfa.demo_problems(pre, ["Works: one."], no, 1)
+          and core.demo_problems(pre, ["Works: one."], no, 1),
+          "needs: notes: the fork's hook accepts the pre-filled needs: evidence only for a "
+          "noted Outcome, as core does",
+          (pfa.demo_problems(pre, ["Works: one."], yes, 1), pfa.demo_problems(pre, ["Works: one."], no, 1)))
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

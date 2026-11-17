@@ -449,6 +449,163 @@ def part9_no_owner_decision_settles_without_match():
                       "match" in u, u[:240])
 
 
+STANDING = "### Standing rules: asked in every plan"
+SCRIPT = os.path.join(SKILLS, "executing-plans", "scripts", "owner-decision.py")
+# The `stays a stop` rows a standing rule answers in advance, by their opening words.
+ANSWERED_ROWS = {"Preflight fails": "wrong-check", "A test cannot be run": "wrong-check",
+                 "A stage gate's remediation budget is exhausted": "spent-rounds",
+                 "An Outcome cannot be met as written": "unshown-outcome"}
+
+
+def script_kinds():
+    """KINDS as owner-decision.py declares it, read from the file (no import side effects)."""
+    m = re.search(r"(?m)^KINDS = \(([^)]*)\)", read(SCRIPT))
+    return tuple(re.findall(r'"([^"]+)"', m.group(1))) if m else ()
+
+
+def fill(line, master=False):
+    """A template's example entry with its placeholders filled, as an author would."""
+    line = line.replace("YYYY-MM-DD", "2026-01-01").replace("[their words]", "yes")
+    decision, _, applies = line.partition("applies to:")
+
+    def place(m):
+        inner = m.group(1)
+        if "command" in inner:
+            return "true"
+        return "Sub-plan 1 Stage 1" if master else "Stage 1"
+    return re.sub(r"\[[^\]]*\]", "x", decision) + "applies to:" + re.sub(r"\[([^\]]*)\]", place, applies)
+
+
+def part10_standing_rules():
+    """Catches the stop the 2026-11-17 measurement counted most: a question the owner
+    had answered once, asked again at the next gate or sub-plan because an entry named one
+    position. The catalog asks one standing question per kind the script reads, every
+    template shows the form, and both checklists make `check`'s notes the evidence."""
+    import subprocess
+    import tempfile
+    kinds = script_kinds()
+    check("10 owner-decision.py declares four kinds", len(kinds) == 4, f"{kinds}")
+    text = read(os.path.join(REF, "owner-decisions.md"))
+    body = section(text, STANDING)
+    check(f"10 owner-decisions.md carries `{STANDING}`", body.strip() != "", "missing")
+    rows = []
+    for line in body.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if line.startswith("|") and len(cells) >= 5 and not set(cells[0]) <= {"-"}:
+            rows.append(cells)
+    rows = rows[1:]
+    named = tuple(plain(r[0]) for r in rows)
+    check("10 the standing table names exactly the script's KINDS, in order", named == kinds,
+          f"table {named}, script {kinds}")
+    for r in rows:
+        check(f"10 standing row `{plain(r[0])}` has an event, a question and two options",
+              all(r[1:5]) and r[2].endswith("?"), r)
+    m = re.search(r"(?ms)^## The record\n(.*?)^## How to ask", text)
+    record = " ".join((m.group(1) if m else "").split())
+    for needle in ("`Rule <kind>`", "whole plan", "every sub-plan", "never confirms a command"):
+        check(f"10 owner-decisions.md § The record states {needle!r}", needle in record, "missing")
+    how = " ".join(section(text, "## How to ask").split())
+    check("10 § How to ask offers the most recent plan's answer first for a standing question",
+          "most recent plan" in how and "standing" in how, "missing")
+    stops = {plain(r[0]): r for r in [[c.strip() for c in l.strip().strip("|").split("|")]
+             for l in section(text, "### Where the executor stops: its Safety rails and Stop conditions").splitlines()
+             if l.startswith("|")]}
+    for lead, kind in ANSWERED_ROWS.items():
+        row = next((r for k, r in stops.items() if k.startswith(lead)), None)
+        check(f"10 the `{lead}` row points at the standing table and `Rule {kind}`",
+              row is not None and "Standing rules" in row[-1] and f"Rule {kind}" in row[-1], row)
+    for name, master in (("plan-document-template.md", False), ("light-plan-format.md", False),
+                         ("master-plan-format.md", True)):
+        sec = section(read(os.path.join(REF, name)), "## Owner decisions")
+        lines = [l for l in sec.split("```")[0].splitlines() if l.startswith("- **OD-")]
+        check(f"10 {name}: the example section carries one `Rule` entry",
+              sum("applies to: Rule " in l for l in lines) == 1, lines)
+        filled = [fill(l, master) for l in lines]
+        with tempfile.TemporaryDirectory() as d:
+            if master:
+                body_lines = ["# Master Plan: t", "", "## Owner decisions", "", *filled, "",
+                              "## Sub-plans", "", "### Sub-plan 1: a", "- **Status:** [ ]",
+                              "- **Plan:** ./2026-01-01-t-sub-01-a-plan.md", ""]
+                path = os.path.join(d, "2026-01-01-t-master-plan.md")
+            else:
+                body_lines = ["# Project Plan: t", "", "## Owner decisions", "", *filled, "",
+                              "## Stage 1: s", "", "### Task 1.1: t", "- **Status:** [ ]", ""]
+                path = os.path.join(d, "t-plan.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(body_lines))
+            r = subprocess.run([sys.executable, SCRIPT, "check", path], capture_output=True,
+                               text=True, stdin=subprocess.DEVNULL, cwd=d)
+        check(f"10 {name}: the example section, placeholders filled, passes `{CHECK}`",
+              r.returncode == 0, (r.stdout + r.stderr)[-400:])
+    ck = read(os.path.join(REF, "authoring-checklist.md"))
+    for name in ("## Checklist — Standard plans", "## Checklist — Light plans"):
+        items = [l for l in section(ck, name).splitlines() if l.startswith("- [ ] ") and "## Owner decisions" in l]
+        check(f"10 {name}: the owner-decisions item names the standing questions and `check`'s notes",
+              len(items) == 1 and "four standing questions" in items[0] and "note: no entry for Rule" in items[0],
+              items[:1])
+
+
+RULE_SITES = {"references/close-out.md": "unshown-outcome", "references/stage-gate.md": "outside-defect",
+              "references/gate-failure-procedure.md": "spent-rounds",
+              "references/preflight-checks.md": "wrong-check"}
+RULE_MATCH = "owner-decision.py match --plan <plan> --rule"
+
+
+def built(skill, rel_path):
+    """`rel_path` under `skill` in every host build, from the source tree; else the copy
+    beside this suite (a built copy run on its own)."""
+    if ROOT is None:
+        return copies(skill, rel_path)
+    builds = ["plugins/claude/planning", "plugins/codex/planning", "plugins/cursor/planning", "packages/opencode"]
+    return [os.path.join(ROOT, b, "skills", skill, rel_path) for b in builds]
+
+
+def part11_the_run_reads_standing_answers():
+    """Catches a host build whose trunk or reference still asks at one of the four events
+    the owner answered in advance: a host override not brought in line with core, or a
+    reference that names the event but not the call that reads the answer."""
+    for path in built("executing-plans", "SKILL.md"):
+        stops = " ".join(section(read(path), "## Stop conditions").split())
+        check(f"11 {rel(path)} § Stop conditions shows the `{RULE_MATCH} <kind>` call",
+              f"{RULE_MATCH} <kind>" in stops, "missing")
+        for kind in script_kinds():
+            check(f"11 {rel(path)} § Stop conditions names `{kind}`", f"`{kind}`" in stops, "missing")
+        check(f"11 {rel(path)} § Stop conditions writes a mid-run answer as a `Rule` entry, in the master's section",
+              "mid-run answer to one of the four as a `Rule` entry" in stops and "master's section" in stops, "missing")
+        # Catches the Stage 1 Tier-2 findings: a host trunk that drops the clauses
+        # bounding a standing answer, or one whose mid-run answer widens to every
+        # sub-plan or lands beside the kind's existing entry (then neither answers).
+        for clause in ("cite its `OD-N`, and do not ask", "It never confirms a command",
+                       "the merge still needs its own entry or the owner's yes",
+                       "editing the kind's existing entry rather than adding a second",
+                       "naming the sub-plan it was asked in"):
+            check(f"11 {rel(path)} § Stop conditions keeps {clause!r}", clause in stops, "missing")
+    for rel_path, kind in RULE_SITES.items():
+        found = built("executing-plans", rel_path)
+        check(f"11 every built {rel_path} is found", all(os.path.isfile(f) for f in found), f"{found}")
+        for path in found:
+            if not os.path.isfile(path):
+                continue
+            flat = " ".join(read(path).split())
+            check(f"11 {rel(path)} runs `{RULE_MATCH} {kind}`", f"{RULE_MATCH} {kind}" in flat, "missing")
+            at = flat.find(f"{RULE_MATCH} {kind}")
+            check(f"11 {rel(path)}: the `{kind}` answer is cited by its `OD-N`",
+                  at >= 0 and "`OD-N`" in flat[at:at + 700], flat[at:at + 300] if at >= 0 else "no call")
+    for path in built("executing-plans", "references/close-out.md"):
+        flat = " ".join(read(path).split())
+        check(f"11 {rel(path)}: the unshown-outcome answer decides only whether to hold the merge",
+              "It decides only whether to hold: step 10's own entry for each command, or the owner's confirmation, is still required" in flat,
+              "missing")
+    for path in built("executing-plans", "references/stage-gate.md"):
+        body = " ".join(section_starting(read(path), "## ACTION NEEDED").split())
+        check(f"11 {rel(path)} § ACTION NEEDED: each option names what it would change",
+              "Each option names what it would change" in body and "later stages or sub-plans" in body, "missing")
+    for path in built("executing-plans", "references/preflight-checks.md"):
+        flat = " ".join(read(path).split())
+        check(f"11 {rel(path)}: a wrong-check amendment proves the same claim; a product failure is never one",
+              "proves the same claim" in flat and "reported the product wrong is a failure" in flat, "missing")
+
+
 def main():
     part1_catalog_names_every_stop()
     part2_templates_carry_the_section()
@@ -460,6 +617,8 @@ def main():
     part7_the_script_decides()
     part8_the_author_checks()
     part9_no_owner_decision_settles_without_match()
+    part10_standing_rules()
+    part11_the_run_reads_standing_answers()
     if FAILED:
         print(f"\n{len(FAILED)} failure(s)")
         sys.exit(1)
