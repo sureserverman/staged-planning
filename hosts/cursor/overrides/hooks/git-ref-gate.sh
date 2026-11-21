@@ -390,7 +390,9 @@ missing, deviations, advisory, named = [], [], [], []
 for sha in added:
     subject = git("log", "-1", "--format=%s", sha).stdout.strip()
     green = pfa.STAGE_GREEN.match(subject)
-    closes = [green.group(1)] if green else []
+    # Group 2 is the stage; group 1 is a master's optional `Sub-plan K`. The gate stays strict:
+    # any `[Sub-plan K ]Stage N green` closes stage N here, whichever sub-plan K names.
+    closes = [green.group(2)] if green else []
     ticked, error = ticked_gates(sha)
     if error:
         # A commit the gate cannot read the plan of may be closing a stage: refuse.

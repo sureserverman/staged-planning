@@ -238,6 +238,14 @@ ACCESS_VOCAB = re.compile(
     re.I,
 )
 
+# The vocabulary is read from a box's prose. Inside backticks it is a command's own text: a grep
+# for `credentials` is not a device probe (remote-agents backlog-sweep Sub-plan 4, Stage 3 gate).
+CODE_SPAN = re.compile(r"`[^`]*`")
+
+
+def names_access(body: str) -> bool:
+    return bool(ACCESS_VOCAB.search(CODE_SPAN.sub("", body)))
+
 # Finding 3's evidence: a probe artefact ADDED OR MODIFIED in that same commit.
 # Deliberately anchored to an evidence-ish directory segment or an explicit
 # probe/serial filename — an unrelated `security-history.jsonl`, which projects
@@ -261,7 +269,34 @@ REVIEW_PATH = re.compile(
 
 COMPLETED = re.compile(r"^\s*\*\*Completed:\*\*", re.I)
 JUDGMENT = re.compile(r"\(judgment\)", re.I)
-STAGE_GREEN = re.compile(r"^Stage\s+(\d+)\s+green\b", re.I)
+# A master plan's sub-plans name the same commit `Sub-plan N Stage M green`; any other
+# prefix is not a green commit.
+STAGE_GREEN = re.compile(r"^(?:Sub-plan\s+(\d+)\s+)?Stage\s+(\d+)\s+green\b", re.I)
+# A sub-plan's own number, from the master format's file name `<date>-<topic>-sub-NN-<slug>-plan.md`.
+SUB_PLAN_FILE = re.compile(r"-sub-0*(\d+)(?:-|$)")
+
+
+def own_sub_plan(plan):
+    """The plan's own sub-plan number, read from its file name, or None for a plan that is
+    not a sub-plan (or whose number cannot be read)."""
+    # The last match: the number follows the topic, which may itself hold a `-sub-N-`.
+    found = SUB_PLAN_FILE.findall(Path(str(plan)).stem)
+    return int(found[-1]) if found else None
+
+
+def green_stage(subject, sub_plan=None):
+    """The stage a `Stage N green` subject closes for this plan, or None.
+
+    A bare `Stage N green` counts as before. A master's `Sub-plan K Stage N green` counts
+    only for the plan that is sub-plan K: on a branch several sub-plans share, sub-plan 3's
+    `Sub-plan 3 Stage 1 green` must not back sub-plan 4's Stage 1 boxes. A plan whose own
+    number cannot be read takes the bare form only."""
+    m = STAGE_GREEN.match(subject.strip())
+    if not m:
+        return None
+    if m.group(1) is None:
+        return m.group(2)
+    return m.group(2) if sub_plan is not None and int(m.group(1)) == sub_plan else None
 # A stage's gate checklist as planning-projects writes it: `### Stage N Gate`, with at
 # most one word between (`Stage 7-light gate`, `Stage 3 addendum gate`). Not "gate"
 # anywhere on the line: measured over 1111 plans from one owner's records homes
@@ -1389,9 +1424,9 @@ def proof_records(repo, plan):
             greens = {}
             for line in (gout(repo, "log", "--format=%H%x00%s", "HEAD") or "").splitlines():
                 sha, _, subj = line.partition("\x00")
-                g = STAGE_GREEN.match(subj.strip())
+                g = green_stage(subj, own_sub_plan(plan))
                 if g:
-                    greens.setdefault(g.group(1), []).append(sha)
+                    greens.setdefault(g, []).append(sha)
         return any(tr is not None and not pc.blob_drift(rec, tr[1])
                    for tr in map(tree, greens.get(task.split(".")[0], [])))
 
@@ -1414,10 +1449,11 @@ def proof_records(repo, plan):
                 task_shas.setdefault(tid, []).append(sha)
             # On Cursor every task is proven at its stage's gate, on the tree the
             # `Stage N green` commit records, so that commit is a binding too. Any plan's
-            # commit for that stage number binds, as any commit naming the task does.
-            green = STAGE_GREEN.match(subj.strip())
+            # bare commit for that stage number binds, as any commit naming the task does;
+            # a `Sub-plan K Stage N green` binds only sub-plan K (`green_stage`).
+            green = green_stage(subj, own_sub_plan(plan))
             if green:
-                green_shas.setdefault(green.group(1), []).append(sha)
+                green_shas.setdefault(green, []).append(sha)
     else:
         # -z: a path with a space (a plan stem, a record) is one entry, never two.
         listing = gout(repo, "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--",
@@ -1620,13 +1656,14 @@ def _gate_ticked(text, stage):
                for ticked, _k, _b, ln, _r in boxes(text))
 
 
-def _has_green(repo, stage):
-    """True/False whether HEAD's history has `Stage <stage> green`; None if git cannot say."""
+def _has_green(repo, stage, plan=None):
+    """True/False whether HEAD's history has `Stage <stage> green` for `plan` (a bare one,
+    or `Sub-plan K Stage <stage> green` when `plan` is sub-plan K); None if git cannot say."""
     subjects = gout(repo, "log", "--format=%s", "HEAD")
     if subjects is None:
         return None
-    return any((m := STAGE_GREEN.match(s.strip())) and m.group(1) == str(stage)
-               for s in subjects.splitlines())
+    sub_plan = own_sub_plan(plan) if plan is not None else None
+    return any(green_stage(s, sub_plan) == str(stage) for s in subjects.splitlines())
 
 
 def unrecorded_gate(repo, plan):
@@ -1653,7 +1690,7 @@ def unrecorded_gate(repo, plan):
             claimed = _gate_ticked(Path(plan).read_text(errors="replace"), stage)
         except OSError:
             return None
-    if not claimed or _has_green(repo, stage) is not False:
+    if not claimed or _has_green(repo, stage, plan) is not False:
         return None
     return str(stage)
 
@@ -1677,7 +1714,7 @@ def open_stage(repo, plan):
             return None
     except OSError:
         return None
-    if _has_green(repo, stage) is not False:
+    if _has_green(repo, stage, plan) is not False:
         return None
     return str(stage)
 
@@ -2080,9 +2117,10 @@ def closed_stages(text):
     return {stage for stage, got in ticks.items() if got and all(got)}
 
 
-def green_stages(subjects):
-    """Stage numbers that have a `Stage N green` commit among `subjects`."""
-    return {m.group(1) for s in subjects for m in [STAGE_GREEN.match(s.strip())] if m}
+def green_stages(subjects, sub_plan=None):
+    """Stage numbers that have a `Stage N green` commit among `subjects`, for the plan whose
+    own sub-plan number is `sub_plan` (see `green_stage`)."""
+    return {g for s in subjects for g in [green_stage(s, sub_plan)] if g}
 
 
 def preflight_lines(text):
@@ -2165,8 +2203,8 @@ def history_findings(repo, rel, path, text, since, threshold):
     task_commits = max(task_commits, len(task_numbers(task_ids) & proven_tasks(repo, path)))
 
     pre = preflight_keys(text)
-    green = green_stages(row.split("\x00", 1)[1] for row in (subj_out or "").split("\n")
-                         if "\x00" in row)
+    green = green_stages((row.split("\x00", 1)[1] for row in (subj_out or "").split("\n")
+                          if "\x00" in row), own_sub_plan(path))
     out, errors, total_flips = [], [], 0
     # Finding 1's probe evidence: a probe artefact in this commit or any earlier one in
     # the range (baseline mode reads the whole range; this is the same rule, ordered).
@@ -2202,7 +2240,7 @@ def history_findings(repo, rel, path, text, since, threshold):
 
         if not probed:
             for key, body, line in entries:
-                if key in pre or ACCESS_VOCAB.search(body):
+                if key in pre or names_access(body):
                     out.append({
                         "finding": 3, "severity": "blocking",
                         "rule": "access/device box ticked with no probe output "
@@ -2359,7 +2397,7 @@ def baseline_findings(root, path, text, base, threshold):
     task_commits = max(task_commits, len(task_numbers(task_ids) & proven_tasks(root, path)))
 
     out, where = [], "baseline..HEAD"
-    counted = unbacked(flips, text, green_stages(subjects), probed)
+    counted = unbacked(flips, text, green_stages(subjects, own_sub_plan(path)), probed)
     if len(counted) > threshold and task_commits < threshold:
         out.append({
             "finding": 1, "severity": "blocking",
@@ -2372,7 +2410,7 @@ def baseline_findings(root, path, text, base, threshold):
     pre = preflight_keys(text)
     if not probed:
         for key, body, line in flips:
-            if key in pre or ACCESS_VOCAB.search(body):
+            if key in pre or names_access(body):
                 out.append({
                     "finding": 3, "severity": "blocking",
                     "rule": "access/device box ticked since the baseline with no "
@@ -2472,7 +2510,7 @@ def resolve_since(repo, rel, explicit):
         rows = [r for r in log.split("\n") if "\x00" in r]
         for row in rows[1:]:
             sha, subj = row.split("\x00", 1)
-            if STAGE_GREEN.match(subj.strip()):
+            if green_stage(subj, own_sub_plan(rel)):
                 return sha, f"default: previous stage boundary {sha[:8]} ({subj.strip()})"
     first = (gout(repo, "--literal-pathspecs", "log", "--format=%H", "--reverse", "--", rel) or "").split()
     if first:

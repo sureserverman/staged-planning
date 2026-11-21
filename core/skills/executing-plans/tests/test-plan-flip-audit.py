@@ -454,6 +454,49 @@ if doc is not None:
         bad("finding 3 fired despite a probe artefact",
             json.dumps(findings_of(doc, 3), indent=2)[:600])
 
+# A gate box whose COMMAND names a credential file is not an access box: the vocabulary is
+# read from the box's prose, never from inside its backticks. Measured on remote-agents'
+# backlog-sweep Sub-plan 4 Stage 3: `grep -E "auth\.json|credentials"` made a no-login-link
+# grep read as a device probe and blocked the gate.
+def gate_plan(box_line, ticked=False):
+    box = "[x]" if ticked else "[ ]"
+    return (
+        "# Project Plan: drills\n"
+        "\n"
+        "## Preflight\n"
+        "\n"
+        "- [x] The worktree is clean.\n"
+        "\n"
+        "## Stage 1: drills\n"
+        "\n"
+        "### Task 1.1: drills\n"
+        "- **Status:** [x]\n"
+        "\n"
+        "### Stage 1 Gate\n"
+        "\n"
+        f"- {box} {box_line}\n"
+    )
+
+
+for label, line, flagged in (
+    ("a command naming credentials", '`! grep -rn "symlink" tests | grep -E "auth\\.json|credentials"` '
+     "-- no drill links a login file", False),
+    ("prose naming access", "the rig is reachable over SSH from the bench host", True),
+):
+    repo, env = newrepo("f3-code-" + str(flagged))
+    plan = repo / "sub-04.md"
+    plan.write_text(gate_plan(line, ticked=False))
+    base = commit(repo, env, "Sub-plan 4 authored")
+    plan.write_text(gate_plan(line, ticked=True))
+    commit(repo, env, "Stage 1 green")
+    r, doc = run_json(str(plan), "--since", base, cwd=repo)
+    if doc is not None:
+        if bool(findings_of(doc, 3)) == flagged:
+            ok(f"finding 3 on a gate box with {label}: {'flagged' if flagged else 'not flagged'}")
+        else:
+            bad(f"finding 3 on a gate box with {label} went the wrong way",
+                json.dumps(findings_of(doc, 3), indent=2)[:600])
+
 # ------------------------------------------------- finding 4: Completed over BLOCKED
 print()
 print("finding 4 — **Completed:** standing over gate boxes that match finding 2")
@@ -1837,13 +1880,13 @@ else:
 # commit in the range. Five task commits, five Status ticks and two gate boxes is an
 # honest stage — counting the gate boxes would make it 7 > 6, a blocking bulk flip at
 # every plan's second gate. The same ticks with no green commit are still a bulk flip.
-def gated_plan(label, n_tasks=5):
+def gated_plan(label, n_tasks=5, name="plan.md"):
     plans_dir = newdir(f"{label}-plans")
     lines = ["# Plan", "", "## Stage 1", ""]
     for i in range(1, n_tasks + 1):
         lines += [f"### Task 1.{i}: thing {i}", "- **Status:** [ ]", ""]
     lines += ["### Stage 1 Gate", "", "- [ ] `make test` exits 0", "- [ ] `make lint` exits 0", ""]
-    plan = plans_dir / "plan.md"
+    plan = plans_dir / name
     plan.write_text("\n".join(lines))
     return plan
 
@@ -1852,21 +1895,36 @@ def tick_all(plan):
     plan.write_text(plan.read_text().replace("- [ ]", "- [x]").replace("**Status:** [ ]", "**Status:** [x]"))
 
 
-for label, green, want in (("bl-gate-green", True, False), ("bl-gate-nogreen", False, True)):
-    plan = gated_plan(label)
+# A master plan's sub-plans name their gate commits `Sub-plan N Stage M green: ...`; that is
+# the same green commit and backs its gate boxes -- but only sub-plan N's, the plan whose
+# file is `...-sub-0N-...`: sub-plans share a branch, and sub-plan 3's green must not back
+# sub-plan 4's gate. A plan with no sub-plan number takes only the bare form. Any other
+# prefix does not count.
+SUB4 = "2026-01-01-topic-sub-04-slug-plan.md"
+for label, green, want, name in (
+    ("bl-gate-green", "Stage 1 green", False, "plan.md"),
+    ("bl-gate-subplan-green", "Sub-plan 4 Stage 1 green: the work", False, SUB4),
+    ("bl-gate-other-subplan", "Sub-plan 3 Stage 1 green: the work", True, SUB4),
+    ("bl-gate-subplan-unnumbered", "Sub-plan 4 Stage 1 green: the work", True, "plan.md"),
+    ("bl-gate-bare-in-subplan", "Stage 1 green", False, SUB4),
+    ("bl-gate-prefixed", "wip: Stage 1 green", True, "plan.md"),
+    ("bl-gate-nogreen", None, True, "plan.md"),
+):
+    plan = gated_plan(label, name=name)
     proj, env = newrepo(f"{label}-proj")
     (proj / "README").write_text("x\n"); commit(proj, env, "chore: initial commit")
     snap(plan, proj)
     for i in range(1, 6):
         (proj / f"f{i}.txt").write_text(f"{i}\n"); commit(proj, env, f"Stage 1 Task 1.{i}: work")
     if green:
-        (proj / "gate.txt").write_text("gate report\n"); commit(proj, env, "Stage 1 green")
+        (proj / "gate.txt").write_text("gate report\n"); commit(proj, env, green)
     tick_all(plan)
     r, doc = run_json(str(plan), "--repo", str(proj))
     f1 = findings_of(doc, 1) if doc else []
     if bool(f1) == want:
-        ok("baseline: 5 task ticks + 2 gate boxes " + ("with" if green else "without")
-           + " a `Stage 1 green` commit " + ("fires finding 1" if want else "is not a bulk flip"))
+        ok(f"baseline ({name}): 5 task ticks + 2 gate boxes "
+           + (f"with a `{green}`" if green else "without a green")
+           + " commit " + ("fires finding 1" if want else "is not a bulk flip"))
     else:
         bad("a stage's gate boxes are backed only by its green commit (red if gate boxes "
             "count, or count as backed with no green commit)", json.dumps(f1)[:400])
@@ -3462,6 +3520,26 @@ for name, gate, want in (
 
 for d_ in _tmpdirs:
     shutil.rmtree(d_, ignore_errors=True)
+
+# The default range starts after the previous stage's green commit -- this plan's own. On a
+# branch sub-plans share, sub-plan 3's `Sub-plan 3 Stage 1 green` is not sub-plan 4's boundary.
+_rs = importlib.util.module_from_spec(importlib.util.spec_from_file_location("pfa_since", SCRIPT))
+_rs.__spec__.loader.exec_module(_rs)
+_rrepo, _renv = newrepo("since-subplan")
+for _name in ("2026-01-01-t-sub-03-s-plan.md", "2026-01-01-t-sub-04-s-plan.md"):
+    (_rrepo / _name).write_text("# Plan\n")
+_first = commit(_rrepo, _renv, "chore: the two plans")
+(_rrepo / "a.txt").write_text("a\n")
+_green3 = commit(_rrepo, _renv, "Sub-plan 3 Stage 1 green: its gate")
+(_rrepo / "b.txt").write_text("b\n")
+commit(_rrepo, _renv, "Stage 1 Task 1.1: sub-plan 4's work")
+_s3, _ = _rs.resolve_since(str(_rrepo), "2026-01-01-t-sub-03-s-plan.md", None)
+_s4, _w4 = _rs.resolve_since(str(_rrepo), "2026-01-01-t-sub-04-s-plan.md", None)
+if _s3 == _green3 and _s4 == _first:
+    ok("default range: a `Sub-plan 3 Stage 1 green` bounds sub-plan 3's range and not sub-plan 4's")
+else:
+    bad("the default range's boundary is the plan's own green commit (red if another "
+        "sub-plan's green bounds it)", f"sub-03 -> {_s3}, sub-04 -> {_s4} ({_w4})")
 
 print()
 print(f"passed {passed}, failed {failed}")

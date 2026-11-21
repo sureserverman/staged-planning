@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 3ee270a10c20a28efcae749a38c87685a59c29a8913ce48817c900c08074a909
+  base_sha256: 5ffd5be8b27f565fd9a1e6280c6c89cdc11437b08682781f77f7e06ff1fd54c8
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -14,7 +14,7 @@ hooks/dispatch-log.sh:
   depends_on:
     hooks/plan_continue_classify.py: da899becc6b710ca5ea2c67d1e366710ae5cf4c66afd33f4e70b3485e4a9f949
 hooks/git-ref-gate.sh:
-  base_sha256: ecbdc42145a996805a2492846c2ffae96f689b1e54593d3021056aa2b4b669d3
+  base_sha256: 9ccd78b72c54137a74d160926c893b406c82fffc49202b1bd307dde94df35798
   host_fact: 'On Cursor an executor left to choose proved only the claims it picked, and it installs nothing it is not told to, so proof there is every claim, once per stage at the gate, and on while a plan is in flight: the fork gates the Stage N green commit, needs a record for every claim of every task of stage N, and its shim is installed by the Cursor hooks installer, which the beforeShellExecution commit gate enforces.'
   depends_on:
     hooks/plan_continue_classify.py: da899becc6b710ca5ea2c67d1e366710ae5cf4c66afd33f4e70b3485e4a9f949
@@ -61,7 +61,7 @@ skills/executing-plans/references/stage-gate.md:
 skills/executing-plans/references/task-execution.md:
   base_sha256: cffa3caf1c533bcf88b02dded5f7b0e7d8638a7fa326dab3e2802107efdf1dbd
 skills/executing-plans/scripts/plan-flip-audit.py:
-  base_sha256: 0e88c203a5cd0797655055a0686f340b255e078dcbf19d3fd26a5a53679abbf5
+  base_sha256: b3ee0bf45e1e3aa2e6a219dd4f3bf47eea2cd81d4f8b6f8bffac0ff84811d18f
   host_fact: 'The Cursor proof model of the hooks/git-ref-gate.sh fork (every claim, once per stage at the gate): findings 8 and 9 hold every claim of a ticked task to a record and skip the tasks of the stage still in flight, read through the hooks'' state reader, so the audit and the Cursor commit gate count the same set. It also carries unrecorded_gate(), which core has none of: the Cursor stop hook asks it whether a stage claimed done (stage-complete, closeout, or ticked gate boxes) lacks its Stage N green commit.'
   depends_on:
     hooks/plan_continue_classify.py: da899becc6b710ca5ea2c67d1e366710ae5cf4c66afd33f4e70b3485e4a9f949

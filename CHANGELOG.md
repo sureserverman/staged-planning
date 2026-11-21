@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.1 — 2026-11-21
+
+- **`plan-flip-audit` reads a master plan's gate commits.** A sub-plan's stage closes
+  with `Sub-plan K Stage N green`; the audit read only `Stage N green`, so it called a
+  sub-plan's ticked gate boxes unbacked. It now accepts the prefixed form, and only for
+  the plan that is sub-plan K (its file is named `-sub-0K-`): on a branch several
+  sub-plans share, one sub-plan's green commit never backs another's gate. A bare
+  `Stage N green` counts as before. The commit gate stays strict: any
+  `[Sub-plan K ]Stage N green` closes stage N there.
+- **Finding 3 reads access words from a gate box's prose, not its commands.** A word
+  such as `credentials` inside a box's backticked command no longer marks the box as
+  needing access.
+
 ## 2.4.0 — 2026-11-17
 
 - **Four standing questions are asked in every plan, and their answers cover the whole

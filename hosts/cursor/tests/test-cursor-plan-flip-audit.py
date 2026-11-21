@@ -512,6 +512,29 @@ try:
           "needs: notes: the fork's hook accepts the pre-filled needs: evidence only for a "
           "noted Outcome, as core does",
           (pfa.demo_problems(pre, ["Works: one."], yes, 1), pfa.demo_problems(pre, ["Works: one."], no, 1)))
+    subjects = ["Stage 1 green", "Sub-plan 4 Stage 2 green: the work", "wip: Stage 3 green",
+                "Stage 4 Task 4.1: work"]
+    check(pfa.green_stages(subjects, 4) == core.green_stages(subjects, 4) == {"1", "2"}
+          and pfa.green_stages(subjects, 3) == core.green_stages(subjects, 3) == {"1"}
+          and pfa.green_stages(subjects) == core.green_stages(subjects) == {"1"},
+          "green commits: the fork reads `Stage N green` and a master plan's `Sub-plan N Stage M "
+          "green` as core does -- the prefixed form only for sub-plan N -- and no other prefix",
+          (pfa.green_stages(subjects, 4), pfa.green_stages(subjects, 3), pfa.green_stages(subjects)))
+    # `_has_green` is the fork's own reader (the stop hook's `unrecorded_gate`), outside the
+    # parity above: it read the stage from the wrong group once the sub-plan number was captured.
+    real_gout = pfa.gout
+    pfa.gout = lambda *a, **k: "\n".join(subjects)
+    try:
+        sub4, sub3 = "2026-01-01-t-sub-04-s-plan.md", "2026-01-01-t-sub-03-s-plan.md"
+        has = (pfa._has_green(None, 1, "plan.md"), pfa._has_green(None, 2, sub4),
+               pfa._has_green(None, 2, sub3), pfa._has_green(None, 2, "plan.md"),
+               pfa._has_green(None, 3, sub4))
+    finally:
+        pfa.gout = real_gout
+    check(has == (True, True, False, False, False),
+          "green commits: the stop hook finds a bare `Stage 1 green` for any plan and "
+          "`Sub-plan 4 Stage 2 green` only for sub-plan 4, never a `wip:` one",
+          has)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
