@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.2 — 2026-11-21
+
+- **`plan-progress.py --dispatch-check` reconciles a task made `Dispatch: YES` after
+  Preflight.** The check read its roster only from Preflight's `Dispatch roster` line,
+  so a task a mid-run amendment set to YES was never reconciled: an amended sub-plan
+  reported `2 of 2` while its two late YES tasks had no executor trailer. It now also
+  reads each task's own Dispatch field (the old `Parallel:` spelling too), names each
+  task the roster line misses in a `note:` line, and reconciles it like a rostered one;
+  a `0 tasks` roster no longer passes over a later YES task. The field reader skips
+  ``` and ~~~ fences, and a `####` subheading inside a task does not end the task.
+
 ## 2.4.1 — 2026-11-21
 
 - **`plan-flip-audit` reads a master plan's gate commits.** A sub-plan's stage closes

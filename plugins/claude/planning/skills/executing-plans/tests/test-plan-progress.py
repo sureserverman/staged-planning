@@ -2595,6 +2595,76 @@ def case_dispatch_check():
     r = dcheck(notgit, notgit / "plan.md")
     check(r.returncode == 2 and "FAIL" in r.stderr and "Traceback" not in r.stderr,
           f"not a git repo exits 2 with a FAIL: line ({r.returncode}, {r.stderr!r})")
+
+    print("  a task made Dispatch: YES after Preflight still needs reconciling:")
+    # A plan amended mid-run adds `Dispatch: YES` tasks the Preflight roster line
+    # never names. The task's own field is the plan's dispatch decision, so the
+    # check reconciles it too, or an amended roster passes with its tasks unread.
+    amended = DISPATCH_PLAN + (
+        "\n## Stage 5 — amendment\n\n"
+        "### Task 5.1: added late\n- **Status:** [x]\n- **Dispatch:** YES\n\n"
+        "### Task 5.2: added late, sequential\n- **Status:** [x]\n"
+        "- **Dispatch:** NO (blocked by 5.1)\n")
+    done = four + [("Stage 4 Task 4.2: ship", "inline (user authorised)")]
+    repo, plan = make_repo("amended", "5 of 21 tasks",
+                           done + [("Stage 5 Task 5.1: added late", None),
+                                   ("Stage 5 Task 5.2: added late, sequential", "inline")],
+                           plan_text=amended)
+    r = dcheck(repo, plan)
+    fails = [ln for ln in r.stderr.splitlines() if ln.startswith("FAIL")]
+    check(r.returncode == 2 and any("Task 5.1" in ln and "unknown" in ln for ln in fails),
+          f"a YES task off the roster with no trailer exits 2 naming it "
+          f"({r.returncode}, {r.stderr!r})")
+    check(not any("Task 5.2" in ln for ln in fails),
+          f"a Dispatch: NO task is not reconciled as rostered ({r.stderr!r})")
+    check("Task 5.1" in r.stdout and "not on the Preflight roster" in r.stdout,
+          f"the report says which YES task the roster line misses ({r.stdout!r})")
+
+    repo, plan = make_repo("amended-ok", "5 of 21 tasks",
+                           done + [("Stage 5 Task 5.1: added late", "dispatched — general-purpose")],
+                           plan_text=amended)
+    r = dcheck(repo, plan)
+    check(r.returncode == 0 and "dispatch: 5 of 6 rostered tasks dispatched" in r.stdout,
+          f"a dispatched late YES task reconciles and counts toward the total "
+          f"({r.returncode}, {r.stdout!r}, {r.stderr!r})")
+
+    repo, plan = make_repo("amended-zero", "0 tasks", [], plan_text=amended)
+    r = dcheck(repo, plan)
+    check(r.returncode == 2 and any("Task 5.1" in ln and "no commit" in ln
+                                   for ln in r.stderr.splitlines()),
+          f"a `0 tasks` roster does not pass over a later YES task "
+          f"({r.returncode}, {r.stderr!r})")
+
+    # The field reader itself: a YES inside a fence is an example, not the task's
+    # own; a `####` subheading inside a task does not end it (it hid the field,
+    # which is the late-YES miss again); the old `Parallel:` spelling counts; a
+    # line under a gate heading belongs to no task.
+    spec = importlib.util.spec_from_file_location("pp_fields", SCRIPT)
+    pp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pp)
+    fields = pp.dispatch_yes_tasks(
+        "### Task 1.1: a\n#### Notes\nprose\n- **Dispatch:** YES\n\n"
+        "### Task 1.2: b\n- **Dispatch:** NO\n```\n- **Dispatch:** YES\n"
+        "### Task 9.9: in a fence\n- **Dispatch:** YES\n```\n\n"
+        "### Task 1.3: c\n- **Parallel:** YES\n\n"
+        "### Stage 1 Gate\n- **Dispatch:** YES\n")
+    check(fields == ["1.1", "1.3"],
+          f"the task fields read: a subheading keeps its task, a fence and a gate hide "
+          f"nothing real ({fields})")
+
+    # A rostered task whose own field also says YES is one task, not two: the
+    # summary reads the same with the field as without it.
+    both = re.sub(r"(### Task 1\.2:[^\n]*\n)", r"\1- **Dispatch:** YES\n", DISPATCH_PLAN, count=1)
+    repo, plan = make_repo("rostered-nofield", "5 of 21 tasks", done, plan_text=DISPATCH_PLAN)
+    plain = dcheck(repo, plan)
+    repo, plan = make_repo("rostered-field", "5 of 21 tasks", done, plan_text=both)
+    r = dcheck(repo, plan)
+    summary = [ln for ln in r.stdout.splitlines() if ln.startswith("dispatch:")]
+    check(both != DISPATCH_PLAN and summary
+          and summary == [ln for ln in plain.stdout.splitlines() if ln.startswith("dispatch:")]
+          and r.returncode == plain.returncode,
+          f"a rostered task with its own YES field is counted once "
+          f"({summary}, {plain.stdout!r})")
     shutil.rmtree(tmp, ignore_errors=True)
 
 

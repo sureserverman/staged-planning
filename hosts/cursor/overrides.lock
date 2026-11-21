@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 5ffd5be8b27f565fd9a1e6280c6c89cdc11437b08682781f77f7e06ff1fd54c8
+  base_sha256: 505fb1b0bf1bb53bfadce712a4f4bd2451c62c067025942e4c823a3f42befd1a
 agents/architecture-researcher.md:
   base_sha256: a86aa8da79eddb2182f9a90fc0a87846a36e9ae432d2aa6f6803e0e002cc4090
 agents/claim-verifier.md:
@@ -71,7 +71,7 @@ skills/executing-plans/scripts/statusline-chain.sh:
   base_sha256: 930df5bf1e77fdf09366ff3723369e7bfe6aad6980feff674cff2219ad4c1fd2
   host_fact: The Cursor CLI pipes its own payload to the statusLine command, and Cursor writes no status line script of its own, so the fork defaults the base script to ~/.cursor/statusline.sh and passes the payload bytes through unread to the base and to plan-progress.py.
   depends_on:
-    skills/executing-plans/scripts/plan-progress.py: 3c3be851e6f3a9d2eb7d3cd5ba7903abb1d40c28e2122a366d11db219ccb91c1
+    skills/executing-plans/scripts/plan-progress.py: cec8eaf35b2286fc88e3c594aa83ce680153bb5fcc001a685d8f2ec0af5a27c1
 skills/executing-plans/scripts/statusline-install.py:
   base_sha256: 229e1d9f3de3698bf1b89fc8e13b3b850b8bd3db7a8accaf80b0778cc549c4c1
   host_fact: The Cursor CLI reads statusLine from ~/.cursor/cli-config.json, not from Claude Code's settings.json, a plugin cannot contribute it, and a local install is not a versioned cache, so the fork writes, repairs and removes that one key there, pointing at the sibling statusline-chain.sh.

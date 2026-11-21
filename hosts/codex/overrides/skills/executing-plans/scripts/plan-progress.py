@@ -315,6 +315,42 @@ def parse_roster(text):
     return count, list(dict.fromkeys(TASK_REF_RE.findall(body)))
 
 
+# `Dispatch: YES|NO` is the task field; `Parallel:` is its old spelling, which
+# existing plans keep forever, so both are read (the same pattern as core's).
+DISPATCH_YES_RE = re.compile(r"^\s*-\s*\*\*(?:Dispatch|Parallel):\*\*\s*YES\b", re.I)
+
+
+def dispatch_yes_tasks(text):
+    """Task ids whose own `- **Dispatch:** YES` field is set, in plan order
+    (DISPATCH_YES_RE, so the old `Parallel:` spelling counts too).
+
+    The field is the plan's dispatch decision; the Preflight roster line is a
+    snapshot of it. A plan amended mid-run adds YES tasks the snapshot never
+    names, so the check reads the fields too.
+
+    Nothing inside a ``` or ~~~ fence counts: an example field there is not the
+    task's own. Only a heading of level 1 to 3 (a stage, a gate, the next task)
+    ends a task; a `####` subheading inside one does not hide its field."""
+    ids, task, fence = [], None, None
+    for line in text.splitlines():
+        mark = line.lstrip()[:3]
+        if mark in ("```", "~~~"):
+            fence = None if fence == mark else (fence or mark)
+            continue
+        if fence:
+            continue
+        m = pu.TASK_RE.match(line)
+        if m:
+            task = m.group(1)
+            continue
+        if re.match(r"#{1,3}\s", line):
+            task = None
+            continue
+        if task and DISPATCH_YES_RE.match(line) and task not in ids:
+            ids.append(task)
+    return ids
+
+
 # A roster entry routing a task inline by the table: `Task 4.2 → inline (routing table …`.
 ROSTER_INLINE_RE = re.compile(r"\bTask\s+(\d+\.\d+)\s*(?:→|->)\s*`?inline \(routing table")
 
@@ -375,10 +411,18 @@ def dispatch_check(args):
     if count is None:
         return fail("roster count unreadable — expected `<n> of <m> tasks` or `0 tasks`")
     if count == 0:
+        ids = []
+    elif count != len(ids):
+        return fail(f"roster says {count} tasks but lists {len(ids)} task ids")
+    late = [tid for tid in dispatch_yes_tasks(text) if tid not in ids]
+    for tid in late:
+        print(f"note: Task {tid} is Dispatch: YES but not on the Preflight roster; "
+              "reconciled with it")
+    ids = ids + late
+    count = len(ids)
+    if count == 0:
         print("dispatch: 0 of 0 rostered tasks dispatched")
         return 0
-    if count != len(ids):
-        return fail(f"roster says {count} tasks but lists {len(ids)} task ids")
 
     rng = f"{since}..HEAD" if since else "HEAD"
     try:

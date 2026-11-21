@@ -1,5 +1,5 @@
 README.md:
-  base_sha256: 5ffd5be8b27f565fd9a1e6280c6c89cdc11437b08682781f77f7e06ff1fd54c8
+  base_sha256: 505fb1b0bf1bb53bfadce712a4f4bd2451c62c067025942e4c823a3f42befd1a
 hooks/dispatch-log.sh:
   base_sha256: 84d74a452f78bf8c8c8b1528e3019852942acef9b373318ab2a26c2791d1fc5f
   host_fact: Codex sets no project-folder variable in a hook's environment and its spawn call carries no description or agent type a tool-use hook could log, so the fork takes the project from the payload's cwd, reading the payload once from stdin, and logs SubagentStart and SubagentStop only.
@@ -54,7 +54,7 @@ skills/executing-plans/scripts/context-usage.py:
     hooks/plan_continue_classify.py: da899becc6b710ca5ea2c67d1e366710ae5cf4c66afd33f4e70b3485e4a9f949
     skills/executing-plans/scripts/handoff-envelope.py: 7ef71db8a44fe272ffbeea7b5622d948854338c87856b1fa5cb7422d290e4750
 skills/executing-plans/scripts/plan-progress.py:
-  base_sha256: 3c3be851e6f3a9d2eb7d3cd5ba7903abb1d40c28e2122a366d11db219ccb91c1
+  base_sha256: cec8eaf35b2286fc88e3c594aa83ce680153bb5fcc001a685d8f2ec0af5a27c1
   host_fact: Codex's status line takes only predefined items and runs no command, so the status-line renderer can never run; the fork keeps the budget, stage-order and dispatch checks byte-identical.
   depends_on:
     lib/plan_parser.py: 657fd27d6289af4d507616a9ba24c57041db547e5350a1438ee0478db6eed73b
